@@ -8,5 +8,6 @@ alwaysApply: true
 - always use javascript
 - always check the package.json for installed packages, before installing any new packages
 - we have @ui-kitten/components v5.3.1 installed use it
+- for icon use @expo/vector-icons
 
-- use color from [Colors.js](mdc:constants/Colors.js)
+- use color from [ColorsConstant.js](mdc:constants/ColorsConstant.js)

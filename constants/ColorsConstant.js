@@ -6,7 +6,7 @@ const secondary = '#FF9800';    // Orange
 const secondaryLight = '#FFB74D';
 const secondaryDark = '#F57C00';
 
-export const Colors = {
+export const ColorsConstant = {
   light: {
     text: '#11181C',
     background: '#FFFFFF',

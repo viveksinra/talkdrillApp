@@ -1,294 +1,187 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Dimensions,
-  ScrollView,
-} from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/Colors';
+import { StyleSheet, View, Image, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { Input, Button, Text, Layout, useTheme } from '@ui-kitten/components';
+import { ColorsConstant } from '../../constants/ColorsConstant';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import talkDrillLogo from '../../assets/images/appLogoAndIcon/talkDrillLogo.png';
 
-const { width, height } = Dimensions.get('window');
 
 const SignInScreen = () => {
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [loading, setLoading] = useState(false);
+  const colorScheme = useColorScheme ? useColorScheme() : 'light';
+  const colors = ColorsConstant[colorScheme] || ColorsConstant.light;
+  const theme = useTheme ? useTheme() : {};
 
-  const handleMobileLogin = () => {
-    if (!phoneNumber || phoneNumber.length < 10) {
-      // Show validation error
-      return;
-    }
-
-    setIsLoading(true);
-    
-    // Simulate API call
+  const handleSendOtp = () => {
+    setLoading(true);
     setTimeout(() => {
-      setIsLoading(false);
-      // Navigate to OTP verification or directly to app
-      router.replace('/(tabs)');
-    }, 1500);
+      setOtpSent(true);
+      setLoading(false);
+    }, 1000);
   };
 
-  const handleGoogleLogin = () => {
-    setIsLoading(true);
-    
-    // Simulate API call
+  const handleVerifyOtp = () => {
+    setLoading(true);
     setTimeout(() => {
-      setIsLoading(false);
-      // Navigate to app after successful login
-      router.replace('/(tabs)');
-    }, 1500);
+      setLoading(false);
+      // Handle successful sign in
+    }, 1000);
+  };
+
+  const handleGoogleSignIn = () => {
+    // Google sign-in logic
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
+    <Layout style={[styles.container, { backgroundColor: colors.background }]}>  
+      <KeyboardAvoidingView
+        style={{ flex: 1, width: '100%' }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <StatusBar style="light" />
-        
-        <View style={styles.container}>
-          {/* Top Wave Design */}
-          <View style={styles.waveContainer}>
-            <View style={styles.wave} />
-          </View>
-          
-          {/* Logo and Welcome Text */}
-          <View style={styles.logoContainer}>
-            <Image 
-              source={{ uri: 'https://i.ibb.co/vQBJj7h/talk-drill-logo.png' }} 
-              style={styles.logo} 
-              resizeMode="contain"
-            />
-            <Text style={styles.welcomeText}>Welcome to TalkDrill</Text>
-            <Text style={styles.subtitle}>Continue with your phone or Google</Text>
-          </View>
-          
-          {/* Login Form */}
-          <View style={styles.formContainer}>
-            <View style={styles.inputContainer}>
-              <View style={styles.countryCode}>
-                <Text style={styles.countryCodeText}>+1</Text>
-              </View>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter phone number"
-                placeholderTextColor="#9BA1A6"
-                keyboardType="phone-pad"
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-                maxLength={10}
-              />
-            </View>
-            
-            <TouchableOpacity
-              style={[styles.button, phoneNumber.length < 10 && styles.buttonDisabled]}
-              onPress={handleMobileLogin}
-              disabled={phoneNumber.length < 10 || isLoading}
-            >
-              {isLoading ? (
-                <Text style={styles.buttonText}>Please wait...</Text>
-              ) : (
-                <Text style={styles.buttonText}>Continue with Phone</Text>
-              )}
-            </TouchableOpacity>
-            
-            <View style={styles.orContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.orText}>OR</Text>
-              <View style={styles.divider} />
-            </View>
-            
-            <TouchableOpacity
-              style={styles.googleButton}
-              onPress={handleGoogleLogin}
-              disabled={isLoading}
-            >
-              <Image 
-                source={{ uri: 'https://i.ibb.co/zr28VRy/google-logo.png' }} 
-                style={styles.googleIcon} 
-                resizeMode="contain"
-              />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              By continuing, you agree to our{' '}
-              <Text style={styles.footerLink}>Terms of Service</Text> and{' '}
-              <Text style={styles.footerLink}>Privacy Policy</Text>
-            </Text>
-          </View>
+        <View style={styles.logoContainer}>
+          <Image
+            source={talkDrillLogo}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text category="h4" style={[styles.title, { color: colors.primary }]}>Welcome Back</Text>
+          <Text appearance="hint" style={styles.subtitle}>Sign in to continue</Text>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <View style={styles.socialContainer}>
+          <Button
+            style={[styles.socialButton, { backgroundColor: '#fff', borderColor: colors.primary }]}
+            // accessoryLeft={() => (
+            //   <Image source={GOOGLE_ICON} style={styles.socialIcon} />
+            // )}
+            onPress={handleGoogleSignIn}
+            status="basic"
+            appearance="outline"
+          >
+            {() => <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Continue with Google</Text>}
+          </Button>
+        </View>
+
+        <View style={styles.dividerContainer}>
+          <View style={[styles.divider, { backgroundColor: colors.surface }]} />
+          <Text appearance="hint" style={styles.dividerText}>or</Text>
+          <View style={[styles.divider, { backgroundColor: colors.surface }]} />
+        </View>
+
+        <View style={styles.formContainer}>
+          <Input
+            style={styles.input}
+            placeholder="Mobile Number"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            accessoryLeft={() => (
+              <MaterialIcons name="phone" size={22} color={colors.icon} style={{ marginRight: 4 }} />
+            )}
+            disabled={otpSent}
+          />
+          {otpSent && (
+            <Input
+              style={styles.input}
+              placeholder="Enter OTP"
+              value={otp}
+              onChangeText={setOtp}
+              keyboardType="number-pad"
+              accessoryLeft={() => (
+                <MaterialIcons name="lock" size={22} color={colors.icon} style={{ marginRight: 4 }} />
+              )}
+            />
+          )}
+          <Button
+            style={styles.button}
+            onPress={otpSent ? handleVerifyOtp : handleSendOtp}
+            disabled={loading || (!otpSent && phone.length < 8)}
+            status="primary"
+          >
+            {loading ? 'Please wait...' : otpSent ? 'Verify OTP' : 'Send OTP'}
+          </Button>
+        </View>
+      </KeyboardAvoidingView>
+    </Layout>
   );
 };
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    flexGrow: 1,
-  },
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  waveContainer: {
-    position: 'absolute',
-    width: width,
-    height: height * 0.25,
-    overflow: 'hidden',
-  },
-  wave: {
-    position: 'absolute',
-    width: width * 2,
-    height: height * 0.4,
-    top: -height * 0.2,
-    left: -width * 0.5,
-    backgroundColor: Colors.light.tint,
-    borderRadius: height * 0.2,
-    transform: [{ scaleX: 1.5 }],
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 12,
   },
   logoContainer: {
     alignItems: 'center',
-    marginTop: height * 0.15,
-    paddingHorizontal: 20,
+    marginBottom: 32,
   },
   logo: {
     width: 120,
     height: 120,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  welcomeText: {
-    fontSize: 28,
+  title: {
     fontWeight: 'bold',
-    color: Colors.light.text,
-    marginBottom: 8,
-    textAlign: 'center',
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
-    color: Colors.light.icon,
-    marginBottom: 40,
-    textAlign: 'center',
+    marginBottom: 8,
+    color: '#687076',
   },
-  formContainer: {
-    paddingHorizontal: 24,
+  socialContainer: {
+    marginBottom: 16,
+    width: '100%',
   },
-  inputContainer: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: '#E9EAEC',
-    borderRadius: 12,
-    marginBottom: 20,
-    overflow: 'hidden',
-  },
-  countryCode: {
-    backgroundColor: '#F5F5F7',
-    paddingHorizontal: 12,
+  socialButton: {
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#2196F3',
+    marginBottom: 8,
+    height: 48,
     justifyContent: 'center',
-    borderRightWidth: 1,
-    borderColor: '#E9EAEC',
   },
-  countryCodeText: {
-    fontSize: 16,
-    color: Colors.light.text,
-    fontWeight: '500',
+  socialIcon: {
+    width: 24,
+    height: 24,
+    marginRight: 8,
   },
-  input: {
-    flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    fontSize: 16,
-    color: Colors.light.text,
-  },
-  button: {
-    backgroundColor: Colors.light.tint,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: Colors.light.tint,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buttonDisabled: {
-    backgroundColor: '#B3DDE8',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  orContainer: {
+  dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginVertical: 16,
+    width: '100%',
   },
   divider: {
     flex: 1,
-    height: 1,
-    backgroundColor: '#E9EAEC',
+    height: 1.5,
+    backgroundColor: '#F0F0F0',
   },
-  orText: {
-    paddingHorizontal: 16,
-    color: Colors.light.icon,
-    fontSize: 14,
+  dividerText: {
+    marginHorizontal: 12,
+    color: '#687076',
+    fontWeight: 'bold',
   },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E9EAEC',
-    borderRadius: 12,
-    paddingVertical: 14,
-    backgroundColor: 'white',
-    marginBottom: 24,
+  formContainer: {
+    width: '100%',
+    marginBottom: 16,
   },
-  googleIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 12,
+  input: {
+    marginBottom: 12,
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
   },
-  googleButtonText: {
-    color: Colors.light.text,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  footer: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-    marginTop: 'auto',
-  },
-  footerText: {
-    textAlign: 'center',
-    color: Colors.light.icon,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  footerLink: {
-    color: Colors.light.tint,
-    fontWeight: '500',
+  button: {
+    borderRadius: 8,
+    height: 48,
+    marginTop: 8,
   },
 });
 
