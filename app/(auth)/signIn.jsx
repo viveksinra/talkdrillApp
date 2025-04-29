@@ -1,46 +1,72 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Image, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { Input, Button, Text, Layout, useTheme } from '@ui-kitten/components';
+import { StyleSheet, View, Image, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { Input, Button, Text, Layout, Card, TopNavigation, TopNavigationAction } from '@ui-kitten/components';
 import { ColorsConstant } from '../../constants/ColorsConstant';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import talkDrillLogo from '../../assets/images/appLogoAndIcon/talkDrillLogo.png';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
+const { width } = Dimensions.get('window');
+
+const GoogleIcon = (props) => (
+  <FontAwesome name="google" size={18} color={ColorsConstant.light.primary} style={styles.socialButtonIcon} />
+);
+
+const PhoneIcon = (props) => (
+  <MaterialIcons name="phone-android" size={20} color={props.color} />
+);
+
+const BackIcon = (props) => (
+  <MaterialIcons {...props} name="arrow-back" size={24} />
+);
 
 const SignInScreen = () => {
   const [phone, setPhone] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const colorScheme = useColorScheme ? useColorScheme() : 'light';
-  const colors = ColorsConstant[colorScheme] || ColorsConstant.light;
-  const theme = useTheme ? useTheme() : {};
+  const colorScheme = useColorScheme();
+  const colors = ColorsConstant[colorScheme || 'light'];
 
   const handleSendOtp = () => {
+    if (phone.length < 10) return;
     setLoading(true);
-    setTimeout(() => {
-      setOtpSent(true);
-      setLoading(false);
-    }, 1000);
-  };
-
-  const handleVerifyOtp = () => {
-    setLoading(true);
+    
+    // Navigate to OTP verification screen with phone number
     setTimeout(() => {
       setLoading(false);
-      // Handle successful sign in
-    }, 1000);
+      router.push({
+        pathname: '/(auth)/otpVerification/[phone]', 
+        params: { phone: phone }
+      });
+    }, 800);
   };
 
   const handleGoogleSignIn = () => {
     // Google sign-in logic
   };
 
+  const goBack = () => {
+    router.back();
+  };
+
+  const renderBackAction = () => (
+    <TopNavigationAction icon={BackIcon} onPress={goBack} />
+  );
+
   return (
-    <Layout style={[styles.container, { backgroundColor: colors.background }]}>  
+    <Layout style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      
+      <TopNavigation
+        accessoryLeft={renderBackAction}
+        style={styles.topNavigation}
+      />
+      
       <KeyboardAvoidingView
-        style={{ flex: 1, width: '100%' }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
         <View style={styles.logoContainer}>
           <Image
@@ -48,62 +74,61 @@ const SignInScreen = () => {
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text category="h4" style={[styles.title, { color: colors.primary }]}>Welcome Back</Text>
-          <Text appearance="hint" style={styles.subtitle}>Sign in to continue</Text>
+          <Text category="h4" style={[styles.title, { color: colors.primary }]}>Welcome to TalkDrill</Text>
+          <Text appearance="hint" style={styles.subtitle}>Sign in with your mobile number</Text>
         </View>
 
-        <View style={styles.socialContainer}>
-          <Button
-            style={[styles.socialButton, { backgroundColor: '#fff', borderColor: colors.primary }]}
-            // accessoryLeft={() => (
-            //   <Image source={GOOGLE_ICON} style={styles.socialIcon} />
-            // )}
-            onPress={handleGoogleSignIn}
-            status="basic"
-            appearance="outline"
-          >
-            {() => <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Continue with Google</Text>}
-          </Button>
-        </View>
+        <Card style={styles.formCard}>
+          <View style={styles.formContainer}>
+            <Text category="s1" style={styles.formLabel}>Phone Number</Text>
+            
+            <Input
+              style={styles.input}
+              placeholder="Enter your mobile number"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              accessoryLeft={(props) => <PhoneIcon {...props} color={colors.icon} />}
+              size="large"
+              maxLength={15}
+              disabled={loading}
+              caption={phone.length > 0 && phone.length < 10 ? 'Please enter a valid phone number' : ''}
+              status={phone.length > 0 && phone.length < 10 ? 'danger' : 'basic'}
+            />
+            
+            <Button
+              style={styles.button}
+              onPress={handleSendOtp}
+              disabled={loading || phone.length < 10}
+              status="primary"
+            >
+              {loading ? 'PROCESSING...' : 'CONTINUE'}
+            </Button>
+          </View>
+        </Card>
 
         <View style={styles.dividerContainer}>
           <View style={[styles.divider, { backgroundColor: colors.surface }]} />
-          <Text appearance="hint" style={styles.dividerText}>or</Text>
+          <Text appearance="hint" style={styles.dividerText}>or continue with</Text>
           <View style={[styles.divider, { backgroundColor: colors.surface }]} />
         </View>
 
-        <View style={styles.formContainer}>
-          <Input
-            style={styles.input}
-            placeholder="Mobile Number"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            accessoryLeft={() => (
-              <MaterialIcons name="phone" size={22} color={colors.icon} style={{ marginRight: 4 }} />
-            )}
-            disabled={otpSent}
-          />
-          {otpSent && (
-            <Input
-              style={styles.input}
-              placeholder="Enter OTP"
-              value={otp}
-              onChangeText={setOtp}
-              keyboardType="number-pad"
-              accessoryLeft={() => (
-                <MaterialIcons name="lock" size={22} color={colors.icon} style={{ marginRight: 4 }} />
-              )}
-            />
-          )}
-          <Button
-            style={styles.button}
-            onPress={otpSent ? handleVerifyOtp : handleSendOtp}
-            disabled={loading || (!otpSent && phone.length < 8)}
-            status="primary"
-          >
-            {loading ? 'Please wait...' : otpSent ? 'Verify OTP' : 'Send OTP'}
-          </Button>
+        <Button
+          style={styles.socialButton}
+          appearance="outline"
+          accessoryLeft={GoogleIcon}
+          onPress={handleGoogleSignIn}
+        >
+          GOOGLE
+        </Button>
+
+        <View style={styles.termsContainer}>
+          <Text appearance="hint" style={styles.termsText}>
+            By continuing, you agree to our{' '}
+            <Text status="primary" style={styles.termsLink}>Terms of Service</Text>
+            {' '}and{' '}
+            <Text status="primary" style={styles.termsLink}>Privacy Policy</Text>
+          </Text>
         </View>
       </KeyboardAvoidingView>
     </Layout>
@@ -113,76 +138,96 @@ const SignInScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  topNavigation: {
+    paddingTop: Platform.OS === 'ios' ? 40 : 20,
+    elevation: 0,
+    shadowOpacity: 0,
+    borderBottomWidth: 0,
+  },
+  content: {
+    flex: 1,
+    width: '100%',
+    paddingHorizontal: 20,
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 144,
-    paddingBottom: 12,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 36,
   },
   logo: {
     width: 120,
     height: 120,
-    marginBottom: 12,
+    marginBottom: 24,
   },
   title: {
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 12,
   },
   subtitle: {
-    marginBottom: 8,
-    color: '#687076',
+    fontSize: 15,
+    textAlign: 'center',
   },
-  socialContainer: {
-    marginBottom: 16,
+  formCard: {
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    marginBottom: 30,
+  },
+  formContainer: {
     width: '100%',
+    padding: 16,
   },
-  socialButton: {
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#2196F3',
-    marginBottom: 8,
-    height: 48,
-    justifyContent: 'center',
+  formLabel: {
+    marginBottom: 12,
+    fontWeight: 'bold',
   },
-  socialIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 8,
+  input: {
+    marginBottom: 24,
+    borderRadius: 12,
+  },
+  button: {
+    borderRadius: 12,
+    height: 52,
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 24,
     width: '100%',
   },
   divider: {
     flex: 1,
     height: 1.5,
-    backgroundColor: '#F0F0F0',
   },
   dividerText: {
-    marginHorizontal: 12,
-    color: '#687076',
+    marginHorizontal: 16,
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  socialButton: {
+    borderRadius: 12,
+    height: 52,
+  },
+  socialButtonIcon: {
+    marginRight: 10,
+  },
+  termsContainer: {
+    marginTop: 32,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  termsText: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  termsLink: {
     fontWeight: 'bold',
-  },
-  formContainer: {
-    width: '100%',
-    marginBottom: 16,
-  },
-  input: {
-    marginBottom: 12,
-    borderRadius: 8,
-    backgroundColor: '#F8F9FA',
-  },
-  button: {
-    borderRadius: 8,
-    height: 48,
-    marginTop: 8,
-  },
+  }
 });
 
 export default SignInScreen;
