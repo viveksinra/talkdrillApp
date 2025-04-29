@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+
+- always use javascript
+- always check the package.json for installed packages, before installing any new packages
+- we have @ui-kitten/components v5.3.1 installed use it
+
+- 
