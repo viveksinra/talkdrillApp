@@ -9,4 +9,4 @@ alwaysApply: true
 - always check the package.json for installed packages, before installing any new packages
 - we have @ui-kitten/components v5.3.1 installed use it
 
-- 
+- use color from [Colors.js](mdc:constants/Colors.js)

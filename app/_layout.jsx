@@ -9,6 +9,7 @@ import * as eva from '@eva-design/eva';
 import { ApplicationProvider } from '@ui-kitten/components';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { lightTheme, darkTheme } from '@/constants/theme';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -30,11 +31,17 @@ export default function RootLayout() {
   }
 
   return (
-    <ApplicationProvider {...eva} theme={colorScheme === 'dark' ? eva.dark : eva.light}>
+    <ApplicationProvider 
+      {...eva} 
+      theme={{
+        ...eva[colorScheme === 'dark' ? 'dark' : 'light'], 
+        ...colorScheme === 'dark' ? darkTheme : lightTheme
+      }}
+    >
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="+not-found" />
         </Stack>
         <StatusBar style="auto" />
