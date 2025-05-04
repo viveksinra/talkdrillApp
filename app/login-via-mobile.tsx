@@ -1,4 +1,5 @@
-import { StyleSheet, TouchableOpacity, View, TextInput, Linking, Modal, FlatList, SafeAreaView } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, TextInput, Linking, Modal, FlatList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 
 import { ThemedText } from '@/components/ThemedText';
@@ -41,6 +42,13 @@ const countryCodes = [
   // Add more countries as needed
 ];
 
+type Country = {
+  code: string;
+  name: string;
+  dial_code: string;
+  flag: string;
+};
+
 export default function LoginViaMobileScreen() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState('8240399578');
@@ -68,7 +76,7 @@ export default function LoginViaMobileScreen() {
     router.back();
   };
   
-  const selectCountry = (country) => {
+  const selectCountry = (country: Country) => {
     setCountryCode(country.dial_code);
     setCountryFlag(country.flag);
     setModalVisible(false);

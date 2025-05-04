@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { View, ActivityIndicator, Platform } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -60,7 +61,7 @@ function RootLayoutNav() {
       </Stack>
       <StatusBar 
         backgroundColor="#00506C" 
-        barStyle={Platform.OS === 'ios' ? 'dark-content' : 'light-content'} 
+        style={Platform.OS === 'ios' ? 'dark' : 'light'} 
       />
     </ThemeProvider>
   );
@@ -83,8 +84,10 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
