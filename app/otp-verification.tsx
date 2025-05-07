@@ -15,7 +15,7 @@ export default function OTPVerificationScreen() {
   const [otp, setOtp] = useState(["1", "2", "3", "4"]);
   const [timer, setTimer] = useState(30);
   const [isResendActive, setIsResendActive] = useState(false);
-  const [isAccountSetUpCompleted, setIsAccountSetUpCompleted] = useState(false);
+  const [isAccountSetUpCompleted, setIsAccountSetUpCompleted] = useState(true);
 
   const inputRefs = [
     useRef(null),
