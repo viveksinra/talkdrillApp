@@ -43,7 +43,7 @@ const countryCodes = [
 
 export default function LoginViaMobileScreen() {
   const router = useRouter();
-  const [phoneNumber, setPhoneNumber] = useState('8240399578');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
   const [countryFlag, setCountryFlag] = useState('🇮🇳');
   const [modalVisible, setModalVisible] = useState(false);
@@ -68,7 +68,7 @@ export default function LoginViaMobileScreen() {
     router.back();
   };
   
-  const selectCountry = (country) => {
+  const selectCountry = (country:any) => {
     setCountryCode(country.dial_code);
     setCountryFlag(country.flag);
     setModalVisible(false);

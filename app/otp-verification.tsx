@@ -13,7 +13,7 @@ export default function OTPVerificationScreen() {
   const { login } = useAuth();
   const { phoneNumber } = useLocalSearchParams();
 
-  const [otp, setOtp] = useState(["1", "2", "3", "4"]);
+  const [otp, setOtp] = useState(["", "", "", ""]);
   const [timer, setTimer] = useState(30);
   const [isResendActive, setIsResendActive] = useState(false);
   const [isAccountSetUpCompleted, setIsAccountSetUpCompleted] = useState(true);
@@ -27,7 +27,18 @@ export default function OTPVerificationScreen() {
     useRef(null),
   ];
   
-  useEffect(() => {
+  /**
+   * Starts a countdown timer for OTP resend functionality.
+   * 
+   * @returns {NodeJS.Timeout} An interval timer that can be used to clear the countdown.
+   * 
+   * This function sets a 30-second countdown timer, disabling OTP resend initially.
+   * When the timer reaches zero, it enables the resend option and clears the interval.
+   */
+  const startOTPTimer = () => {
+    setTimer(30);
+    setIsResendActive(false);
+    
     const interval = setInterval(() => {
       setTimer((prevTimer) => {
         if (prevTimer <= 1) {
@@ -39,9 +50,71 @@ export default function OTPVerificationScreen() {
       });
     }, 1000);
     
-    return () => clearInterval(interval);
+    return interval;
+  };
+
+  /**
+   * Initializes the OTP (One-Time Password) process for phone number verification.
+   * 
+   * @param {boolean} [isResend=false] - Indicates whether this is a resend attempt of the OTP.
+   * @returns {() => void} A cleanup function to clear the OTP timer interval.
+   * @throws {Error} Throws an error if OTP sending fails, with an alert shown to the user.
+   */
+  const initializeOTP = async (isResend = false) => {
+    try {
+      if (isResend) {
+        setResendLoading(true);
+      }
+      
+      // Call the API to send OTP
+      await sendOTP(phoneNumber as string);
+      
+      // Start the timer
+      const interval = startOTPTimer();
+      
+      return () => clearInterval(interval);
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        'Failed to send OTP. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      if (isResend) {
+        setResendLoading(false);
+      }
+    }
+  };
+  
+  /**
+   * Sets up the OTP (One-Time Password) initialization when the component mounts.
+   * 
+   * This effect triggers the OTP sending process automatically when the component loads,
+   * and ensures proper cleanup of the OTP timer interval when the component unmounts.
+   * 
+   * @returns {void} Cleans up the OTP timer interval to prevent memory leaks.
+   */
+  useEffect(() => {
+    // Send OTP when component mounts
+    const cleanupTimer = initializeOTP();
+    
+    return () => {
+      // Handle the Promise returned by initializeOTP
+      cleanupTimer.then(cleanup => {
+        if (cleanup) cleanup();
+      });
+    };
   }, []);
   
+  /**
+   * Handles changes to the OTP (One-Time Password) input fields.
+   * 
+   * @param {string} text - The input text for the current OTP digit.
+   * @param {number} index - The index of the current OTP input field.
+   * 
+   * Updates the OTP state, limits input to a single character,
+   * and automatically focuses the next input field when a digit is entered.
+   */
   const handleOtpChange = (text: string, index: number) => {
     if (text.length > 1) {
       text = text.charAt(0);
@@ -57,41 +130,34 @@ export default function OTPVerificationScreen() {
     }
   };
   
+
+  /**
+   * Handles the resending of the One-Time Password (OTP).
+   * 
+   * This function triggers the OTP resend process only if the resend functionality is currently active.
+   * It calls the initializeOTP method with a flag indicating a resend attempt.
+   * 
+   * @returns {Promise<void>} A promise that resolves when the OTP resend process is initiated.
+   */
   const handleResendOtp = async () => {
     if (isResendActive) {
-      try {
-        setResendLoading(true);
-
-        // Call the API to resend OTP
-        await sendOTP(phoneNumber as string);
-
-        // Restart timer
-        setTimer(30);
-        setIsResendActive(false);
-
-        const interval = setInterval(() => {
-          setTimer((prevTimer) => {
-            if (prevTimer <= 1) {
-              clearInterval(interval);
-              setIsResendActive(true);
-              return 0;
-            }
-            return prevTimer - 1;
-          });
-        }, 1000);
-      } catch (error) {
-        Alert.alert(
-          'Error',
-          'Failed to resend OTP. Please try again.',
-          [{ text: 'OK' }]
-        );
-        console.error('Error resending OTP:', error);
-      } finally {
-        setResendLoading(false);
-      }
+      initializeOTP(true);
     }
   };
   
+  /**
+   * Handles the verification of the One-Time Password (OTP).
+   * 
+   * This function is triggered when the user attempts to verify their OTP:
+   * - Checks if a complete 4-digit OTP has been entered
+   * - Calls the OTP verification API with the phone number and entered OTP
+   * - Logs in the user upon successful verification
+   * - Navigates to the main app screen
+   * - Handles and displays any verification errors
+   * 
+   * @async
+   * @throws {Error} Throws an error if OTP verification fails
+   */
   const handleVerifyOtp = async () => {
     const enteredOtp = otp.join('');
     if (enteredOtp.length === 4) {
