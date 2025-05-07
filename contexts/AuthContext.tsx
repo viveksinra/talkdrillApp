@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { router, useSegments, useRootNavigationState } from 'expo-router';
+import { ActivityIndicator, View } from 'react-native';
 
 // Define the User type
 type User = {
@@ -93,6 +94,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Use the protected route hook
   useProtectedRoute(user);
+
+   // Show loading indicator while authentication is being checked
+   if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#4A86E8" />
+      </View>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user, login, logout, isLoading }}>
