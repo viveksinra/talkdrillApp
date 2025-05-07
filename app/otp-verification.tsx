@@ -1,4 +1,4 @@
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 
@@ -6,16 +6,18 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { TextInput } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { sendOTP, verifyOTP } from '@/api/services/public/authService';
 
 export default function OTPVerificationScreen() {
   const router = useRouter();
   const { login } = useAuth();
   const { phoneNumber } = useLocalSearchParams();
 
-  const [otp, setOtp] = useState(["1", "2", "3", "4"]);
+  const [otp, setOtp] = useState(["", "", "", ""]);
   const [timer, setTimer] = useState(30);
   const [isResendActive, setIsResendActive] = useState(false);
-  const [isAccountSetUpCompleted, setIsAccountSetUpCompleted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   const inputRefs = [
     useRef(null),
@@ -54,37 +56,71 @@ export default function OTPVerificationScreen() {
     }
   };
   
-  const handleResendOtp = () => {
+  const handleResendOtp = async () => {
     if (isResendActive) {
-      setTimer(30);
-      setIsResendActive(false);
-      // Mock OTP resend
-      
-      // Restart timer
-      const interval = setInterval(() => {
-        setTimer((prevTimer) => {
-          if (prevTimer <= 1) {
-            clearInterval(interval);
-            setIsResendActive(true);
-            return 0;
-          }
-          return prevTimer - 1;
-        });
-      }, 1000);
+      try {
+        setResendLoading(true);
+        
+        // Call the API to resend OTP
+        await sendOTP(phoneNumber as string);
+        
+        // Restart timer
+        setTimer(30);
+        setIsResendActive(false);
+        
+        const interval = setInterval(() => {
+          setTimer((prevTimer) => {
+            if (prevTimer <= 1) {
+              clearInterval(interval);
+              setIsResendActive(true);
+              return 0;
+            }
+            return prevTimer - 1;
+          });
+        }, 1000);
+      } catch (error) {
+        Alert.alert(
+          'Error',
+          'Failed to resend OTP. Please try again.',
+          [{ text: 'OK' }]
+        );
+        console.error('Error resending OTP:', error);
+      } finally {
+        setResendLoading(false);
+      }
     }
   };
   
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
     const enteredOtp = otp.join('');
     if (enteredOtp.length === 4) {
-      // Mock OTP verification
-      // In a real app, verify with API
-      // Mock direct login (simplified for demo)
-      login({ name: 'Phone User', phoneNumber: phoneNumber as string });
-      if(isAccountSetUpCompleted) {
-        router.replace('/(tabs)');
-      } else {
-        router.replace('/account-setup');
+      try {
+        setLoading(true);
+        
+        // Call the API to verify OTP
+        const response = await verifyOTP(phoneNumber as string, enteredOtp);
+        
+        // Extract token and user data from response
+        const { token, user } = response;
+        
+        // Login the user
+        login(user);
+        
+        // Navigate to the appropriate screen
+        // if (!user.isProfileCompleted) {
+        //   router.replace('account-setup' as any);
+        // } else {
+          router.replace('(tabs)' as any);
+        // }
+      } catch (error) {
+        Alert.alert(
+          'Error',
+          'Failed to verify OTP. Please check the code and try again.',
+          [{ text: 'OK' }]
+        );
+        console.error('Error verifying OTP:', error);
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -111,7 +147,7 @@ export default function OTPVerificationScreen() {
             ref={inputRefs[index]}
             style={[
               styles.otpInput,
-              index === 0 && otp[0] !== '' && styles.activeInput
+              digit !== '' && styles.activeInput
             ]}
             value={digit}
             onChangeText={(text) => handleOtpChange(text, index)}
@@ -124,8 +160,15 @@ export default function OTPVerificationScreen() {
       <View style={styles.resendContainer}>
         {
           isResendActive ? (
-            <TouchableOpacity onPress={handleResendOtp}>
-             <ThemedText style={styles.resendButtonText}>Resend code</ThemedText>
+            <TouchableOpacity 
+              onPress={handleResendOtp} 
+              disabled={resendLoading}
+            >
+              {resendLoading ? (
+                <ActivityIndicator size="small" color="#4A86E8" />
+              ) : (
+                <ThemedText style={styles.resendButtonText}>Resend code</ThemedText>
+              )}
             </TouchableOpacity>
           ) : (
             <ThemedText style={styles.resendText}>
@@ -138,11 +181,15 @@ export default function OTPVerificationScreen() {
       <TouchableOpacity
         style={[
           styles.verifyButton,
-          otp.join('').length < 4 && styles.verifyButtonDisabled
+          (otp.join('').length < 4 || loading) && styles.verifyButtonDisabled
         ]}
-        disabled={otp.join('').length < 4}
+        disabled={otp.join('').length < 4 || loading}
         onPress={handleVerifyOtp}>
-        <ThemedText style={styles.verifyButtonText}>Verify</ThemedText>
+        {loading ? (
+          <ActivityIndicator color="#FFFFFF" size="small" />
+        ) : (
+          <ThemedText style={styles.verifyButtonText}>Verify</ThemedText>
+        )}
       </TouchableOpacity>
       
       <View style={styles.warningContainer}>

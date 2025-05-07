@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "speak-up",
-    "slug": "speak-up",
+    "name": "talkdrill",
+    "slug": "talkdrill",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "talkdrill",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {

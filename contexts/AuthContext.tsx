@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { router, useSegments, useRootNavigationState } from 'expo-router';
+import { View, ActivityIndicator } from 'react-native';
 
 // Define the User type
 type User = {
@@ -31,12 +32,14 @@ function useProtectedRoute(user: User) {
   const navigationState = useRootNavigationState();
 
   useEffect(() => {
-    if (!navigationState?.key) return;
+    // Don't do anything if the navigation state isn't ready
+    if (!navigationState) return;
+    if (!navigationState.key) return;
     
     const isPublicRoute = segments[0] === 'login' || 
-    segments[0] === 'otp-verification' ||
-    segments[0] === 'login-via-mobile' || 
-    segments[0] === 'welcome-carousel';
+      segments[0] === 'otp-verification' ||
+      segments[0] === 'login-via-mobile' || 
+      segments[0] === 'welcome-carousel';
     
     if (!user && !isPublicRoute) {
       // Redirect to the login page if the user is not authenticated
@@ -45,7 +48,7 @@ function useProtectedRoute(user: User) {
       // Redirect to the home page if the user is authenticated and on a public page
       router.replace('/(tabs)');
     }
-  }, [user, segments, navigationState?.key]);
+  }, [user, segments, navigationState]);
 }
 
 // AuthProvider component
@@ -93,6 +96,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Use the protected route hook
   useProtectedRoute(user);
+  
+  // Show loading indicator while authentication is being checked
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#4A86E8" />
+      </View>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user, login, logout, isLoading }}>
