@@ -8,6 +8,7 @@ import { View, ActivityIndicator, Platform } from 'react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { SocketProvider } from '@/contexts/SocketContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -84,7 +85,9 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <SocketProvider>
+        <RootLayoutNav />
+      </SocketProvider>
     </AuthProvider>
   );
 }

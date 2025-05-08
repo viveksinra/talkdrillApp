@@ -171,7 +171,7 @@ export default function OTPVerificationScreen() {
         const { token, user } = response;
 
         // Login the user
-        login(user);
+        await login(token, user);
 
         // Navigate to the appropriate screen
         // if (!user.isProfileCompleted) {
