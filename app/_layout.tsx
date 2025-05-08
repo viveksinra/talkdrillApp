@@ -41,6 +41,7 @@ function RootLayoutNav() {
         <Stack.Screen name="+not-found" options={{ title: 'Not Found' }} />
         
         {/* Other protected routes */}
+        <Stack.Screen name="online-users" options={{ title: 'Online Users', headerBackTitle: 'Back' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="ai-entry" options={{ title: 'AI Practice' }} />

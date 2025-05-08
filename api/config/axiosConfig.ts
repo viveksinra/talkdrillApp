@@ -32,7 +32,7 @@ let requestInterceptor = async (config: RequestConfig): Promise<RequestConfig> =
   const token = await SecureStore.getItemAsync('token');
   if (token) {
     config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${token}`;
+    config.headers.Authorization = `${token}`;
   }
   return config;
 };
