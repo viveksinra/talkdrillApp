@@ -6,7 +6,7 @@ import socketService from '../api/services/socketService';
 import CallHistory from '../components/ui/calling/CallHistory';
 import UserCallScreen from '../components/ui/calling/UserCallScreen';
 import AICallScreen from '../components/ui/calling/AICallScreen';
-import ThemedView from '../components/ThemedView';
+import {ThemedView} from '../components/ThemedView';
 
 enum CallState {
   IDLE,

@@ -7,101 +7,111 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { TranscriptItem } from '@/types';
+import { useSocket } from '@/contexts/SocketContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { getChatHistory, sendMessage, markMessagesAsRead } from '@/api/services/chatService';
 
 export default function PeerChatScreen() {
   const router = useRouter();
-  const { level, gender, teacher, random } = useLocalSearchParams();
+  const { user } = useAuth();
+  const { joinRoom, leaveRoom, sendChatMessage, on, off } = useSocket();
+  const { peerId, peerName, peerAvatar } = useLocalSearchParams();
   const flatListRef = useRef<FlatList>(null);
   
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<TranscriptItem[]>([]);
-  const [peer, setPeer] = useState({
-    id: 'peer1',
-    name: 'Alex',
-    avatar: 'https://via.placeholder.com/100',
-    level: level || 'intermediate'
-  });
+  const [messages, setMessages] = useState<any[]>([]);
   const [isCallRequested, setIsCallRequested] = useState(false);
   
-  // Mock peer connection
-  useEffect(() => {
-    // In a real app, connect to a peer
-    
-    // Add system message
-    setMessages([
-      {
-        id: 'system-1',
-        speaker: 'ai', // Using AI for system messages
-        text: `You are now connected with ${peer.name}. Say hi!`,
-        timestamp: new Date(),
-        errors: []
-      }
-    ]);
-    
-    // Mock peer message after a delay
-    setTimeout(() => {
-      const peerMessage: TranscriptItem = {
-        id: 'peer-1',
-        speaker: 'peer',
-        text: 'Hi there! Nice to meet you. How are you doing today?',
-        timestamp: new Date(),
-        errors: []
-      };
-      
-      setMessages(prevMessages => [...prevMessages, peerMessage]);
-    }, 2000);
-  }, []);
+  const roomId = `chat_${user?._id}_${peerId}`;
   
-  const handleSendMessage = () => {
-    if (message.trim() === '') return;
+  // Load chat history and join chat room
+  useEffect(() => {
+    if (!user?._id || !peerId) return;
     
-    const newUserMessage: TranscriptItem = {
-      id: Date.now().toString(),
-      speaker: 'user',
-      text: message,
-      timestamp: new Date(),
-      errors: []
+    // Join the chat room
+    joinRoom(roomId);
+    
+    // Load chat history
+    loadChatHistory();
+    
+    // Mark messages as read
+    markAsRead();
+    
+    // Listen for new messages
+    const handleNewMessage = (message: any) => {
+      setMessages(prev => [...prev, message]);
+      // Scroll to bottom
+      if (flatListRef.current) {
+        flatListRef.current.scrollToEnd({ animated: true });
+      }
     };
     
-    setMessages([...messages, newUserMessage]);
-    setMessage('');
+    on('new_message', handleNewMessage);
     
-    // Mock peer response after a delay
-    setTimeout(() => {
-      const peerResponse: TranscriptItem = {
-        id: (Date.now() + 1).toString(),
-        speaker: 'peer',
-        text: 'That\'s interesting! I\'m learning English to travel abroad next year. What about you?',
-        timestamp: new Date(),
-        errors: []
+    return () => {
+      // Leave the chat room
+      leaveRoom(roomId);
+      off('new_message', handleNewMessage);
+    };
+  }, [user?._id, peerId]);
+  
+  const loadChatHistory = async () => {
+    try {
+      const response = await getChatHistory(peerId as string);
+      setMessages(response.messages);
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+    }
+  };
+  
+  const markAsRead = async () => {
+    try {
+      await markMessagesAsRead(peerId as string);
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  };
+  
+  const handleSendMessage = async () => {
+    if (message.trim() === '') return;
+    
+    try {
+      // Create new message
+      const newMessage = {
+        sender: user?._id,
+        receiver: peerId,
+        text: message,
+        createdAt: new Date(),
       };
       
-      setMessages(prevMessages => [...prevMessages, peerResponse]);
+      // Add to UI immediately
+      setMessages([...messages, newMessage]);
+      setMessage('');
       
       // Scroll to bottom
       if (flatListRef.current) {
         flatListRef.current.scrollToEnd({ animated: true });
       }
-    }, 2000);
+      
+      // Send to API
+      await sendMessage(peerId as string, message);
+      
+      // Send to socket for real-time updates
+      sendChatMessage(roomId, newMessage);
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   };
   
   const handleCallRequest = () => {
-    setIsCallRequested(true);
-    
-    // Show incoming call UI
-    // In a real app, this would send a call request to the peer
-  };
-  
-  const handleAcceptCall = () => {
-    setIsCallRequested(false);
+    // Navigate to call screen
     router.push({
       pathname: '/peer-call',
-      params: { peerId: peer.id }
+      params: { 
+        peerId: peerId,
+        peerName: peerName,
+      }
     });
-  };
-  
-  const handleDeclineCall = () => {
-    setIsCallRequested(false);
   };
   
   const handleEndSession = () => {
@@ -112,37 +122,39 @@ export default function PeerChatScreen() {
     });
   };
   
-  const renderMessageItem = ({ item }: { item: TranscriptItem }) => (
-    <View style={[
-      styles.messageContainer,
-      item.speaker === 'user' ? styles.userMessage : 
-      item.speaker === 'peer' ? styles.peerMessage : styles.systemMessage
-    ]}>
-      {item.speaker !== 'user' && (
-        <Image
-          source={{ uri: item.speaker === 'peer' ? peer.avatar : undefined }}
-          style={styles.avatar}
-        />
-      )}
+  const renderMessageItem = ({ item }: { item: any }) => {
+    const isUser = item.sender === user?._id;
+    
+    return (
       <View style={[
-        styles.messageBubble,
-        item.speaker === 'user' ? styles.userBubble : 
-        item.speaker === 'peer' ? styles.peerBubble : styles.systemBubble
+        styles.messageContainer,
+        isUser ? styles.userMessage : styles.peerMessage
       ]}>
-        <ThemedText>{item.text}</ThemedText>
-        <ThemedText style={styles.timestamp}>
-          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </ThemedText>
+        {!isUser && (
+          <Image
+            source={{ uri: peerAvatar as string || 'https://via.placeholder.com/100' }}
+            style={styles.avatar}
+          />
+        )}
+        <View style={[
+          styles.messageBubble,
+          isUser ? styles.userBubble : styles.peerBubble
+        ]}>
+          <ThemedText>{item.text}</ThemedText>
+          <ThemedText style={styles.timestamp}>
+            {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </ThemedText>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
   
   return (
     <>
       <Stack.Screen
         options={{
           headerShown: true,
-          title: peer.name,
+          title: peerName as string || 'Chat',
           headerRight: () => (
             <View style={{ flexDirection: 'row', gap: 16 }}>
               <TouchableOpacity onPress={handleCallRequest}>
@@ -159,33 +171,15 @@ export default function PeerChatScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
-        {isCallRequested && (
-          <View style={styles.callRequestBanner}>
-            <ThemedText style={styles.callRequestText}>
-              {peer.name} is calling you
-            </ThemedText>
-            <View style={styles.callActions}>
-              <TouchableOpacity 
-                style={[styles.callActionButton, styles.declineButton]}
-                onPress={handleDeclineCall}>
-                <IconSymbol size={20} name="phone.down.fill" color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.callActionButton, styles.acceptButton]}
-                onPress={handleAcceptCall}>
-                <IconSymbol size={20} name="phone.fill" color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
         
         <FlatList
           ref={flatListRef}
           data={messages}
           renderItem={renderMessageItem}
-          keyExtractor={item => item.id}
+          keyExtractor={(item, index) => item._id || index.toString()}
           contentContainerStyle={styles.messagesList}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          initialNumToRender={messages.length}
         />
         
         <View style={styles.inputContainer}>
@@ -216,35 +210,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  callRequestBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#ECF3FF',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  callRequestText: {
-    fontWeight: '500',
-  },
-  callActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  callActionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  declineButton: {
-    backgroundColor: '#FF3B30',
-  },
-  acceptButton: {
-    backgroundColor: '#4CD964',
-  },
   messagesList: {
     padding: 16,
   },
@@ -258,10 +223,6 @@ const styles = StyleSheet.create({
   },
   peerMessage: {
     alignSelf: 'flex-start',
-  },
-  systemMessage: {
-    alignSelf: 'center',
-    maxWidth: '90%',
   },
   avatar: {
     width: 36,
@@ -280,10 +241,6 @@ const styles = StyleSheet.create({
   peerBubble: {
     backgroundColor: '#F5F5F5',
     borderBottomLeftRadius: 4,
-  },
-  systemBubble: {
-    backgroundColor: '#E5E5E5',
-    borderRadius: 8,
   },
   timestamp: {
     fontSize: 10,

@@ -5,8 +5,8 @@ import { Audio } from 'expo-av';
 import WebRTCService from '../../../api/services/webrtcService';
 import socketService from '../../../api/services/socketService';
 import { updateCallStatus } from '../../../api/services/callService';
-import ThemedView from '../../ThemedView';
-import ThemedText from '../../ThemedText';
+import {ThemedView} from '../../ThemedView';
+import {ThemedText} from '../../ThemedText';
 
 interface UserCallScreenProps {
   callId: string;
@@ -30,6 +30,9 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
   const webrtcService = useRef(new WebRTCService()).current;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const ringtoneRef = useRef<Audio.Sound | null>(null);
+  const localStream = useRef<MediaStream | null>(null);
+  const isMuted = useRef<boolean>(false);
+  const isSpeakerOn = useRef<boolean>(true);
 
   useEffect(() => {
     const connectSocket = async () => {
@@ -63,6 +66,7 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
         updateCallStatus(callId, 'ongoing');
         startTimer();
         stopRingtone();
+        localStream.current = remoteStream;
       });
       
       if (isOutgoing) {
@@ -135,10 +139,40 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
     }
   };
 
+  const handleToggleMute = () => {
+    if (localStream.current) {
+      localStream.current.getAudioTracks().forEach((track: any) => {
+        track.enabled = isMuted.current;
+      });
+      isMuted.current = !isMuted.current;
+    }
+  };
+  
+  const handleToggleSpeaker = async () => {
+    isSpeakerOn.current = !isSpeakerOn.current;
+    
+    // Update audio mode
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: isSpeakerOn.current, // Toggle the current value
+    });
+  };
+  
+  const handleEndCall = async () => {
+    try {
+      endCall();
+      onEndCall();
+    } catch (err) {
+      console.error('Failed to end call:', err);
+    }
+  };
+
   const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Start call if outgoing
@@ -150,57 +184,51 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.callerInfo}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{receiverName.charAt(0)}</Text>
+      <View style={styles.header}>
+        <ThemedText style={styles.headerTitle}>{receiverName}</ThemedText>
+        {callStatus === 'connected' ? (
+          <ThemedText style={styles.callTime}>{formatTime(callDuration)}</ThemedText>
+        ) : (
+          <ThemedText style={styles.callStatus}>
+            {callStatus === 'calling' ? 'Calling...' : 'Incoming call...'}
+          </ThemedText>
+        )}
+      </View>
+      
+      <View style={styles.avatar}>
+        <View style={styles.avatarCircle}>
+          <ThemedText style={styles.avatarText}>
+            {receiverName.charAt(0).toUpperCase()}
+          </ThemedText>
         </View>
-        <ThemedText style={styles.callerName}>{receiverName}</ThemedText>
-        <ThemedText style={styles.statusText}>
-          {callStatus === 'calling' && 'Calling...'}
-          {callStatus === 'incoming' && 'Incoming Call'}
-          {callStatus === 'connecting' && 'Connecting...'}
-          {callStatus === 'connected' && formatTime(callDuration)}
-        </ThemedText>
       </View>
       
       <View style={styles.controls}>
-        {callStatus === 'incoming' ? (
-          // Incoming call controls
-          <View style={styles.incomingControls}>
-            <TouchableOpacity
-              style={[styles.controlButton, styles.rejectButton]}
-              onPress={rejectCall}
-            >
-              <Ionicons name="call" size={30} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.controlButton, styles.acceptButton]}
-              onPress={acceptCall}
-            >
-              <Ionicons name="call" size={30} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          // Call in progress or outgoing call
-          <View style={styles.ongoingControls}>
-            <TouchableOpacity
-              style={[styles.controlButton, styles.muteButton]}
-            >
-              <Ionicons name="mic-off" size={24} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.controlButton, styles.speakerButton]}
-            >
-              <Ionicons name="volume-high" size={24} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.controlButton, styles.rejectButton]}
-              onPress={endCall}
-            >
-              <Ionicons name="call" size={30} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        )}
+        <TouchableOpacity 
+          style={[styles.controlButton, isMuted.current && styles.activeButton]} 
+          onPress={handleToggleMute}
+          disabled={callStatus !== 'connected'}
+        >
+          <Ionicons name={isMuted.current ? "mic-off" : "mic"} size={24} color="white" />
+          <ThemedText style={styles.buttonText}>Mute</ThemedText>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.endCallButton} 
+          onPress={handleEndCall}
+        >
+          <Ionicons name="call" size={24} color="white" />
+          <ThemedText style={styles.buttonText}>End Call</ThemedText>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.controlButton, isSpeakerOn.current && styles.activeButton]} 
+          onPress={handleToggleSpeaker}
+          disabled={callStatus !== 'connected'}
+        >
+          <Ionicons name="volume-high" size={24} color="white" />
+          <ThemedText style={styles.buttonText}>Speaker</ThemedText>
+        </TouchableOpacity>
       </View>
     </ThemedView>
   );
@@ -209,68 +237,74 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'space-between',
-    padding: 20,
+    backgroundColor: '#1D3D47',
   },
-  callerInfo: {
+  header: {
+    padding: 20,
     alignItems: 'center',
-    marginTop: 50,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  callTime: {
+    fontSize: 16,
+    color: '#A1CEDC',
+    marginTop: 8,
+  },
+  callStatus: {
+    fontSize: 16,
+    color: '#A1CEDC',
+    marginTop: 8,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#3498db',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#4A86E8',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 40,
-    color: '#fff',
+    fontSize: 48,
     fontWeight: 'bold',
-  },
-  callerName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 20,
-  },
-  statusText: {
-    fontSize: 16,
-    marginTop: 10,
-    color: '#777',
+    color: 'white',
   },
   controls: {
-    marginBottom: 50,
-  },
-  incomingControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  ongoingControls: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
+    padding: 20,
   },
   controlButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  acceptButton: {
-    backgroundColor: '#2ecc71',
-    transform: [{ rotate: '0deg' }],
+  activeButton: {
+    backgroundColor: '#4A86E8',
   },
-  rejectButton: {
-    backgroundColor: '#e74c3c',
-    transform: [{ rotate: '135deg' }],
+  buttonText: {
+    color: 'white',
+    fontSize: 12,
+    marginTop: 4,
   },
-  muteButton: {
-    backgroundColor: '#7f8c8d',
-  },
-  speakerButton: {
-    backgroundColor: '#3498db',
+  endCallButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

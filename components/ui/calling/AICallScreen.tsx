@@ -1,12 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import DeepgramService from '../../../api/services/deepgramService';
-import socketService from '../../../api/services/socketService';
+import { useSocket } from '../../../contexts/SocketContext';
 import { updateCallStatus } from '../../../api/services/callService';
-import ThemedView from '../../ThemedView';
-import ThemedText from '../../ThemedText';
+import { ThemedText } from '../../ThemedText';
+import { ThemedView } from '../../ThemedView';
 
 interface AICallScreenProps {
   callId: string;
@@ -15,200 +14,207 @@ interface AICallScreenProps {
   onEndCall: () => void;
 }
 
-interface Message {
-  id: string;
-  text: string;
-  isUser: boolean;
-  timestamp: Date;
-}
+const AICallScreen: React.FC<AICallScreenProps> = ({ callId, userId, deepgramApiKey, onEndCall }) => {
+  const { sendAITranscription, onCallEvent } = useSocket();
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [transcribedText, setTranscribedText] = useState('');
+  const [aiResponse, setAiResponse] = useState('Hello! How can I help you today?');
+  const [isMuted, setIsMuted] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [callTime, setCallTime] = useState(0);
+  const [isListening, setIsListening] = useState(false);
 
-const AICallScreen: React.FC<AICallScreenProps> = ({
-  callId,
-  userId,
-  deepgramApiKey,
-  onEndCall,
-}) => {
-  const [callStatus, setCallStatus] = useState<string>('connecting');
-  const [callDuration, setCallDuration] = useState<number>(0);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const deepgramService = useRef(new DeepgramService()).current;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    const initializeCall = async () => {
-      socketService.connect();
-      
-      // Initialize Deepgram
-      const initialized = deepgramService.initialize(
-        deepgramApiKey,
-        userId,
-        callId,
-        handleTranscript
-      );
-      
-      if (initialized) {
-        socketService.onCallEvent('ai-response', handleAIResponse);
-        updateCallStatus(callId, 'ongoing');
-        setCallStatus('connected');
-        startTimer();
-        
-        // Start listening after a short delay to ensure everything is set up
-        setTimeout(() => {
-          deepgramService.startListening();
-          
-          // Add welcome message
-          addMessage({
-            id: Date.now().toString(),
-            text: "Hello! I'm your AI assistant. How can I help you today?",
-            isUser: false,
-            timestamp: new Date()
-          });
-        }, 1000);
-      } else {
-        console.error('Failed to initialize Deepgram');
-        endCall();
-      }
-    };
-    
-    initializeCall();
-    
+    // Update call status to ongoing
+    updateCallStatus(callId, 'ongoing');
+
+    // Start call timer
+    timerRef.current = setInterval(() => {
+      setCallTime(prev => prev + 1);
+    }, 1000);
+
+    // Setup permission for recording
+    setupRecording();
+
+    // Listen for AI responses
+    onCallEvent('ai-response', handleAIResponse);
+
     return () => {
+      // Clean up
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      deepgramService.cleanup();
+      if (recording) {
+        stopRecording();
+      }
     };
   }, []);
 
-  const handleTranscript = (text: string) => {
-    // Add user message
-    addMessage({
-      id: Date.now().toString(),
-      text,
-      isUser: true,
-      timestamp: new Date()
-    });
+  const setupRecording = async () => {
+    try {
+      await Audio.requestPermissionsAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: !isSpeakerOn,
+      });
+    } catch (err) {
+      console.error('Failed to setup recording', err);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      if (recording) {
+        await stopRecording();
+      }
+      
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      
+      setRecording(newRecording);
+      setIsListening(true);
+      
+      // Auto-stop after 10 seconds of recording
+      setTimeout(() => {
+        if (recording) {
+          stopRecording();
+        }
+      }, 10000);
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      if (!recording) return;
+      
+      setIsListening(false);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      
+      if (uri) {
+        processAudio(uri);
+      }
+    } catch (err) {
+      console.error('Failed to stop recording', err);
+    }
+  };
+
+  const processAudio = async (uri: string) => {
+    try {
+      // Here you would normally upload the audio to Deepgram or process it
+      // For simplicity, we'll simulate transcription with a mock text
+      const mockTranscription = "This is a simulated transcription from the audio";
+      setTranscribedText(mockTranscription);
+      
+      // Send to AI through socket
+      sendAITranscription(userId, callId, mockTranscription);
+    } catch (err) {
+      console.error('Failed to process audio', err);
+    }
   };
 
   const handleAIResponse = (data: any) => {
-    if (data.callId === callId && data.message) {
-      // Add AI message
-      addMessage({
-        id: Date.now().toString(),
-        text: data.message,
-        isUser: false,
-        timestamp: new Date()
-      });
+    if (data.callId === callId) {
+      setAiResponse(data.message);
     }
   };
 
-  const addMessage = (message: Message) => {
-    setMessages(prev => [...prev, message]);
-    
-    // Scroll to bottom after message is added
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
-
-  const toggleMute = () => {
+  const handleToggleMute = () => {
     setIsMuted(!isMuted);
-    // Additional logic to mute microphone
   };
 
-  const toggleSpeaker = () => {
+  const handleToggleSpeaker = async () => {
     setIsSpeakerOn(!isSpeakerOn);
-    // Additional logic to toggle speaker
-  };
-
-  const endCall = async () => {
-    updateCallStatus(callId, 'completed');
-    deepgramService.cleanup();
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    onEndCall();
-  };
-
-  const startTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
     
-    const startTime = Date.now();
-    timerRef.current = setInterval(() => {
-      const seconds = Math.floor((Date.now() - startTime) / 1000);
-      setCallDuration(seconds);
-    }, 1000);
+    // Update audio mode
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: isSpeakerOn, // Toggle the current value
+    });
+  };
+
+  const handleEndCall = async () => {
+    try {
+      await updateCallStatus(callId, 'completed');
+      if (recording) {
+        await recording.stopAndUnloadAsync();
+      }
+      onEndCall();
+    } catch (err) {
+      console.error('Failed to end call', err);
+    }
   };
 
   const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
     <ThemedView style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.avatar}>
-          <Ionicons name="person" size={40} color="#fff" />
-        </View>
-        <ThemedText style={styles.callerName}>AI Assistant</ThemedText>
-        <ThemedText style={styles.statusText}>
-          {callStatus === 'connecting' ? 'Connecting...' : formatTime(callDuration)}
-        </ThemedText>
+        <ThemedText style={styles.headerTitle}>AI Assistant</ThemedText>
+        <ThemedText style={styles.callTime}>{formatTime(callTime)}</ThemedText>
       </View>
       
-      <ScrollView 
-        ref={scrollViewRef}
-        style={styles.conversationContainer}
-        contentContainerStyle={styles.conversationContent}
-      >
-        {messages.map(message => (
-          <View 
-            key={message.id} 
-            style={[
-              styles.messageBubble, 
-              message.isUser ? styles.userBubble : styles.aiBubble
-            ]}
-          >
-            <ThemedText style={styles.messageText}>{message.text}</ThemedText>
-          </View>
-        ))}
-      </ScrollView>
+      <View style={styles.content}>
+        <View style={styles.avatar}>
+          <Ionicons name="logo-android" size={80} color="#3498db" />
+        </View>
+        
+        <View style={styles.transcript}>
+          <ThemedText style={styles.transcriptTitle}>Transcript</ThemedText>
+          {transcribedText ? (
+            <ThemedText style={styles.userText}>You: {transcribedText}</ThemedText>
+          ) : (
+            <ThemedText style={styles.placeholder}>Speak to the AI assistant...</ThemedText>
+          )}
+          {aiResponse && (
+            <ThemedText style={styles.aiText}>AI: {aiResponse}</ThemedText>
+          )}
+        </View>
+      </View>
       
       <View style={styles.controls}>
-        <TouchableOpacity
-          style={[
-            styles.controlButton, 
-            styles.muteButton, 
-            isMuted && styles.activeButton
-          ]}
-          onPress={toggleMute}
+        <TouchableOpacity 
+          style={[styles.controlButton, isMuted && styles.activeButton]} 
+          onPress={handleToggleMute}
         >
-          <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color="#fff" />
+          <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color="white" />
+          <ThemedText style={styles.buttonText}>Mute</ThemedText>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.controlButton, styles.rejectButton]}
-          onPress={endCall}
+        
+        <TouchableOpacity 
+          style={[styles.recordButton, isListening && styles.recordingButton]} 
+          onPress={isListening ? stopRecording : startRecording}
         >
-          <Ionicons name="call" size={30} color="#fff" />
+          <Ionicons name={isListening ? "stop" : "mic"} size={32} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.controlButton, 
-            styles.speakerButton, 
-            isSpeakerOn && styles.activeButton
-          ]}
-          onPress={toggleSpeaker}
+        
+        <TouchableOpacity 
+          style={[styles.controlButton, isSpeakerOn && styles.activeButton]} 
+          onPress={handleToggleSpeaker}
         >
-          <Ionicons name="volume-high" size={24} color="#fff" />
+          <Ionicons name="volume-high" size={24} color="white" />
+          <ThemedText style={styles.buttonText}>Speaker</ThemedText>
         </TouchableOpacity>
       </View>
+      
+      <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
+        <Ionicons name="call" size={24} color="white" />
+        <ThemedText style={styles.buttonText}>End Call</ThemedText>
+      </TouchableOpacity>
     </ThemedView>
   );
 };
@@ -216,83 +222,95 @@ const AICallScreen: React.FC<AICallScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'space-between',
+    backgroundColor: '#1D3D47',
   },
   header: {
+    padding: 20,
     alignItems: 'center',
-    marginTop: 20,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  callTime: {
+    fontSize: 16,
+    color: '#A1CEDC',
+    marginTop: 8,
+  },
+  content: {
+    flex: 1,
+    padding: 20,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#3498db',
-    justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 20,
   },
-  callerName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 10,
-  },
-  statusText: {
-    fontSize: 16,
-    marginTop: 5,
-    color: '#777',
-  },
-  conversationContainer: {
+  transcript: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 10,
+    padding: 15,
     flex: 1,
-    marginVertical: 20,
   },
-  conversationContent: {
-    paddingVertical: 10,
+  transcriptTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 10,
   },
-  messageBubble: {
-    maxWidth: '80%',
-    borderRadius: 18,
-    padding: 12,
-    marginVertical: 5,
+  userText: {
+    color: '#ECF3FF',
+    marginBottom: 10,
   },
-  userBubble: {
-    backgroundColor: '#3498db',
-    alignSelf: 'flex-end',
-    marginLeft: '20%',
+  aiText: {
+    color: '#A1CEDC',
+    marginBottom: 10,
   },
-  aiBubble: {
-    backgroundColor: '#7f8c8d',
-    alignSelf: 'flex-start',
-    marginRight: '20%',
-  },
-  messageText: {
-    color: '#fff',
-    fontSize: 16,
+  placeholder: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontStyle: 'italic',
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 20,
+    alignItems: 'center',
+    padding: 20,
   },
   controlButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  rejectButton: {
-    backgroundColor: '#e74c3c',
-    transform: [{ rotate: '135deg' }],
-  },
-  muteButton: {
-    backgroundColor: '#7f8c8d',
-  },
-  speakerButton: {
-    backgroundColor: '#3498db',
-  },
   activeButton: {
-    borderWidth: 3,
-    borderColor: '#2ecc71',
+    backgroundColor: '#4A86E8',
+  },
+  recordButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#4CD964',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recordingButton: {
+    backgroundColor: '#FF3B30',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  endCallButton: {
+    backgroundColor: '#FF3B30',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 15,
+    margin: 20,
+    borderRadius: 10,
   },
 });
 
