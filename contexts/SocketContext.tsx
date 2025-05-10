@@ -29,28 +29,34 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   
+  // Use a ref to track socket connection
+  const socketRef = React.useRef<any>(null);
+  
   useEffect(() => {
-    if (user?._id) {
-      const socket = socketService.connect();
+    if (user?._id && !socketRef.current) {
+      socketRef.current = socketService.connect();
       
-      socket?.on('connect', () => {
+      socketRef.current?.on('connect', () => {
         setIsConnected(true);
-        socket.emit('user_online', { userId: user._id });
+        socketRef.current.emit('user_online', { userId: user._id });
       });
       
-      socket?.on('disconnect', () => {
+      socketRef.current?.on('disconnect', () => {
         setIsConnected(false);
       });
       
-      socket?.on('online_users', (users) => {
+      socketRef.current?.on('online_users', (users: string[]) => {
         setOnlineUsers(users);
       });
-      
-      return () => {
-        socketService.disconnect();
-      };
     }
-  }, [user]);
+    
+    return () => {
+      if (socketRef.current) {
+        socketService.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [user?._id]); // Only depend on user ID
   
   const joinRoom = (roomId: string) => {
     socketService.joinRoom(roomId);

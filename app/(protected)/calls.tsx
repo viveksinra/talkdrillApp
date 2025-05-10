@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, SafeAreaView } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
-import { startAICall, startUserCall } from '../api/services/callService';
-import socketService from '../api/services/socketService';
-import CallHistory from '../components/ui/calling/CallHistory';
-import UserCallScreen from '../components/ui/calling/UserCallScreen';
-import AICallScreen from '../components/ui/calling/AICallScreen';
-import {ThemedView} from '../components/ThemedView';
+import { useAuth } from '@/contexts/AuthContext';
+import { startAICall, startUserCall } from '../../api/services/callService';
+import socketService from '../../api/services/socketService';
+import CallHistory from '../../components/ui/calling/CallHistory';
+import UserCallScreen from '../../components/ui/calling/UserCallScreen';
+import AICallScreen from '../../components/ui/calling/AICallScreen';
+import {ThemedView} from '../../components/ThemedView';
 
 enum CallState {
   IDLE,

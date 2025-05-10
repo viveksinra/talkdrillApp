@@ -24,29 +24,52 @@ export default function OnlineUsersScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   
-  useEffect(() => {
-    loadUsers();
-  }, [onlineUsers]);
-  
-  const loadUsers = async () => {
+  const fetchUsers = async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       const response = await getUsersList();
       
-      // Mark online users
-      const usersWithOnlineStatus = response.users.map((u: any) => ({
-        ...u,
-        isOnline: onlineUsers.includes(u._id)
-      })).filter((u: any) => u._id !== user?._id); // Filter out current user
-      
-      setUsers(usersWithOnlineStatus);
+      // Only update if not aborted
+      if (!signal?.aborted) {
+        const usersWithOnlineStatus = response.users
+          .filter((u: any) => u._id !== user?._id) // Filter first
+          .map((u: any) => ({
+            ...u,
+            isOnline: onlineUsers.includes(u._id)
+          }));
+        
+        setUsers(usersWithOnlineStatus);
+      }
     } catch (error) {
-      console.error('Error loading users:', error);
+      if (!signal?.aborted) {
+        console.error('Error loading users:', error);
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   };
-  
+
+  // Initial fetch
+  useEffect(() => {
+    const abortController = new AbortController();
+    fetchUsers(abortController.signal);
+    return () => abortController.abort();
+  }, []); 
+
+  // Update online status without re-fetching
+  useEffect(() => {
+    if (users.length > 0 && onlineUsers) {
+      setUsers(prevUsers => 
+        prevUsers.map(u => ({
+          ...u,
+          isOnline: onlineUsers.includes(u._id)
+        }))
+      );
+    }
+  }, [onlineUsers]);
+
   const handleChatWithUser = (user: User) => {
     router.push({
       pathname: '/peer-chat',
@@ -119,9 +142,10 @@ export default function OnlineUsersScreen() {
     <>
       <Stack.Screen
         options={{
+          headerBackTitle: 'Back',
           title: 'Online Users',
           headerRight: () => (
-            <TouchableOpacity onPress={loadUsers}>
+            <TouchableOpacity onPress={() => fetchUsers()}>
               <Ionicons name="refresh" size={24} color="#4A86E8" />
             </TouchableOpacity>
           ),
@@ -133,7 +157,7 @@ export default function OnlineUsersScreen() {
           renderItem={renderUserItem}
           keyExtractor={(item) => item._id}
           refreshing={loading}
-          onRefresh={loadUsers}
+          onRefresh={() => fetchUsers()}
           ListEmptyComponent={() => (
             <View style={styles.emptyContainer}>
               <ThemedText style={styles.emptyText}>

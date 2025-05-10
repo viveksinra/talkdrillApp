@@ -1,7 +1,7 @@
-import { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { router, useSegments, useRootNavigationState } from 'expo-router';
+import { createContext, useState, useContext, useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import React from 'react';
 
 interface User {
   _id: string;
@@ -13,7 +13,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  loading: boolean;
+  isLoading: boolean;
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (userData: Partial<User>) => void;
@@ -22,7 +22,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isAuthenticated: false,
-  loading: true,
+  isLoading: true,
   login: async () => {},
   logout: async () => {},
   updateUser: () => {},
@@ -34,22 +34,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Only load the stored user data on initial mount
   useEffect(() => {
-    // Check if user is logged in on app start
-    const loadUser = async () => {
+    const loadUserData = async () => {
       try {
-        const userJson = await SecureStore.getItemAsync('user');
-        if (userJson) {
-          setUser(JSON.parse(userJson));
+        const storedToken = await SecureStore.getItemAsync('token');
+        const storedUser = await SecureStore.getItemAsync('user');
+        
+        if (storedToken && storedUser) {
+          setUser(JSON.parse(storedUser));
         }
       } catch (error) {
-        console.error('Error loading user from storage:', error);
+        console.error('Error loading auth data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadUser();
+    loadUserData();
   }, []);
 
   const login = async (token: string, userData: User) => {
@@ -68,6 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await SecureStore.deleteItemAsync('token');
       await SecureStore.deleteItemAsync('user');
       setUser(null);
+      console.log('User logged out');
     } catch (error) {
       console.error('Error removing auth data:', error);
       throw error;
@@ -82,8 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-   // Show loading indicator while authentication is being checked
-   if (loading) {
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#4A86E8" />
@@ -96,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         isAuthenticated: !!user,
-        loading,
+        isLoading: loading,
         login,
         logout,
         updateUser,
