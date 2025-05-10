@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, SafeAreaView } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { startAICall, startUserCall } from '../../api/services/callService';
-import socketService from '../../api/services/socketService';
 import CallHistory from '../../components/ui/calling/CallHistory';
 import UserCallScreen from '../../components/ui/calling/UserCallScreen';
 import AICallScreen from '../../components/ui/calling/AICallScreen';
@@ -20,15 +19,6 @@ export default function CallsScreen() {
   const [callData, setCallData] = useState<any>(null);
   const [selectedUser, setSelectedUser] = useState<{id: string, name: string} | null>(null);
 
-  useEffect(() => {
-    // Initialize socket connection
-    socketService.connect();
-
-    return () => {
-      socketService.disconnect();
-    };
-  }, []);
-
   const handleSelectUser = (userId: string, name: string) => {
     setSelectedUser({ id: userId, name });
     initiateUserCall(userId);
@@ -40,7 +30,7 @@ export default function CallsScreen() {
       
       setCallData({
         callId: response.callId,
-        callerId: user?._id,
+        callerId: user?.id,
         receiverId: receiverId,
         receiverName: selectedUser?.name || 'User',
         isOutgoing: true
@@ -59,7 +49,7 @@ export default function CallsScreen() {
       
       setCallData({
         callId: response.callId,
-        userId: user?._id,
+        userId: user?.id,
         deepgramApiKey: response.credentials.deepgramApiKey
       });
       
@@ -100,7 +90,7 @@ export default function CallsScreen() {
       default:
         return (
           <CallHistory
-            userId={user?._id || ''}
+            userId={user?.id || ''}
             onSelectUser={handleSelectUser}
             onCallAI={initiateAICall}
           />

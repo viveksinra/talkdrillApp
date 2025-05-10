@@ -1,14 +1,14 @@
 import io, { Socket } from 'socket.io-client';
-import { API_BASE_URL } from '../config/axiosConfig';
+import { SOCKET_BASE_URL } from '../config/axiosConfig';
 
 class SocketService {
   private socket: Socket | null = null;
   private listeners: Map<string, Function[]> = new Map();
 
   // Initialize socket connection
-  connect() {
+  connect(userId: string) {
     if (!this.socket) {
-      this.socket = io(API_BASE_URL, {
+      this.socket = io(SOCKET_BASE_URL, {
         transports: ['websocket'],
         reconnection: true,
         reconnectionAttempts: 5,
@@ -17,7 +17,7 @@ class SocketService {
 
       this.socket.on('connect', () => {
         console.log('Socket connected:', this.socket?.id);
-        this.triggerEvent('connect', this.socket?.id);
+        this.triggerEvent('connect', { socketId: this.socket?.id, userId });
       });
 
       this.socket.on('disconnect', () => {

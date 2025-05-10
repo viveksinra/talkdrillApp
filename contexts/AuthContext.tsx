@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import React from 'react';
 
 interface User {
-  _id: string;
+  id: string;
   name: string;
   email?: string;
   profileImage?: string;
@@ -42,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedUser = await SecureStore.getItemAsync('user');
         
         if (storedToken && storedUser) {
+          console.log('Stored user:', JSON.parse(storedUser).phoneNumber);
           setUser(JSON.parse(storedUser));
         }
       } catch (error) {

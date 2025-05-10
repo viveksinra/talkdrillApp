@@ -91,7 +91,7 @@ const CallHistory: React.FC<CallHistoryProps> = ({ userId, onSelectUser, onCallA
           if (item.isAICall) {
             onCallAI();
           } else if (otherUser) {
-            onSelectUser(otherUser._id, otherUser.name);
+            onSelectUser(otheruser.id, otherUser.name);
           }
         }}
       >
@@ -112,7 +112,7 @@ const CallHistory: React.FC<CallHistoryProps> = ({ userId, onSelectUser, onCallA
             if (item.isAICall) {
               onCallAI();
             } else if (otherUser) {
-              onSelectUser(otherUser._id, otherUser.name);
+              onSelectUser(otheruser.id, otherUser.name);
             }
           }}
         >

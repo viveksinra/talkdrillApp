@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getUsersList } from '@/api/services/userService';
 
 interface User {
-  _id: string;
+  id: string;
   name: string;
   profileImage?: string;
   isOnline: boolean;
@@ -32,7 +32,7 @@ export default function OnlineUsersScreen() {
       // Only update if not aborted
       if (!signal?.aborted) {
         const usersWithOnlineStatus = response.users
-          .filter((u: any) => u._id !== user?._id) // Filter first
+          .filter((u: any) => u._id !== user?.id) // Filter first
           .map((u: any) => ({
             ...u,
             isOnline: onlineUsers.includes(u._id)
@@ -64,7 +64,7 @@ export default function OnlineUsersScreen() {
       setUsers(prevUsers => 
         prevUsers.map(u => ({
           ...u,
-          isOnline: onlineUsers.includes(u._id)
+          isOnline: onlineUsers.includes(u.id)
         }))
       );
     }
@@ -74,7 +74,7 @@ export default function OnlineUsersScreen() {
     router.push({
       pathname: '/peer-chat',
       params: {
-        peerId: user._id,
+        peerId: user.id,
         peerName: user.name,
         peerAvatar: user.profileImage
       }
@@ -85,14 +85,14 @@ export default function OnlineUsersScreen() {
     router.push({
       pathname: '/peer-call',
       params: {
-        peerId: user._id,
+        peerId: user.id,
         peerName: user.name
       }
     });
   };
   
   const renderUserItem = ({ item }: { item: User }) => (
-    <View style={styles.userItem}>
+    <View key={item.id} style={styles.userItem}>
       <View style={styles.userInfo}>
         <View style={styles.avatarContainer}>
           {item.profileImage ? (
@@ -144,6 +144,11 @@ export default function OnlineUsersScreen() {
         options={{
           headerBackTitle: 'Back',
           title: 'Online Users',
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.replace('/(protected)/(tabs)')}>
+              <Ionicons name="chevron-back" size={24} color="#4A86E8" />
+            </TouchableOpacity>
+          ),
           headerRight: () => (
             <TouchableOpacity onPress={() => fetchUsers()}>
               <Ionicons name="refresh" size={24} color="#4A86E8" />
@@ -155,7 +160,7 @@ export default function OnlineUsersScreen() {
         <FlatList
           data={users}
           renderItem={renderUserItem}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item) => item.id}
           refreshing={loading}
           onRefresh={() => fetchUsers()}
           ListEmptyComponent={() => (

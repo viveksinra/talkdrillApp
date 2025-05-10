@@ -1,6 +1,6 @@
 import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Image } from 'react-native';
 
 import { ThemedText } from '@/components/ThemedText';
@@ -22,12 +22,13 @@ export default function PeerChatScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [isCallRequested, setIsCallRequested] = useState(false);
   
-  const roomId = `chat_${user?._id}_${peerId}`;
+  const roomId = `chat_${user?.id}_${peerId}`;
   
   // Load chat history and join chat room
   useEffect(() => {
-    if (!user?._id || !peerId) return;
+    if (!user?.id || !peerId) return;
     
+    console.log(`Joining room: ${roomId}`);
     // Join the chat room
     joinRoom(roomId);
     
@@ -39,6 +40,7 @@ export default function PeerChatScreen() {
     
     // Listen for new messages
     const handleNewMessage = (message: any) => {
+      console.log('New message received:', message);
       setMessages(prev => [...prev, message]);
       // Scroll to bottom
       if (flatListRef.current) {
@@ -46,14 +48,17 @@ export default function PeerChatScreen() {
       }
     };
     
+    console.log('Setting up new_message listener');
     on('new_message', handleNewMessage);
     
     return () => {
       // Leave the chat room
+      console.log(`Leaving room: ${roomId}`);
       leaveRoom(roomId);
+      console.log('Removing new_message listener');
       off('new_message', handleNewMessage);
     };
-  }, [user?._id, peerId]);
+  }, [user?.id, peerId]);
   
   const loadChatHistory = async () => {
     try {
@@ -78,7 +83,7 @@ export default function PeerChatScreen() {
     try {
       // Create new message
       const newMessage = {
-        sender: user?._id,
+        sender: user?.id,
         receiver: peerId,
         text: message,
         createdAt: new Date(),
@@ -123,7 +128,7 @@ export default function PeerChatScreen() {
   };
   
   const renderMessageItem = ({ item }: { item: any }) => {
-    const isUser = item.sender === user?._id;
+    const isUser = item.sender === user?.id;
     
     return (
       <View style={[
