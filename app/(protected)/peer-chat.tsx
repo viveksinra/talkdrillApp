@@ -22,15 +22,18 @@ export default function PeerChatScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [isCallRequested, setIsCallRequested] = useState(false);
   
-  const roomId = `chat_${user?.id}_${peerId}`;
+  // Create both possible room IDs to ensure messages are received in both directions
+  const roomId1 = `chat_${user?.id}_${peerId}`;
+  const roomId2 = `chat_${peerId}_${user?.id}`;
   
   // Load chat history and join chat room
   useEffect(() => {
     if (!user?.id || !peerId) return;
     
-    console.log(`Joining room: ${roomId}`);
-    // Join the chat room
-    joinRoom(roomId);
+    console.log(`Joining rooms: ${roomId1} and ${roomId2}`);
+    // Join both chat rooms to ensure we receive messages sent in either direction
+    joinRoom(roomId1);
+    joinRoom(roomId2);
     
     // Load chat history
     loadChatHistory();
@@ -38,27 +41,48 @@ export default function PeerChatScreen() {
     // Mark messages as read
     markAsRead();
     
-    // Listen for new messages
+    // Listen for new messages - create a stable reference to the handler
     const handleNewMessage = (message: any) => {
       console.log('New message received:', message);
-      setMessages(prev => [...prev, message]);
-      // Scroll to bottom
-      if (flatListRef.current) {
-        flatListRef.current.scrollToEnd({ animated: true });
-      }
+      
+      setMessages(prev => {
+        // Check if message already exists in the messages array to prevent duplicates
+        const isDuplicate = prev.some(existingMsg => 
+          existingMsg._id === message._id || 
+          (existingMsg.text === message.text && 
+           existingMsg.sender === message.sender &&
+           // Compare date strings rather than date objects
+           new Date(existingMsg.createdAt).getTime() === new Date(message.createdAt).getTime())
+        );
+        
+        // Only add the message if it's not a duplicate
+        if (!isDuplicate) {
+          return [...prev, message];
+        }
+        return prev;
+      });
+      
+      // Scroll to bottom with a slight delay to ensure rendering is complete
+      setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToEnd({ animated: true });
+        }
+      }, 100);
     };
     
     console.log('Setting up new_message listener');
     on('new_message', handleNewMessage);
     
+    // Clear function to clean up when component unmounts or dependencies change
     return () => {
-      // Leave the chat room
-      console.log(`Leaving room: ${roomId}`);
-      leaveRoom(roomId);
+      // Leave the chat rooms
+      console.log(`Leaving rooms: ${roomId1} and ${roomId2}`);
+      leaveRoom(roomId1);
+      leaveRoom(roomId2);
       console.log('Removing new_message listener');
       off('new_message', handleNewMessage);
     };
-  }, [user?.id, peerId]);
+  }, [user?.id, peerId, roomId1, roomId2, joinRoom, leaveRoom, on, off]);
   
   const loadChatHistory = async () => {
     try {
@@ -87,23 +111,30 @@ export default function PeerChatScreen() {
         receiver: peerId,
         text: message,
         createdAt: new Date(),
+        _id: `temp_${Date.now()}`, // Add a temporary ID to help with duplicate detection
       };
       
-      // Add to UI immediately
-      setMessages([...messages, newMessage]);
+      // Clear the input field immediately
       setMessage('');
       
+      // Add to UI immediately
+      setMessages(prev => [...prev, newMessage]);
+      
       // Scroll to bottom
-      if (flatListRef.current) {
-        flatListRef.current.scrollToEnd({ animated: true });
-      }
+      setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToEnd({ animated: true });
+        }
+      }, 100);
       
       // Send to API
-      await sendMessage(peerId as string, message);
+      const response = await sendMessage(peerId as string, message);
       
-      // Send to socket for real-time updates
-      sendChatMessage(roomId, newMessage);
+      // Send to socket for real-time updates - use both rooms to ensure delivery
+      sendChatMessage(roomId1, newMessage);
+      sendChatMessage(roomId2, newMessage);
     } catch (error) {
+      console.log('Error sending message:', JSON.stringify(error));
       console.error('Error sending message:', error);
     }
   };
@@ -137,8 +168,10 @@ export default function PeerChatScreen() {
       ]}>
         {!isUser && (
           <Image
-            source={{ uri: peerAvatar as string || 'https://via.placeholder.com/100' }}
+            source={{ uri: peerAvatar as string || 'https://img.freepik.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?semt=ais_hybrid&w=740' }}
             style={styles.avatar}
+            onError={(error) => console.error('Image loading error:', error.nativeEvent.error)}
+            defaultSource={require('@/assets/images/default-avatar-1.jpg')} // Add a local fallback image
           />
         )}
         <View style={[

@@ -13,11 +13,12 @@ export const getChatHistory = async (userId: string) => {
 
 // Send a message to another user
 export const sendMessage = async (receiverId: string, text: string) => {
+  console.log('Sending message to:', receiverId, text);
   try {
     const response = await post('/api/v1/chat/message', { receiverId, text });
     return response.data;
   } catch (error) {
-    console.error('Error sending message:', error);
+    console.error('Error sending message:', JSON.stringify(error));
     throw error;
   }
 };
