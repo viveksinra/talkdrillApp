@@ -1,12 +1,17 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import WebRTCService from '../../../api/services/webrtcService';
-import socketService from '../../../api/services/socketService';
+import streamService from '../../../api/services/streamService';
 import { updateCallStatus } from '../../../api/services/callService';
-import {ThemedView} from '../../ThemedView';
-import {ThemedText} from '../../ThemedText';
+import { ThemedView } from '../../ThemedView';
+import { ThemedText } from '../../ThemedText';
+import { 
+  StreamVideoClient, 
+  StreamVideo, 
+  StreamCall, 
+  Call
+} from '@stream-io/video-react-native-sdk';
 
 interface UserCallScreenProps {
   callId: string;
@@ -15,6 +20,7 @@ interface UserCallScreenProps {
   receiverName: string;
   onEndCall: () => void;
   isOutgoing?: boolean;
+  streamCallId?: string;
 }
 
 const UserCallScreen: React.FC<UserCallScreenProps> = ({
@@ -23,32 +29,68 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
   receiverId,
   receiverName,
   onEndCall,
-  isOutgoing = true
+  isOutgoing = true,
+  streamCallId
 }) => {
   const [callStatus, setCallStatus] = useState<string>(isOutgoing ? 'calling' : 'incoming');
   const [callDuration, setCallDuration] = useState<number>(0);
-  const webrtcService = useRef(new WebRTCService()).current;
+  const [streamClient, setStreamClient] = useState<StreamVideoClient | null>(null);
+  const [streamCall, setStreamCall] = useState<Call | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const ringtoneRef = useRef<Audio.Sound | null>(null);
-  const localStream = useRef<MediaStream | null>(null);
   const isMuted = useRef<boolean>(false);
   const isSpeakerOn = useRef<boolean>(true);
 
+  // Initialize Stream and join call
   useEffect(() => {
-    const connectSocket = async () => {
-      socketService.connect();
+    const initializeStream = async () => {
+      try {
+        if (isOutgoing || callStatus === 'connecting') {
+          // Get token from backend
+          const response = await streamService.getToken();
+          
+          // Initialize Stream client
+          const client = await streamService.initialize(
+            callerId,
+            response.token,
+            response.apiKey
+          );
+          
+          setStreamClient(client);
+          
+          // Start or join call
+          if (streamCallId) {
+            const call = await streamService.joinCall(streamCallId);
+            setStreamCall(call);
+            setCallStatus('connected');
+            updateCallStatus(callId, 'ongoing');
+            startTimer();
+          } else if (isOutgoing) {
+            // Create a new call
+            const { streamCallId: newStreamCallId } = await streamService.startCall(receiverId);
+            const call = streamService.getCall();
+            setStreamCall(call);
+            updateCallStatus(callId, 'initiated');
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing Stream for call:', error);
+        endCall();
+      }
     };
     
-    connectSocket();
+    if (isOutgoing || callStatus === 'connecting') {
+      initializeStream();
+    }
     
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
       stopRingtone();
-      webrtcService.cleanup();
+      streamService.cleanup();
     };
-  }, []);
+  }, [isOutgoing, callStatus]);
 
   useEffect(() => {
     if (callStatus === 'incoming') {
@@ -56,37 +98,10 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
     }
   }, [callStatus]);
 
-  const startCall = async () => {
-    try {
-      const roomId = callId;
-      
-      await webrtcService.initialize(roomId, (remoteStream) => {
-        // Remote stream received, user answered
-        setCallStatus('connected');
-        updateCallStatus(callId, 'ongoing');
-        startTimer();
-        stopRingtone();
-        localStream.current = remoteStream;
-      });
-      
-      if (isOutgoing) {
-        // Create and send offer if this is the caller
-        webrtcService.createOffer();
-        updateCallStatus(callId, 'initiated');
-      } else {
-        // Update status to ongoing if this is the receiver accepting the call
-        updateCallStatus(callId, 'ongoing');
-      }
-    } catch (error) {
-      console.error('Error starting call:', error);
-      endCall();
-    }
-  };
-
   const acceptCall = async () => {
     setCallStatus('connecting');
     stopRingtone();
-    await startCall();
+    // The Stream initialization will happen in the useEffect that watches for callStatus changes
   };
 
   const rejectCall = async () => {
@@ -98,12 +113,18 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
   };
 
   const endCall = async () => {
-    updateCallStatus(callId, 'completed');
-    webrtcService.cleanup();
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
+    try {
+      updateCallStatus(callId, 'completed');
+      await streamService.endCall();
+      
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      onEndCall();
+    } catch (err) {
+      console.error('Failed to end call:', err);
+      onEndCall();
     }
-    onEndCall();
   };
 
   const startTimer = () => {
@@ -139,12 +160,12 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
     }
   };
 
-  const handleToggleMute = () => {
-    if (localStream.current) {
-      localStream.current.getAudioTracks().forEach((track: any) => {
-        track.enabled = isMuted.current;
-      });
+  const handleToggleMute = async () => {
+    try {
+      await streamService.toggleMicrophone();
       isMuted.current = !isMuted.current;
+    } catch (err) {
+      console.error('Failed to toggle mute:', err);
     }
   };
   
@@ -156,16 +177,16 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
       allowsRecordingIOS: true,
       playsInSilentModeIOS: true,
       shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: isSpeakerOn.current, // Toggle the current value
+      playThroughEarpieceAndroid: !isSpeakerOn.current,
     });
   };
   
   const handleEndCall = async () => {
     try {
-      endCall();
-      onEndCall();
+      await endCall();
     } catch (err) {
       console.error('Failed to end call:', err);
+      onEndCall();
     }
   };
 
@@ -175,61 +196,109 @@ const UserCallScreen: React.FC<UserCallScreenProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Start call if outgoing
-  useEffect(() => {
-    if (isOutgoing) {
-      startCall();
+  const renderCallUI = () => {
+    // If we have a Stream call and client, render the Stream UI
+    if (streamClient && streamCall && callStatus === 'connected') {
+      return (
+        <StreamVideo client={streamClient}>
+          <StreamCall call={streamCall}>
+            <View style={styles.header}>
+              <ThemedText style={styles.headerTitle}>{receiverName}</ThemedText>
+              <ThemedText style={styles.callTime}>{formatTime(callDuration)}</ThemedText>
+            </View>
+            
+            <View style={styles.avatar}>
+              <View style={styles.avatarCircle}>
+                <ThemedText style={styles.avatarText}>
+                  {receiverName.charAt(0).toUpperCase()}
+                </ThemedText>
+              </View>
+            </View>
+            
+            <View style={styles.controls}>
+              <TouchableOpacity 
+                style={[styles.controlButton, isMuted.current && styles.activeButton]} 
+                onPress={handleToggleMute}
+              >
+                <Ionicons name={isMuted.current ? "mic-off" : "mic"} size={24} color="white" />
+                <ThemedText style={styles.buttonText}>Mute</ThemedText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.endCallButton} 
+                onPress={handleEndCall}
+              >
+                <Ionicons name="call" size={24} color="white" />
+                <ThemedText style={styles.buttonText}>End Call</ThemedText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.controlButton, isSpeakerOn.current && styles.activeButton]} 
+                onPress={handleToggleSpeaker}
+              >
+                <Ionicons name="volume-high" size={24} color="white" />
+                <ThemedText style={styles.buttonText}>Speaker</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </StreamCall>
+        </StreamVideo>
+      );
     }
-  }, [isOutgoing]);
-
-  return (
-    <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <ThemedText style={styles.headerTitle}>{receiverName}</ThemedText>
-        {callStatus === 'connected' ? (
-          <ThemedText style={styles.callTime}>{formatTime(callDuration)}</ThemedText>
-        ) : (
+    
+    // Otherwise show the calling/incoming UI
+    return (
+      <>
+        <View style={styles.header}>
+          <ThemedText style={styles.headerTitle}>{receiverName}</ThemedText>
           <ThemedText style={styles.callStatus}>
             {callStatus === 'calling' ? 'Calling...' : 'Incoming call...'}
           </ThemedText>
-        )}
-      </View>
-      
-      <View style={styles.avatar}>
-        <View style={styles.avatarCircle}>
-          <ThemedText style={styles.avatarText}>
-            {receiverName.charAt(0).toUpperCase()}
-          </ThemedText>
         </View>
-      </View>
-      
-      <View style={styles.controls}>
-        <TouchableOpacity 
-          style={[styles.controlButton, isMuted.current && styles.activeButton]} 
-          onPress={handleToggleMute}
-          disabled={callStatus !== 'connected'}
-        >
-          <Ionicons name={isMuted.current ? "mic-off" : "mic"} size={24} color="white" />
-          <ThemedText style={styles.buttonText}>Mute</ThemedText>
-        </TouchableOpacity>
         
-        <TouchableOpacity 
-          style={styles.endCallButton} 
-          onPress={handleEndCall}
-        >
-          <Ionicons name="call" size={24} color="white" />
-          <ThemedText style={styles.buttonText}>End Call</ThemedText>
-        </TouchableOpacity>
+        <View style={styles.avatar}>
+          <View style={styles.avatarCircle}>
+            <ThemedText style={styles.avatarText}>
+              {receiverName.charAt(0).toUpperCase()}
+            </ThemedText>
+          </View>
+        </View>
         
-        <TouchableOpacity 
-          style={[styles.controlButton, isSpeakerOn.current && styles.activeButton]} 
-          onPress={handleToggleSpeaker}
-          disabled={callStatus !== 'connected'}
-        >
-          <Ionicons name="volume-high" size={24} color="white" />
-          <ThemedText style={styles.buttonText}>Speaker</ThemedText>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.controls}>
+          {callStatus === 'incoming' ? (
+            <>
+              <TouchableOpacity 
+                style={[styles.controlButton, { backgroundColor: '#4CAF50' }]} 
+                onPress={acceptCall}
+              >
+                <Ionicons name="call" size={24} color="white" />
+                <ThemedText style={styles.buttonText}>Accept</ThemedText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.endCallButton} 
+                onPress={rejectCall}
+              >
+                <Ionicons name="call" size={24} color="white" />
+                <ThemedText style={styles.buttonText}>Reject</ThemedText>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity 
+              style={styles.endCallButton} 
+              onPress={handleEndCall}
+            >
+              <Ionicons name="call" size={24} color="white" />
+              <ThemedText style={styles.buttonText}>End Call</ThemedText>
+            </TouchableOpacity>
+          )}
+        </View>
+      </>
+    );
+  };
+
+  return (
+    <ThemedView style={styles.container}>
+      {renderCallUI()}
     </ThemedView>
   );
 };

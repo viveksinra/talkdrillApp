@@ -1,3 +1,109 @@
+# TalkDrill: Language Learning App
+
+## Application Overview
+
+TalkDrill is a comprehensive language learning mobile application designed to help users improve their language proficiency through interactive conversations with AI and peer users. The app provides a platform for language practice through various modes including AI chat, AI calls, peer chat, and peer calls, followed by detailed performance analysis and feedback.
+
+### Key Features
+
+- **Multiple Practice Modes**:
+  - AI Chat: Text-based conversations with AI language partners
+  - AI Call: Voice conversations with AI models
+  - Peer Chat: Text conversations with other language learners
+  - Peer Call: Voice calls with other users for real-time practice
+
+- **Smart Matching System**: Find language partners based on proficiency level, interests, and preferences
+
+- **Performance Analysis**: Detailed reports after each session with metrics on:
+  - Fluency
+  - Grammar
+  - Vocabulary
+  - Pronunciation
+
+- **Virtual Currency System**: Earn and spend coins for premium features
+
+- **Progress Tracking**: Track improvement over time with session history and analytics
+
+## High-Level Design
+
+### Architecture
+
+TalkDrill is built using a modern React Native architecture with Expo, implementing:
+
+- **File-based Routing**: Using Expo Router for navigation
+- **Context API**: For global state management
+- **Real-time Communication**: Socket.IO for instant messaging and WebRTC for voice calls
+- **TypeScript**: For type safety and enhanced developer experience
+
+### System Components
+
+1. **Authentication System**
+   - Phone-based authentication with OTP verification
+   - Account setup and profile management
+
+2. **Session Management**
+   - AI session initialization and management
+   - Peer matching algorithm
+   - Real-time communication protocols
+
+3. **Analytics Engine**
+   - Speech-to-text processing (using Deepgram)
+   - Language analysis and metrics generation
+   - Report creation and storage
+
+4. **Coin Economy**
+   - Virtual currency management
+   - Transaction history
+   - Premium feature access control
+
+### Data Models
+
+The application revolves around these core data models:
+
+- **User**: Profile, statistics, preferences
+- **Session**: Conversation details, participants, duration
+- **Report**: Performance metrics, transcript analysis, improvement suggestions
+- **Transaction**: Coin economy activities
+- **Notification**: System messages and alerts
+
+### API Integration
+
+TalkDrill integrates several external services:
+
+- **Socket.IO**: For real-time messaging and online status
+- **WebRTC**: For peer-to-peer voice calls
+- **Deepgram**: For speech recognition and analysis
+- **Custom Backend APIs**: For user management, session history, and reporting
+
+### UI/UX Design
+
+The app follows a clean, intuitive design with:
+
+- **Tab-based Navigation**: For main sections (Calls, Chat, Reports, Settings)
+- **Custom Components**: Including parallax scrolling, haptic feedback tabs
+- **Responsive Layout**: Adapting to different device sizes
+- **Dark/Light Mode**: Supporting system theme preferences
+
+## Technical Stack
+
+- **Frontend**: React Native, Expo
+- **Language**: TypeScript
+- **State Management**: React Context API
+- **Navigation**: Expo Router
+- **Styling**: React Native's built-in styling system
+- **APIs**: RESTful services, WebSockets
+- **Voice Processing**: WebRTC, Deepgram integration
+
+## Deployment
+
+The app is configured for deployment to:
+- iOS App Store
+- Google Play Store
+
+Using Expo's EAS Build system for optimized native builds.
+
+---
+
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).

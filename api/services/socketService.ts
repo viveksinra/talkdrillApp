@@ -30,7 +30,7 @@ class SocketService {
         this.triggerEvent('online_users', users);
       });
 
-      // WebRTC signaling events
+      // audio/video call signaling events
       this.socket.on('incoming_offer', (offer) => {
         this.triggerEvent('offer', offer);
       });

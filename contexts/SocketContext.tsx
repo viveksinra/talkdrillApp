@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Alert } from 'react-native';
 import socketService from '../api/services/socketService';
 import { useAuth } from './AuthContext';
+import streamService from '../api/services/streamService';
+import { useRouter } from 'expo-router';
 
 interface SocketContextType {
   isConnected: boolean;
@@ -32,6 +34,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const { user } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const router = useRouter();
   
   // Use a ref to track socket connection
   const socketRef = useRef<any>(null);
@@ -63,6 +66,68 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       socketRef.current?.on('online_users', (users: string[]) => {
         console.log('Received online users:', users);
         setOnlineUsers(users);
+      });
+      
+      // Listen for incoming call offers from Stream
+      socketRef.current?.on('incoming_offer', async (offer: any) => {
+        try {
+          console.log('Received incoming call offer:', offer);
+          
+          // Get Stream token
+          const { token, apiKey } = await streamService.getToken();
+          
+          // Initialize Stream
+          await streamService.initialize(user.id, token, apiKey);
+          
+          // Show incoming call UI
+          Alert.alert(
+            'Incoming Call',
+            `You have an incoming call`,
+            [
+              {
+                text: 'Decline',
+                onPress: () => {
+                  // Update call status to rejected
+                  socketService.sendAnswer(offer.roomId, {
+                    status: 'rejected',
+                    callId: offer.callId
+                  });
+                },
+                style: 'cancel'
+              },
+              {
+                text: 'Accept',
+                onPress: async () => {
+                  try {
+                    // Join the Stream call
+                    await streamService.joinCall(offer.streamCallId);
+                    
+                    // Send answer
+                    socketService.sendAnswer(offer.roomId, {
+                      status: 'accepted',
+                      callId: offer.callId
+                    });
+                    
+                    // Navigate to call screen
+                    router.push({
+                      pathname: '/peer-call',
+                      params: { 
+                        callId: offer.callId,
+                        streamCallId: offer.streamCallId,
+                        peerId: offer.callerId
+                      }
+                    });
+                  } catch (error) {
+                    console.error('Error accepting call:', error);
+                    Alert.alert('Error', 'Could not join the call. Please try again.');
+                  }
+                }
+              }
+            ]
+          );
+        } catch (error) {
+          console.error('Error handling incoming call offer:', error);
+        }
       });
     }
   };

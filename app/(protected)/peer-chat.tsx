@@ -1,4 +1,4 @@
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View, Alert } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect, useRef } from 'react';
 import { Image } from 'react-native';
@@ -10,6 +10,7 @@ import { TranscriptItem } from '@/types';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getChatHistory, sendMessage, markMessagesAsRead } from '@/api/services/chatService';
+import streamService  from '@/api/services/streamService';
 
 export default function PeerChatScreen() {
   const router = useRouter();
@@ -139,15 +140,30 @@ export default function PeerChatScreen() {
     }
   };
   
-  const handleCallRequest = () => {
-    // Navigate to call screen
-    router.push({
-      pathname: '/peer-call',
-      params: { 
-        peerId: peerId,
-        peerName: peerName,
-      }
-    });
+  const handleCallRequest = async () => {
+    try {
+      // Get Stream token
+      const { token, apiKey } = await streamService.getToken();
+      
+      // Initialize Stream client
+      await streamService.initialize(user?.id || '', token, apiKey);
+      
+      // Start call with peer
+      const { callId, streamCallId } = await streamService.startCall(peerId as string);
+      
+      // Navigate to call screen
+      router.push({
+        pathname: '/peer-call',
+        params: { 
+          peerId: peerId,
+          callId: callId,
+          streamCallId: streamCallId
+        }
+      });
+    } catch (error) {
+      console.error('Error requesting call:', error);
+      Alert.alert('Error', 'Could not initiate the call. Please try again.');
+    }
   };
   
   const handleEndSession = () => {
