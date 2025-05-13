@@ -12,25 +12,27 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
   
+  const headerRight = React.useCallback(() => (
+    <View style={{ flexDirection: 'row', gap: 16 }}>
+      <TouchableOpacity onPress={() => router.push('/settings')}>
+        <IconSymbol size={24} name="gear" color="#000" />
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => router.push('/notifications')}>
+        <IconSymbol size={24} name="bell.fill" color="#000" />
+      </TouchableOpacity>
+    </View>
+  ), [router]);
+
+  const screenOptions = React.useMemo(() => ({
+    headerShown: true,
+    title: 'Home',
+    headerTransparent: true,
+    headerRight
+  }), [headerRight]);
+  
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'Home',
-          headerTransparent: true,
-          headerRight: () => (
-            <View style={{ flexDirection: 'row', gap: 16 }}>
-              <TouchableOpacity onPress={() => router.push('/settings')}>
-                <IconSymbol size={24} name="gear" color="#000" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/notifications')}>
-                <IconSymbol size={24} name="bell.fill" color="#000" />
-              </TouchableOpacity>
-            </View>
-          ),
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
       <ParallaxScrollView
         headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
         headerImage={
