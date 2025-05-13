@@ -6,8 +6,7 @@ import {
   StreamVideoParticipant
 } from '@stream-io/video-react-native-sdk';
 import { Alert } from 'react-native';
-import { API_BASE_URL } from '../config/axiosConfig';
-import axios from 'axios';
+import { get, post, put } from '../config/axiosConfig';
 import socketService from './socketService';
 
 class StreamService {
@@ -61,7 +60,7 @@ class StreamService {
    */
   async getToken() {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/v1/call/token`);
+      const response = await get('/api/v1/call/token');
       return {
         token: response.data.token,
         apiKey: response.data.apiKey
@@ -103,7 +102,7 @@ class StreamService {
   async startCall(receiverId: string) {
     try {
       // Create call on the backend
-      const response = await axios.post(`${API_BASE_URL}/api/v1/call/user`, {
+      const response = await post('/api/v1/call/user', {
         receiverId
       });
       

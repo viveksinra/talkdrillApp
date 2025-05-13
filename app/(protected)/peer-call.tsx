@@ -5,6 +5,7 @@ import { Image } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import streamService from '@/api/services/streamService';
 import axios from '@/api/config/axiosConfig';
+import InCallManager from 'react-native-incall-manager';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -36,6 +37,15 @@ export default function PeerCallScreen() {
       try {
         setIsLoading(true);
         
+        // Start InCallManager with explicit options for wake lock
+        InCallManager.start({
+          media: 'video', 
+          auto: true,           // Auto audio handling
+          ringback: '',         // No ringback tone during call
+          keepAwake: true,      // Explicitly keep device awake
+          requestAudioFocus: true  // Request audio focus
+        });
+        
         // Get token from backend
         const response = await streamService.getToken();
         
@@ -64,10 +74,14 @@ export default function PeerCallScreen() {
           streamService.endCall().catch(error => {
             console.error('Error ending call on unmount:', error);
           });
+          // Stop InCallManager when the call ends
+          InCallManager.stop();
         };
       } catch (error) {
         console.error('Error initializing Stream for call:', error);
         setIsLoading(false);
+        // Stop InCallManager in case of error
+        InCallManager.stop();
         router.back();
       }
     };
@@ -96,6 +110,9 @@ export default function PeerCallScreen() {
         // End call and update status
         await streamService.endCall();
         
+        // Stop InCallManager
+        InCallManager.stop();
+        
         // Update call status in database
         await axios.put('/api/v1/call/status', {
           callId,
@@ -109,6 +126,8 @@ export default function PeerCallScreen() {
         });
       } catch (error) {
         console.error('Error ending call:', error);
+        // Stop InCallManager in case of error
+        InCallManager.stop();
         router.back();
       }
     };

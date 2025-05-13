@@ -33,7 +33,7 @@ export default function ChatsScreen() {
     try {
       setLoading(true);
       const response = await getChatList();
-      setChats(response.chats);
+      setChats(response.chats.filter((chat: ChatPreview) => chat.userId !== user?.id));
     } catch (error) {
       console.error('Error loading chats:', error);
     } finally {
@@ -53,7 +53,7 @@ export default function ChatsScreen() {
   };
   
   const handleNewChat = () => {
-    router.push('/online-users');
+    router.push('/users');
   };
   
   const renderChatItem = ({ item }: { item: ChatPreview }) => {
