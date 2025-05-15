@@ -5,7 +5,7 @@ import { Image } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import streamService from '@/api/services/streamService';
 import axios from '@/api/config/axiosConfig';
-import InCallManager from 'react-native-incall-manager';
+import { activateKeepAwakeAsync, deactivateKeepAwake, useKeepAwake } from 'expo-keep-awake';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -31,23 +31,21 @@ export default function PeerCallScreen() {
   const [streamCall, setStreamCall] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Use Expo's KeepAwake hook to prevent the screen from sleeping
+  useKeepAwake();
+  
   // Initialize Stream
   useEffect(() => {
     const initializeStream = async () => {
       try {
         setIsLoading(true);
         
-        // Start InCallManager with explicit options for wake lock
-        InCallManager.start({
-          media: 'video', 
-          auto: true,           // Auto audio handling
-          ringback: '',         // No ringback tone during call
-          keepAwake: true,      // Explicitly keep device awake
-          requestAudioFocus: true  // Request audio focus
-        });
+        // Keep device awake during the call
+        await activateKeepAwakeAsync('peerCallAwake');
         
         // Get token from backend
         const response = await streamService.getToken();
+        console.log('response', response);
         
         // Initialize Stream client
         const client = await streamService.initialize(
@@ -55,9 +53,11 @@ export default function PeerCallScreen() {
           response.token, 
           response.apiKey
         );
+        console.log('client', client);
         
         // Create or join call
         const call = await streamService.joinCall(streamCallId as string);
+        console.log('call', call);
         
         setStreamClient(client);
         setStreamCall(call);
@@ -74,21 +74,21 @@ export default function PeerCallScreen() {
           streamService.endCall().catch(error => {
             console.error('Error ending call on unmount:', error);
           });
-          // Stop InCallManager when the call ends
-          InCallManager.stop();
+          // Release the keep awake lock when the call ends
+          deactivateKeepAwake('peerCallAwake');
         };
       } catch (error) {
         console.error('Error initializing Stream for call:', error);
         setIsLoading(false);
-        // Stop InCallManager in case of error
-        InCallManager.stop();
+        // Release the keep awake lock in case of error
+        deactivateKeepAwake('peerCallAwake');
         router.back();
       }
     };
     
     initializeStream();
   }, [user?.id, streamCallId]);
-  
+
   // Custom call controls component
   const CustomCallControls = () => {
     const call = useCall();
@@ -101,17 +101,13 @@ export default function PeerCallScreen() {
       await call?.camera.toggle();
     };
     
-    const handleToggleSpeaker = async () => {
-      // Stream doesn't directly have a speaker toggle, handled by device
-    };
-    
     const handleEndCall = async () => {
       try {
         // End call and update status
         await streamService.endCall();
         
-        // Stop InCallManager
-        InCallManager.stop();
+        // Release the keep awake lock when ending the call
+        deactivateKeepAwake('peerCallAwake');
         
         // Update call status in database
         await axios.put('/api/v1/call/status', {
@@ -126,8 +122,6 @@ export default function PeerCallScreen() {
         });
       } catch (error) {
         console.error('Error ending call:', error);
-        // Stop InCallManager in case of error
-        InCallManager.stop();
         router.back();
       }
     };

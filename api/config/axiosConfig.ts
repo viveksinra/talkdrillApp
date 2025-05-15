@@ -3,12 +3,12 @@ import { Platform } from 'react-native';
 
 // We need different URLs for iOS simulator vs Android emulator
 export const API_BASE_URL =  Platform.OS === 'ios' 
-  ? 'https://650c-103-215-226-222.ngrok-free.app' // For iOS simulator
-  : 'https://650c-103-215-226-222.ngrok-free.app';  // For Android emulator
+  ? 'https://5403-103-215-226-222.ngrok-free.app' // For iOS simulator
+  : 'https://5403-103-215-226-222.ngrok-free.app';  // For Android emulator
 
 export const SOCKET_BASE_URL = Platform.OS === 'ios' 
-  ? 'https://650c-103-215-226-222.ngrok-free.app' // For iOS simulator
-  : 'https://650c-103-215-226-222.ngrok-free.app';  // For Android emulator
+  ? 'https://5403-103-215-226-222.ngrok-free.app' // For iOS simulator
+  : 'https://5403-103-215-226-222.ngrok-free.app';  // For Android emulator
 
 // Types to maintain compatibility
 type AxiosResponse<T = any> = {

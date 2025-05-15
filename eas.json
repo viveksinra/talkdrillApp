@@ -1,0 +1,18 @@
+{
+    "build": {
+      "production": {
+        "developmentClient": false,
+        "distribution": "store",
+        "android": {
+          "buildType": "apk"
+        },
+        "ios": {
+          "simulator": false, 
+          "buildConfiguration": "Release"
+        }
+      }
+    },
+    "cli": {
+      "version": ">= 3.0.0"
+    }
+}
