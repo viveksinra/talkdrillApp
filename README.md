@@ -154,3 +154,22 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+
+## how to run the app locally
+
+1. download(https://drive.google.com/file/d/18lHSb0xMDhfNv5F5VuWG2f6lyIh1BsLm/view?usp=sharing) install this development apk in real android device, if you have two devices install in both
+
+2. open the talkdrillApp folder in vs code terminal
+
+3. run the command `npm install`
+
+4. run the command `npx expo start --tunnel`
+
+5. you can see something like using development build in expo console, if you see using Expo Go, press s in terminal
+
+6. scan the QR with camera and paste the link in installed app in the section called 'Enter URL manually'
+
+7. app will be functioning, you can test the app
+
+
