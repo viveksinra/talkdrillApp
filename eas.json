@@ -1,18 +1,24 @@
 {
-    "build": {
-      "production": {
-        "developmentClient": false,
-        "distribution": "store",
-        "android": {
-          "buildType": "apk"
-        },
-        "ios": {
-          "simulator": false, 
-          "buildConfiguration": "Release"
-        }
-      }
+  "cli": {
+    "version": ">= 16.5.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
     },
-    "cli": {
-      "version": ">= 3.0.0"
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+          "ANDROID_SDK_ROOT": "/home/YourUserName/Android/Sdk"
+      }
     }
+  },
+  "submit": {
+    "production": {}
+  }
 }
