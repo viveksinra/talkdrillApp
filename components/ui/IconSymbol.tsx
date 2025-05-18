@@ -17,7 +17,12 @@ const MAPPING = {
   'person.2.fill': 'group',
   'gear': 'settings',
   'bell.fill': 'notifications',
-  'arrow.right.square': 'logout'
+  'arrow.right.square': 'logout',
+  // Added missing mappings
+  'person.fill': 'person',
+  'doc.text.fill': 'description',
+  'clock.fill': 'access-time',
+  'pencil': 'edit'
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],
@@ -44,5 +49,6 @@ export function IconSymbol({
   style?: StyleProp<ViewStyle>;
   weight?: SymbolWeight;
 }) {
+  // @ts-ignore
   return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
 }
