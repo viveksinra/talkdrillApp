@@ -11,15 +11,9 @@ export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
   
-  const handleGoogleSignIn = async () => {
-    // Mock Google authentication
-    try {
-      // In a real app, implement Expo Google Auth here
-      login({ name: 'Google User', email: 'user@example.com' });
-    } catch (error) {
-      console.error('Google sign in error:', error);
-    }
-  };
+  // const handleGoogleSignIn = async () => {
+  //  
+  // };
   
   const handleLoginViaMobile = () => {
       // In a real app, this would navigate to OTP verification
@@ -47,7 +41,7 @@ export default function LoginScreen() {
       <ThemedText style={styles.tagline}>Improve your English through conversation</ThemedText>
       
       <View style={styles.buttonContainer}>
-        <TouchableOpacity 
+        {/* <TouchableOpacity 
           style={styles.googleButton}
           onPress={handleGoogleSignIn}>
           <IconSymbol size={24} name="g.circle.fill" color="#DF4A32" />
@@ -58,7 +52,7 @@ export default function LoginScreen() {
           <View style={styles.dividerLine} />
           <ThemedText style={styles.dividerText}>or</ThemedText>
           <View style={styles.dividerLine} />
-        </View>
+        </View> */}
         
         <TouchableOpacity 
           style={styles.mobileButton}
