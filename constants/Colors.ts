@@ -3,41 +3,25 @@
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
  */
 
-const primary = '#2196F3';      // Blue
-const primaryLight = '#64B5F6';
-const primaryDark = '#1976D2';
-
-const secondary = '#FF9800';    // Orange
-const secondaryLight = '#FFB74D';
-const secondaryDark = '#F57C00';
-
-export const Colors = {
-  light: {
-    text: '#11181C',
-    background: '#FFFFFF',
-    surface: '#F8F9FA',
-    primary,
-    primaryLight,
-    primaryDark,
-    secondary,
-    secondaryLight,
-    secondaryDark,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: primary,
-  },
-  dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    surface: '#1E2324',
-    primary: primaryLight,
-    primaryLight: primary,
-    primaryDark,
-    secondary: secondaryLight,
-    secondaryLight: secondary,
-    secondaryDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: primaryLight,
-  },
-};
+export default {
+  primary: '#4F6DF5',
+  primaryDark: '#3955D8',
+  primaryLight: '#7A8FF8',
+  secondary: '#FF6B6B',
+  secondaryDark: '#E85151',
+  secondaryLight: '#FF8C8C',
+  accent: '#00BFA6',
+  darkAccent: '#00A28F',
+  lightAccent: '#E4F7F4',
+  background: '#F8F9FA',
+  surface: '#FFFFFF',
+  text: '#212529',
+  textSecondary: '#495057',
+  textTertiary: '#6C757D',
+  border: '#DEE2E6',
+  divider: '#E9ECEF',
+  error: '#DC3545',
+  success: '#28A745',
+  warning: '#FFC107',
+  info: '#17A2B8',
+} as const;
