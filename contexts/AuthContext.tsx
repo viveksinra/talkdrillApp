@@ -1,102 +1,93 @@
-import { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { router, useSegments, useRootNavigationState } from 'expo-router';
+import { createContext, useState, useContext, useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+import React from 'react';
 
-// Define the User type
-type User = {
+interface User {
   id: string;
   name: string;
   email?: string;
   phoneNumber?: string;
-} | null;
-
-// Define the AuthContext type
-type AuthContextType = {
-  user: User;
-  login: (userData: Omit<NonNullable<User>, 'id'>) => void;
-  logout: () => void;
-  isLoading: boolean;
-};
-
-// Create the AuthContext
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Auth Provider props
-type AuthProviderProps = {
-  children: ReactNode;
-};
-
-// Function to check if the route is protected
-function useProtectedRoute(user: User) {
-  const segments = useSegments();
-  const navigationState = useRootNavigationState();
-
-  useEffect(() => {
-    if (!navigationState?.key) return;
-    
-    const isPublicRoute = segments[0] === 'login' || 
-    segments[0] === 'otp-verification' ||
-    segments[0] === 'login-via-mobile' || 
-    segments[0] === 'welcome-carousel';
-    
-    if (!user && !isPublicRoute) {
-      // Redirect to the login page if the user is not authenticated
-      router.replace('/login');
-    } else if (user && isPublicRoute) {
-      // Redirect to the home page if the user is authenticated and on a public page
-      router.replace('/(tabs)');
-    }
-  }, [user, segments, navigationState?.key]);
+  profileImage?: string;
 }
 
-// AuthProvider component
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User>(null);
-  const [isLoading, setIsLoading] = useState(true);
+interface AuthContextType {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (token: string, user: User) => Promise<void>;
+  logout: () => Promise<void>;
+  updateUser: (userData: Partial<User>) => void;
+}
 
-  // Check for stored authentication on app load
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  isAuthenticated: false,
+  isLoading: true,
+  login: async () => {},
+  logout: async () => {},
+  updateUser: () => {},
+});
+
+export const useAuth = () => useContext(AuthContext);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Only load the stored user data on initial mount
   useEffect(() => {
-    // Mock checking for stored credentials
-    // In a real app, this would check AsyncStorage or SecureStore
-    const checkAuth = async () => {
+    const loadUserData = async () => {
       try {
-        // Simulating async auth check
-        setTimeout(() => {
-          setIsLoading(false);
-          // No stored user found
-        }, 1000);
+        const storedToken = await SecureStore.getItemAsync('token');
+        const storedUser = await SecureStore.getItemAsync('user');
+        
+        if (storedToken && storedUser) {
+          console.log('Stored user:', JSON.parse(storedUser).phoneNumber);
+          setUser(JSON.parse(storedUser));
+        }
       } catch (error) {
-        console.error('Failed to check authentication:', error);
-        setIsLoading(false);
+        console.error('Error loading auth data:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
-    checkAuth();
+    loadUserData();
   }, []);
 
-  // Login function
-  const login = (userData: Omit<NonNullable<User>, 'id'>) => {
-    // Mock login - in a real app, this would call your API
-    const newUser = {
-      id: 'user-' + Date.now(),
-      ...userData,
-    };
-    setUser(newUser);
-    // In a real app, store user data in AsyncStorage or SecureStore
+  const login = async (token: string, userData: User) => {
+    try {
+      await SecureStore.setItemAsync('token', token);
+      await SecureStore.setItemAsync('user', JSON.stringify(userData));
+      setUser(userData);
+    } catch (error) {
+      console.error('Error saving auth data:', error);
+      throw error;
+    }
   };
 
-  // Logout function
-  const logout = () => {
-    setUser(null);
-    // In a real app, clear user data from AsyncStorage or SecureStore
-    router.replace('/login');
+  const logout = async () => {
+    try {
+      await SecureStore.deleteItemAsync('token');
+      await SecureStore.deleteItemAsync('user');
+      setUser(null);
+      console.log('User logged out');
+    } catch (error) {
+      console.error('Error removing auth data:', error);
+      throw error;
+    }
   };
 
-  // Use the protected route hook
-  useProtectedRoute(user);
+  const updateUser = (userData: Partial<User>) => {
+    if (user) {
+      const updatedUser = { ...user, ...userData };
+      setUser(updatedUser);
+      SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
+    }
+  };
 
-   // Show loading indicator while authentication is being checked
-   if (isLoading) {
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#4A86E8" />
@@ -105,17 +96,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading: loading,
+        login,
+        logout,
+        updateUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
-}
-
-// Hook to use the auth context
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-} 
+}; 

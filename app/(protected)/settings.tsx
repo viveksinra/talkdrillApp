@@ -5,9 +5,12 @@ import { useState } from 'react';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { useAuth } from '@/contexts/AuthContext';
+import React from 'react';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { logout } = useAuth();
   const [settings, setSettings] = useState({
     pushNotifications: true,
     language: 'English',
@@ -37,8 +40,9 @@ export default function SettingsScreen() {
     });
   };
   
-  const handleLogout = () => {
+  const handleLogout = async () => {
     // Mock logout
+    await logout();
     router.replace('/login');
   };
   
