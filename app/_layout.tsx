@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { View, ActivityIndicator, Platform } from 'react-native';
-
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
@@ -49,10 +49,12 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <SocketProvider>
-        <Slot />
-      </SocketProvider>
-    </AuthProvider>
+    <GestureHandlerRootView>
+        <AuthProvider>
+          <SocketProvider>
+            <Slot />
+          </SocketProvider>
+        </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
