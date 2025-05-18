@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View, ScrollView, SafeAreaView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-
+import { Image } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  console.log(user);
   
   // Use the actual routes
   const handleViewSavedReports = () => router.push('/saved-reports');
@@ -29,10 +30,13 @@ export default function ProfileScreen() {
         <ThemedView style={styles.container}>
           <View style={styles.profileHeader}>
             <View style={styles.profilePicture}>
-              <IconSymbol size={60} name="person.fill" color="#FFF" />
+           { user?.profileImage ? (<Image 
+              source={{ uri: user.profileImage }} 
+              style={styles.avatar} 
+            />) : (<IconSymbol size={60} name="person.fill" color="#FFF" />)}
             </View>
             <ThemedText type="title">{user?.name || 'Your Name'}</ThemedText>
-            <ThemedText>{user?.email || 'your.email@example.com'}</ThemedText>
+            <ThemedText>{user?.email || user?.phoneNumber}</ThemedText>
           </View>
           
           <ThemedView style={styles.statsContainer}>
@@ -159,6 +163,11 @@ const styles = StyleSheet.create({
   },
   menuContent: {
     flex: 1,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   menuTitle: {
     fontWeight: '500',
