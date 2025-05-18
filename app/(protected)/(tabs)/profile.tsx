@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, ScrollView, SafeAreaView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/ThemedText';
@@ -17,7 +17,7 @@ export default function ProfileScreen() {
   const handleEditProfile = () => router.push('/settings');
   
   return (
-    <>
+    <SafeAreaView style={styles.safeArea}>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -25,77 +25,85 @@ export default function ProfileScreen() {
           headerTransparent: true,
         }}
       />
-      <ThemedView style={styles.container}>
-        <View style={styles.profileHeader}>
-          <View style={styles.profilePicture}>
-            <IconSymbol size={60} name="person.fill" color="#FFF" />
-          </View>
-          <ThemedText type="title">{user?.name || 'Your Name'}</ThemedText>
-          <ThemedText>{user?.email || user?.phoneNumber || 'your.email@example.com'}</ThemedText>
-        </View>
-        
-        <ThemedView style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <ThemedText type="subtitle">12</ThemedText>
-            <ThemedText>Sessions</ThemedText>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <ThemedText type="subtitle">4</ThemedText>
-            <ThemedText>Hours</ThemedText>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <ThemedText type="subtitle">350</ThemedText>
-            <ThemedText>Coins</ThemedText>
-          </View>
-        </ThemedView>
-        
-        <ThemedView style={styles.menuContainer}>
-          <TouchableOpacity style={styles.menuItem} onPress={handleViewSavedReports}>
-            <View style={styles.menuIcon}>
-              <IconSymbol size={24} name="doc.text.fill" color="#4A86E8" />
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ThemedView style={styles.container}>
+          <View style={styles.profileHeader}>
+            <View style={styles.profilePicture}>
+              <IconSymbol size={60} name="person.fill" color="#FFF" />
             </View>
-            <View style={styles.menuContent}>
-              <ThemedText style={styles.menuTitle}>Saved Reports</ThemedText>
-              <ThemedText style={styles.menuDescription}>View your saved session reports</ThemedText>
-            </View>
-            <IconSymbol size={20} name="chevron.right" color="#888" />
-          </TouchableOpacity>
+            <ThemedText type="title">{user?.name || 'Your Name'}</ThemedText>
+            <ThemedText>{user?.email || 'your.email@example.com'}</ThemedText>
+          </View>
           
-          <TouchableOpacity style={styles.menuItem} onPress={handleViewSessionHistory}>
-            <View style={styles.menuIcon}>
-              <IconSymbol size={24} name="clock.fill" color="#4A86E8" />
+          <ThemedView style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <ThemedText type="subtitle">12</ThemedText>
+              <ThemedText>Sessions</ThemedText>
             </View>
-            <View style={styles.menuContent}>
-              <ThemedText style={styles.menuTitle}>Session History</ThemedText>
-              <ThemedText style={styles.menuDescription}>See your past practice sessions</ThemedText>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <ThemedText type="subtitle">4</ThemedText>
+              <ThemedText>Hours</ThemedText>
             </View>
-            <IconSymbol size={20} name="chevron.right" color="#888" />
-          </TouchableOpacity>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <ThemedText type="subtitle">350</ThemedText>
+              <ThemedText>Coins</ThemedText>
+            </View>
+          </ThemedView>
           
-          <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
-            <View style={styles.menuIcon}>
-              <IconSymbol size={24} name="pencil" color="#4A86E8" />
-            </View>
-            <View style={styles.menuContent}>
-              <ThemedText style={styles.menuTitle}>Edit Profile</ThemedText>
-              <ThemedText style={styles.menuDescription}>Update your profile information</ThemedText>
-            </View>
-            <IconSymbol size={20} name="chevron.right" color="#888" />
+          <ThemedView style={styles.menuContainer}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleViewSavedReports}>
+              <View style={styles.menuIcon}>
+                <IconSymbol size={24} name="doc.text.fill" color="#4A86E8" />
+              </View>
+              <View style={styles.menuContent}>
+                <ThemedText style={styles.menuTitle}>Saved Reports</ThemedText>
+                <ThemedText style={styles.menuDescription}>View your saved session reports</ThemedText>
+              </View>
+              <IconSymbol size={20} name="chevron.right" color="#888" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={handleViewSessionHistory}>
+              <View style={styles.menuIcon}>
+                <IconSymbol size={24} name="clock.fill" color="#4A86E8" />
+              </View>
+              <View style={styles.menuContent}>
+                <ThemedText style={styles.menuTitle}>Session History</ThemedText>
+                <ThemedText style={styles.menuDescription}>See your past practice sessions</ThemedText>
+              </View>
+              <IconSymbol size={20} name="chevron.right" color="#888" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
+              <View style={styles.menuIcon}>
+                <IconSymbol size={24} name="pencil" color="#4A86E8" />
+              </View>
+              <View style={styles.menuContent}>
+                <ThemedText style={styles.menuTitle}>Edit Profile</ThemedText>
+                <ThemedText style={styles.menuDescription}>Update your profile information</ThemedText>
+              </View>
+              <IconSymbol size={20} name="chevron.right" color="#888" />
+            </TouchableOpacity>
+          </ThemedView>
+          
+          <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+            <IconSymbol size={20} name="arrow.right.square" color="#FFFFFF" />
+            <ThemedText style={styles.logoutButtonText}>Logout</ThemedText>
           </TouchableOpacity>
         </ThemedView>
-        
-        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-          <IconSymbol size={20} name="arrow.right.square" color="#FFFFFF" />
-          <ThemedText style={styles.logoutButtonText}>Logout</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
-    </>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+  },
   container: {
     flex: 1,
     padding: 24,
