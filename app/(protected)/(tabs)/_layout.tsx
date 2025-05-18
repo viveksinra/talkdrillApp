@@ -42,13 +42,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="calls"
-        options={{
-          title: 'Calls',
-          tabBarIcon: ({ color }) => <TabBarIcon name="phone" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="chats"
         options={{
           title: 'Chats',
@@ -58,7 +51,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="users"
         options={{
-          title: 'Users',
+          title: 'Peers',
           tabBarIcon: ({ color }) => <TabBarIcon name="users" color={color} />,
         }}
       />

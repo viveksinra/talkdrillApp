@@ -164,7 +164,7 @@ export default function OnlineUsersScreen() {
       <Stack.Screen
         options={{
           headerBackTitle: 'Back',
-          title: 'Online Users',
+          title: 'Peers',
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()}>
               <Ionicons name="chevron-back" size={24} color="#4A86E8" />
