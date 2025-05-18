@@ -32,11 +32,11 @@ class SocketService {
 
       // audio/video call signaling events
       this.socket.on('incoming_offer', (offer) => {
-        this.triggerEvent('offer', offer);
+        this.triggerEvent('incoming_offer', offer);
       });
 
       this.socket.on('incoming_answer', (answer) => {
-        this.triggerEvent('answer', answer);
+        this.triggerEvent('incoming_answer', answer);
       });
 
       this.socket.on('incoming_ice_candidate', (candidate) => {

@@ -14,30 +14,39 @@ class StreamService {
   private currentUser: User | null = null;
   private currentCall: Call | null = null;
   private apiKey: string = '';
+  private isInitializing: boolean = false;
+  private initPromise: Promise<StreamVideoClient> | null = null;
 
   /**
-   * Initialize Stream client with user and token
-   * @param userId User ID to connect as
-   * @param token Stream token for authentication
-   * @param apiKey Stream API key
+   * Get token and initialize client in one call
+   * Returns existing client if already initialized
    */
-  async initialize(userId: string, token: string, apiKey: string) {
+  async ensureInitialized(userId: string, userName?: string, userImage?: string) {
+    // Return existing client if already set up for this user
+    if (this.client && this.currentUser?.id === userId) {
+      return this.client;
+    }
+
+    // Don't duplicate initialization
+    if (this.isInitializing) {
+      return this.initPromise;
+    }
+
     try {
-      // If we already have a client for the same user, reuse it
-      if (this.client && this.currentUser?.id === userId) {
-        return this.client;
-      }
+      this.isInitializing = true;
       
-      // Set the API key
-      this.apiKey = apiKey;
+      // Get token first
+      const { token, apiKey } = await this.getToken();
       
-      // Create user object
+      // Create user object with profile data
       const user: User = {
         id: userId,
-        name: userId,
+        name: userName || userId,
+        image: userImage
       };
       
-      // Initialize the Stream Video client
+      // Initialize client
+      this.apiKey = apiKey;
       this.client = new StreamVideoClient({
         apiKey,
         user,
@@ -45,13 +54,15 @@ class StreamService {
       });
       
       this.currentUser = user;
-      
       console.log('Stream client initialized for user:', userId);
       
       return this.client;
     } catch (error) {
       console.error('Error initializing Stream client:', error);
       throw error;
+    } finally {
+      this.isInitializing = false;
+      this.initPromise = null;
     }
   }
   
@@ -85,8 +96,36 @@ class StreamService {
       // Get or create call
       this.currentCall = this.client.call(callType as string, callId);
       
-      // Join the call
-      await this.currentCall.join({ create: true });
+      // Join the call with retry logic
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          await this.currentCall.join({ create: true });
+          console.log('Successfully joined call:', callId);
+          
+          // Check if we have proper state after joining
+          if (!this.currentCall.state || !this.currentCall.state.participants) {
+            console.log('Call joined but state or participants are missing, retrying...');
+            retryCount++;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
+          }
+          
+          break; // Successfully joined
+        } catch (error) {
+          console.error(`Join attempt ${retryCount + 1} failed:`, error);
+          retryCount++;
+          
+          if (retryCount >= maxRetries) {
+            throw error;
+          }
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
       
       return this.currentCall;
     } catch (error) {
@@ -96,33 +135,44 @@ class StreamService {
   }
   
   /**
-   * Start a user-to-user call with another user
-   * @param receiverId ID of the user to call
+   * Call another user (handles entire flow)
    */
-  async startCall(receiverId: string) {
+  async callUser(receiverId: string, receiverName?: string) {
     try {
-      // Create call on the backend
+      // Ensure we're initialized first
+      if (!this.client || !this.currentUser) {
+        throw new Error('Stream client not initialized');
+      }
+      
+      // Create call on backend
       const response = await post('/api/v1/call/user', {
         receiverId
       });
       
-      // Get the call ID
       const { streamCallId, callId } = response.data;
       
       // Join the call
-      await this.joinCall(streamCallId);
+      this.currentCall = this.client.call('default', streamCallId);
+      await this.currentCall.join({ create: true });
       
-      // Notify the other user through socket
-      socketService.sendOffer(`chat_${this.currentUser?.id}_${receiverId}`, {
+      // By default, disable camera for audio-only
+      await this.currentCall.camera.disable();
+      
+      // Notify the receiver through socket
+      socketService.sendOffer(`chat_${this.currentUser.id}_${receiverId}`, {
         callId,
         streamCallId,
-        callerId: this.currentUser?.id,
-        receiverId
+        callerId: this.currentUser.id,
+        callerName: this.currentUser.name,
+        callerImage: this.currentUser.image,
+        receiverId,
+        receiverName
       });
       
       return {
         callId,
-        streamCallId
+        streamCallId,
+        call: this.currentCall
       };
     } catch (error) {
       console.error('Error starting call:', error);

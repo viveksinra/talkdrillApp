@@ -1,10 +1,9 @@
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Alert } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import { Image } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import streamService from '@/api/services/streamService';
-import axios from '@/api/config/axiosConfig';
 import { activateKeepAwakeAsync, deactivateKeepAwake, useKeepAwake } from 'expo-keep-awake';
 
 import { ThemedText } from '@/components/ThemedText';
@@ -13,156 +12,176 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 
 // Import Stream components
 import { 
-  StreamVideoClient, 
   StreamVideo, 
   StreamCall, 
   CallContent,
   useCallStateHooks,
-  useCall
+  Call,
+  StreamVideoClient
 } from '@stream-io/video-react-native-sdk';
 
 export default function PeerCallScreen() {
   const router = useRouter();
-  const { peerId, callId, streamCallId } = useLocalSearchParams();
+  const { 
+    peerId, 
+    peerName = 'Peer',
+    callId, 
+    streamCallId,
+    isIncoming = 'false' 
+  } = useLocalSearchParams();
   const { user } = useAuth();
   
   const [callTime, setCallTime] = useState(0);
-  const [streamClient, setStreamClient] = useState<StreamVideoClient | null>(null);
-  const [streamCall, setStreamCall] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [callState, setCallState] = useState<{
+    client: StreamVideoClient | null;
+    call: Call | null;
+  }>({
+    client: null,
+    call: null
+  });
   
   // Use Expo's KeepAwake hook to prevent the screen from sleeping
   useKeepAwake();
   
-  // Initialize Stream
+  // Initialize call
   useEffect(() => {
-    const initializeStream = async () => {
+    let interval: NodeJS.Timeout;
+    
+    const setupCall = async () => {
       try {
         setIsLoading(true);
         
-        // Keep device awake during the call
+        // Keep device awake during call
         await activateKeepAwakeAsync('peerCallAwake');
         
-        // Get token from backend
-        const response = await streamService.getToken();
-        console.log('response', response);
-        
-        // Initialize Stream client
-        const client = await streamService.initialize(
+        // Initialize with current authenticated user, not peer
+        const client = await streamService.ensureInitialized(
           user?.id || '', 
-          response.token, 
-          response.apiKey
+          user?.name, 
+          user?.profileImage
         );
-        console.log('client', client);
         
-        // Create or join call
-        const call = await streamService.joinCall(streamCallId as string);
-        console.log('call', call);
+        let call;
         
-        setStreamClient(client);
-        setStreamCall(call);
+        if (isIncoming === 'true' && streamCallId) {
+          // For incoming calls, join the existing call
+          call = await streamService.joinCall(streamCallId as string);
+          console.log('Joined incoming call:', streamCallId);
+          
+          // Add a delay after joining to ensure connection is established
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Check participants after joining and log for debugging
+          console.log('Initial participants after joining:', call.state.participants);
+          
+          // Force a state update to reconnect if needed
+          if (Object.keys(call.state.participants).length < 2) {
+            console.log('Attempting to reconnect to call with insufficient participants');
+            await call.leave();
+            call = await streamService.joinCall(streamCallId as string);
+          }
+        } else if (streamCallId) {
+          // For outgoing calls that were already initiated
+          call = streamService.getCall();
+          
+          // If call isn't already active, rejoin it
+          if (!call) {
+            call = await streamService.joinCall(streamCallId as string);
+            console.log('Rejoined outgoing call:', streamCallId);
+          }
+        } else {
+          throw new Error("No valid streamCallId provided");
+        }
+        
+        // Ensure audio-only mode
+        if (call && call.camera) {
+          await call.camera.disable();
+        }
+        
+        setCallState({ client, call });
         setIsLoading(false);
+        
+        // Debug logging
+        console.log('Call setup complete, participants:', call.state.participants);
         
         // Start timer
-        const interval = setInterval(() => {
+        interval = setInterval(() => {
           setCallTime(prevTime => prevTime + 1);
         }, 1000);
-        
-        return () => {
-          clearInterval(interval);
-          // Clean up call on unmount
-          streamService.endCall().catch(error => {
-            console.error('Error ending call on unmount:', error);
-          });
-          // Release the keep awake lock when the call ends
-          deactivateKeepAwake('peerCallAwake');
-        };
       } catch (error) {
-        console.error('Error initializing Stream for call:', error);
+        console.error('Error setting up call:', error);
+        Alert.alert('Error', 'Could not connect to call. Please try again later.');
         setIsLoading(false);
-        // Release the keep awake lock in case of error
         deactivateKeepAwake('peerCallAwake');
         router.back();
       }
     };
     
-    initializeStream();
-  }, [user?.id, streamCallId]);
+    setupCall();
+    
+    return () => {
+      if (interval) clearInterval(interval);
+      
+      // Clean up call on unmount
+      const call = streamService.getCall();
+      if (call) {
+        call.camera.disable().catch(e => console.error("Error disabling camera:", e));
+        call.microphone.disable().catch(e => console.error("Error disabling mic:", e));
+        
+        streamService.endCall().catch(error => {
+          console.error('Error ending call on unmount:', error);
+        });
+      }
+      
+      deactivateKeepAwake('peerCallAwake');
+    };
+  }, [user?.id, streamCallId, isIncoming]);
 
-  // Custom call controls component
-  const CustomCallControls = () => {
-    const call = useCall();
-    
-    const handleToggleMute = async () => {
-      await call?.microphone.toggle();
-    };
-    
-    const handleToggleVideo = async () => {
-      await call?.camera.toggle();
-    };
-    
-    const handleEndCall = async () => {
-      try {
-        // End call and update status
-        await streamService.endCall();
-        
-        // Release the keep awake lock when ending the call
-        deactivateKeepAwake('peerCallAwake');
-        
-        // Update call status in database
-        await axios.put('/api/v1/call/status', {
-          callId,
-          status: 'completed'
-        });
-        
-        // Navigate to end confirmation
-        router.push({
-          pathname: '/session-end-confirmation',
-          params: { type: 'peer-call' }
-        });
-      } catch (error) {
-        console.error('Error ending call:', error);
-        router.back();
-      }
-    };
-    
-    return (
-      <View style={styles.controlsContainer}>
-        <TouchableOpacity
-          style={[styles.controlButton, call?.microphone.state.status === 'disabled' && styles.activeControlButton]}
-          onPress={handleToggleMute}>
-          <IconSymbol size={24} name={call?.microphone.state.status === 'disabled' ? "mic.slash.fill" : "mic.fill"} color="white" />
-          <ThemedText style={styles.controlText}>Mute</ThemedText>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.controlButton, styles.endCallButton]}
-          onPress={handleEndCall}>
-          <IconSymbol size={24} name="phone.down.fill" color="white" />
-          <ThemedText style={styles.controlText}>End</ThemedText>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.controlButton, call?.camera.state.status === 'disabled' && styles.activeControlButton]}
-          onPress={handleToggleVideo}>
-          <IconSymbol size={24} name={call?.camera.state.status === 'disabled' ? "video.slash.fill" : "video.fill"} color="white" />
-          <ThemedText style={styles.controlText}>Video</ThemedText>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.controlButton]}
-          onPress={() => call?.camera.flip()}>
-          <IconSymbol size={24} name="camera.rotate.fill" color="white" />
-          <ThemedText style={styles.controlText}>Flip</ThemedText>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-  
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  // Function to safely end call with confirmation
+  const handleEndCall = () => {
+    Alert.alert(
+      'End Call',
+      'Are you sure you want to end this call?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'End Call',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const call = streamService.getCall();
+              if (call) {
+                // Disable camera and microphone before ending
+                if (call.camera) {
+                  await call.camera.disable();
+                }
+                if (call.microphone) {
+                  await call.microphone.disable();
+                }
+                
+                // End the call
+                await streamService.endCall();
+                console.log('Call ended successfully');
+              }
+              router.back();
+            } catch (error) {
+              console.error('Error ending call:', error);
+              router.back();
+            }
+          }
+        }
+      ]
+    );
   };
   
   // Custom header component
@@ -172,7 +191,7 @@ export default function PeerCallScreen() {
     
     return (
       <ThemedView style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={handleEndCall}>
           <IconSymbol size={24} name="chevron.down" color="#FFF" />
         </TouchableOpacity>
         <ThemedText style={styles.callStatusText}>On call</ThemedText>
@@ -182,7 +201,9 @@ export default function PeerCallScreen() {
     );
   };
   
-  if (isLoading || !streamCall || !streamClient) {
+  
+  
+  if (isLoading || !callState.call || !callState.client) {
     return (
       <ThemedView style={styles.loadingContainer}>
         <ThemedText>Connecting to call...</ThemedText>
@@ -197,12 +218,11 @@ export default function PeerCallScreen() {
           headerShown: false,
         }}
       />
-      <StreamVideo client={streamClient}>
-        <StreamCall call={streamCall}>
+      <StreamVideo client={callState.client}>
+        <StreamCall call={callState.call}>
           <ThemedView style={styles.container}>
             <CallContent
-              onHangupCallHandler={() => router.back()}
-              CallControls={CustomCallControls}
+              onHangupCallHandler={handleEndCall}
               // @ts-ignore
               CallTopView={CustomCallHeader}
             />
@@ -244,6 +264,45 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     marginLeft: 'auto',
+  },
+  participantContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    zIndex: 10,
+  },
+  participantImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  initialsContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#4A86E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  initialsText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  participantName: {
+    color: 'white',
+    fontSize: 16,
+    marginTop: 8,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   controlsContainer: {
     flexDirection: 'row',

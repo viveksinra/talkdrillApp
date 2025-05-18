@@ -73,21 +73,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
           console.log('Received incoming call offer:', offer);
           
-          // Get Stream token
-          const { token, apiKey } = await streamService.getToken();
-          
-          // Initialize Stream
-          await streamService.initialize(user.id, token, apiKey);
-          
           // Show incoming call UI
           Alert.alert(
             'Incoming Call',
-            `You have an incoming call`,
+            `Incoming call from ${offer.callerName || 'User'}`,
             [
               {
                 text: 'Decline',
                 onPress: () => {
-                  // Update call status to rejected
                   socketService.sendAnswer(offer.roomId, {
                     status: 'rejected',
                     callId: offer.callId
@@ -99,23 +92,30 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 text: 'Accept',
                 onPress: async () => {
                   try {
-                    // Join the Stream call
-                    await streamService.joinCall(offer.streamCallId);
+                    // Initialize stream client
+                    await streamService.ensureInitialized(
+                      user.id,
+                      user.name,
+                      user.profileImage
+                    );
                     
-                    // Send answer
-                    socketService.sendAnswer(offer.roomId, {
-                      status: 'accepted',
-                      callId: offer.callId
-                    });
-                    
-                    // Navigate to call screen
+                    // Navigate to call screen - peer-call will handle joining
                     router.push({
                       pathname: '/peer-call',
                       params: { 
                         callId: offer.callId,
                         streamCallId: offer.streamCallId,
-                        peerId: offer.callerId
+                        peerId: offer.callerId,
+                        peerName: offer.callerName,
+                        peerImage: offer.callerImage,
+                        isIncoming: 'true'
                       }
+                    });
+                    
+                    // Send answer after navigation to avoid UI blocking
+                    socketService.sendAnswer(offer.roomId, {
+                      status: 'accepted',
+                      callId: offer.callId
                     });
                   } catch (error) {
                     console.error('Error accepting call:', error);
@@ -129,6 +129,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           console.error('Error handling incoming call offer:', error);
         }
       });
+
+      socketRef.current?.on('incoming_answer', async (answer: any) => {
+        try {
+          console.log('Received incoming call answer:', answer);
+        } catch (error) {
+          console.error('Error handling incoming call answer:', error);
+        }
+      });
+      
+      
+
     }
   };
   

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, FlatList, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, FlatList, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUsersList } from '@/api/services/userService';
+import streamService from '@/api/services/streamService';
 
 interface User {
   id: string;
@@ -82,14 +83,33 @@ export default function OnlineUsersScreen() {
     });
   };
   
-  const handleCallUser = (user: User) => {
-    router.push({
-      pathname: '/peer-call',
-      params: {
-        peerId: user.id,
-        peerName: user.name
-      }
-    });
+  const handleCallUser = async (recipientUser: User) => {
+    try {
+      // Initialize the client with user profile info first
+      await streamService.ensureInitialized(
+        user?.id || '', 
+        user?.name,
+        user?.profileImage
+      );
+      
+      // Call the user - this handles everything in one step
+      const { callId, streamCallId } = await streamService.callUser(recipientUser.id, recipientUser.name);
+      
+      // Now navigate to call screen
+      router.push({
+        pathname: '/peer-call',
+        params: {
+          peerId: recipientUser.id,
+          peerName: recipientUser.name,
+          callId: callId,
+          streamCallId: streamCallId,
+          isIncoming: 'false'
+        }
+      });
+    } catch (error) {
+      console.error('Error starting call:', error);
+      Alert.alert('Error', 'Could not start call. Please try again.');
+    }
   };
   
   const renderUserItem = ({ item }: { item: User }) => (
