@@ -3,7 +3,7 @@ import { StyleSheet, View, Image, Text, ScrollView, TouchableOpacity, ActivityIn
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '../../../constants/Colors';
+import {Colors} from '../../../constants/Colors';
 import { fetchAICharacterDetails, startConversation } from '../../../api/services/public/aiCharacters';
 
 interface AICharacter {
@@ -77,7 +77,7 @@ export default function AICharacterDetailScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.light.primary} />
         <Text style={styles.loadingText}>Loading tutor details...</Text>
       </SafeAreaView>
     );
@@ -103,7 +103,7 @@ export default function AICharacterDetailScreen() {
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            <Ionicons name="arrow-back" size={24} color={Colors.light.primary} />
           </TouchableOpacity>
         </View>
         
@@ -187,7 +187,7 @@ export default function AICharacterDetailScreen() {
             <ActivityIndicator 
               style={styles.callLoader} 
               size="small" 
-              color={Colors.primary} 
+              color={Colors.light.primary} 
             />
           )}
         </View>
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.light.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 5,
@@ -266,17 +266,17 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: Colors.light.primary,
     marginBottom: 4,
   },
   profession: {
     fontSize: 18,
-    color: Colors.textSecondary,
+    color: Colors.light.secondary,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: Colors.textTertiary,
+    color: Colors.light.secondary,
   },
   tagsContainer: {
     flexDirection: 'row',
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   tag: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.light.primary,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -299,10 +299,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   secondaryTag: {
-    backgroundColor: Colors.lightAccent,
+    backgroundColor: Colors.light.primaryLight,
   },
   secondaryTagText: {
-    color: Colors.darkAccent,
+    color: Colors.light.primaryDark,
   },
   section: {
     paddingHorizontal: 16,
@@ -311,13 +311,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: Colors.text,
+    color: Colors.light.primary,
     marginBottom: 8,
   },
   sectionText: {
     fontSize: 16,
     lineHeight: 24,
-    color: Colors.textSecondary,
+    color: Colors.light.secondary,
   },
   callToActionContainer: {
     marginTop: 32,
@@ -328,12 +328,12 @@ const styles = StyleSheet.create({
   callToActionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: Colors.light.primary,
     marginBottom: 8,
   },
   callToActionSubtitle: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: Colors.light.secondary,
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -352,13 +352,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   chatButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.light.primary,
   },
   audioButton: {
-    backgroundColor: Colors.secondary,
+    backgroundColor: Colors.light.secondary,
   },
   videoButton: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.light.primary,
   },
   buttonText: {
     color: 'white',

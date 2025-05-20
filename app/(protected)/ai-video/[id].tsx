@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Video } from 'expo-av';
-import Colors from '../../../constants/Colors';
+import { Colors } from '../../../constants/Colors';
 import { 
   getConversationHistory, 
   sendAudioForVideo, 
@@ -236,7 +236,7 @@ export default function AIVideoCallScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.light.primary} />
         <Text style={styles.loadingText}>Setting up your call...</Text>
       </SafeAreaView>
     );
@@ -307,7 +307,7 @@ export default function AIVideoCallScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={Colors.light.primary} />
         </TouchableOpacity>
         
         <View style={styles.characterInfo}>
@@ -386,10 +386,10 @@ export default function AIVideoCallScreen() {
 
 // Helper function for metric color
 const getMetricColor = (value: number) => {
-  if (value >= 80) return Colors.success;
-  if (value >= 60) return Colors.accent;
-  if (value >= 40) return Colors.warning;
-  return Colors.error;
+  if (value >= 80) return Colors.light.primary;
+  if (value >= 60) return Colors.light.secondary;
+  if (value >= 40) return '#FFC107'; // Warning color - should be defined in Colors
+  return '#F44336'; // Error color - should be defined in Colors
 };
 
 const styles = StyleSheet.create({
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.light.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 5,
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: Colors.light.surface,
     backgroundColor: 'white',
   },
   backButton: {
@@ -455,14 +455,14 @@ const styles = StyleSheet.create({
   characterName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: Colors.light.text,
   },
   characterProfession: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: Colors.light.secondary,
   },
   endCallButton: {
-    backgroundColor: Colors.error,
+    backgroundColor: '#F44336', // Error color - should be defined in Colors
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
   },
   userMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.light.primary,
   },
   aiMessage: {
     alignSelf: 'flex-start',
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   recordButton: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.light.secondary,
     width: 120,
     height: 120,
     borderRadius: 60,
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   recordingButton: {
-    backgroundColor: Colors.error,
+    backgroundColor: '#F44336', // Error color - should be defined in Colors
   },
   recordButtonText: {
     color: 'white',
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
   processingText: {
     marginLeft: 8,
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: Colors.light.secondary,
   },
   assessmentContainer: {
     flex: 1,
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
   assessmentTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: Colors.light.text,
     marginBottom: 24,
     textAlign: 'center',
   },
@@ -579,12 +579,12 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: Colors.light.secondary,
   },
   feedbackTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: Colors.light.text,
     marginBottom: 12,
   },
   feedbackContainer: {
@@ -597,10 +597,10 @@ const styles = StyleSheet.create({
   feedbackText: {
     fontSize: 16,
     lineHeight: 24,
-    color: Colors.textSecondary,
+    color: Colors.light.secondary,
   },
   closeButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.light.primary,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
