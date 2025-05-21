@@ -10,8 +10,8 @@ import { Platform } from 'react-native';
 //   ? 'https://api.talkdrill.com' // For iOS simulator
 //   : 'https://api.talkdrill.com';  // For Android emulator
 
-export const API_BASE_URL = 'https://cee3-103-215-226-51.ngrok-free.app';
-export const SOCKET_BASE_URL = 'https://cee3-103-215-226-51.ngrok-free.app';
+export const API_BASE_URL = 'https://f632-103-215-226-189.ngrok-free.app';
+export const SOCKET_BASE_URL = 'https://f632-103-215-226-189.ngrok-free.app';
 
 // Types to maintain compatibility
 type AxiosResponse<T = any> = {
