@@ -18,10 +18,11 @@ import { Video } from 'expo-av';
 import { Colors } from '../../../constants/Colors';
 import { 
   getConversationHistory, 
-  sendAudioForVideo, 
   endConversation,
-  getLanguageAssessment
+  getLanguageAssessment,
+  sendTextForVideo
 } from '../../../api/services/public/aiCharacters';
+import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 
 interface Message {
   sender: 'user' | 'ai';
@@ -90,9 +91,11 @@ export default function AIVideoCallScreen() {
     });
     
     return () => {
-      if (recording) {
+      if (isRecording) {
         stopRecording();
       }
+      // Clean up any remaining listeners
+      ExpoSpeechRecognitionModule.abort();
     };
   }, [id]);
   
@@ -125,91 +128,123 @@ export default function AIVideoCallScreen() {
   
   const startRecording = async () => {
     try {
-      // Prepare recording
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      setIsRecording(true);
+      
+      // Request permissions
+      const { granted: micPermission } = await Audio.requestPermissionsAsync();
+      if (!micPermission) {
+        Alert.alert('Microphone Permission Required', 'Please grant microphone permission to use speech recognition.');
+        setIsRecording(false);
+        return;
+      }
+      
+      // Request speech recognition permissions
+      const speechPermission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!speechPermission.granted) {
+        Alert.alert('Speech Recognition Permission Required', 'Please grant speech recognition permission to continue.');
+        setIsRecording(false);
+        return;
+      }
+      
+      // Start speech recognition
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        continuous: false,
+        iosTaskHint: 'unspecified',
       });
       
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      // Set up speech recognition event listeners
+      const resultListener = ExpoSpeechRecognitionModule.addListener('result', (event) => {
+        if (event.results && event.results.length > 0) {
+          const transcribedText = event.results[0].transcript;
+          if (event.isFinal) {
+            // Process the final transcribed text
+            processTranscribedText(transcribedText);
+            // Remove the listener
+            resultListener.remove();
+            setIsRecording(false);
+          }
+        }
+      });
       
-      setRecording(recording);
-      setIsRecording(true);
+      // Add error listener
+      const errorListener = ExpoSpeechRecognitionModule.addListener('error', (event) => {
+        console.error('Speech recognition error:', event.error, event.message);
+        Alert.alert('Error', `Speech recognition error: ${event.message}`);
+        setIsRecording(false);
+        errorListener.remove();
+      });
+      
+      // Auto-stop after 10 seconds to prevent indefinite recording
+      setTimeout(() => {
+        if (isRecording) {
+          stopRecording();
+        }
+      }, 10000);
     } catch (err) {
       console.error('Failed to start recording:', err);
-      Alert.alert('Error', 'Failed to start recording. Please try again.');
+      Alert.alert('Error', 'Failed to start speech recognition. Please try again.');
+      setIsRecording(false);
     }
   };
   
   const stopRecording = async () => {
-    if (!recording) return;
-    
     try {
-      setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      if (!isRecording) return;
       
-      if (uri) {
-        processAudio(uri);
-      }
+      setIsRecording(false);
+      
+      // Stop speech recognition
+      ExpoSpeechRecognitionModule.stop();
     } catch (err) {
       console.error('Failed to stop recording:', err);
-      setRecording(null);
       setIsRecording(false);
     }
   };
   
-  const processAudio = async (audioUri: string) => {
+  const processTranscribedText = async (text: string) => {
     if (!conversation) return;
     
     try {
       setIsProcessing(true);
       
-      // Read audio file as blob
-      const fileInfo = await FileSystem.getInfoAsync(audioUri);
-      if (!fileInfo.exists) {
-        throw new Error('Audio file does not exist');
-      }
+      // Add the user message to UI immediately for better UX
+      const updatedConversation = {
+        ...conversation,
+        messages: [
+          ...conversation.messages,
+          {
+            sender: 'user',
+            content: text,
+            timestamp: new Date().toISOString()
+          }
+        ]
+      };
+      setConversation(updatedConversation as any);
       
-      const audioData = await FileSystem.readAsStringAsync(audioUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      
-      // Create blob from base64
-      const blob = Platform.OS === 'web' 
-        ? base64ToBlob(audioData, 'audio/wav') 
-        : { uri: audioUri, type: 'audio/wav', name: 'audio.wav' };
-      
-      // Send to server
-      const result = await sendAudioForVideo(
-        blob as Blob,
+      // Send transcribed text to server
+      await sendTextForVideo(
+        text,
         conversation.characterId._id,
         conversation._id,
         'en-US' // Use appropriate language code
       );
       
-      // Update conversation with response
-      const updatedConversation = await getConversationHistory(id as string);
-      setConversation(updatedConversation);
+      // Fetch updated conversation with AI response and video
+      const refreshedConversation = await getConversationHistory(id as string);
+      setConversation(refreshedConversation);
       setIsProcessing(false);
     } catch (err) {
       setIsProcessing(false);
-      console.error('Error processing audio:', err);
+      console.error('Error processing text:', err);
       Alert.alert('Error', 'Failed to process your message. Please try again.');
     }
   };
   
-  // Helper function for web environments
-  const base64ToBlob = (base64: string, type: string) => {
-    const binaryString = window.atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return new Blob([bytes], { type });
+  const processAudio = async (audioUri: string) => {
+    // This is now handled by performSpeechRecognition and processTranscribedText
+    // We keep this for compatibility if needed
   };
   
   const handleEndCall = async () => {
@@ -230,7 +265,7 @@ export default function AIVideoCallScreen() {
   
   const handleCloseAssessment = () => {
     setShowAssessment(false);
-    router.push('/(protected)/(tabs)/');
+    router.push('/(protected)/(tabs)/ai-characters');
   };
   
   if (loading) {
@@ -355,7 +390,7 @@ export default function AIVideoCallScreen() {
         
         {isProcessing && (
           <View style={styles.processingContainer}>
-            <ActivityIndicator color={Colors.primary} size="small" />
+            <ActivityIndicator color={Colors.light.primary} size="small" />
             <Text style={styles.processingText}>Processing your response...</Text>
           </View>
         )}
@@ -376,7 +411,7 @@ export default function AIVideoCallScreen() {
             color="white" 
           />
           <Text style={styles.recordButtonText}>
-            {isRecording ? 'Stop' : 'Hold to speak'}
+            {isRecording ? 'Stop' : 'Tap to speak'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -512,7 +547,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: Colors.light.surface,
     alignItems: 'center',
   },
   recordButton: {

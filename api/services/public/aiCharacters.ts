@@ -1,5 +1,4 @@
 import { get, post, put } from '@/api/config/axiosConfig';
-import { ENDPOINTS } from '@/constants/Config';
 
 interface AICharacter {
   _id: string;
@@ -97,38 +96,6 @@ export const sendTextMessage = async (characterId: string, message: string, conv
   }
 };
 
-// Send audio to get video response
-export const sendAudioForVideo = async (
-  audioBlob: Blob,
-  characterId: string,
-  conversationId: string,
-  language: string = 'en-US'
-): Promise<{
-  conversationId: string;
-  userText: string;
-  aiResponse: string;
-  videoUrl: string;
-}> => {
-  try {
-    const formData = new FormData();
-    formData.append('audio', audioBlob);
-    formData.append('characterId', characterId);
-    formData.append('conversationId', conversationId);
-    formData.append('language', language);
-    
-    // For FormData, we need to use the lower-level post function with custom config
-    const response = await post(`${AI_CHARACTERS_ENDPOINT}/process-audio`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data.data;
-  } catch (error) {
-    console.error('Error processing audio:', error);
-    throw error;
-  }
-};
-
 // End a conversation
 export const endConversation = async (conversationId: string): Promise<AIConversation> => {
   try {
@@ -166,6 +133,32 @@ export const getLanguageAssessment = async (conversationId: string): Promise<{
     return response.data.data;
   } catch (error) {
     console.error('Error getting language assessment:', error);
+    throw error;
+  }
+};
+
+// Send text to get video response
+export const sendTextForVideo = async (
+  userText: string,
+  characterId: string,
+  conversationId: string,
+  language: string = 'en-US'
+): Promise<{
+  conversationId: string;
+  userText: string;
+  aiResponse: string;
+  videoUrl: string;
+}> => {
+  try {
+    const response = await post(`${AI_CHARACTERS_ENDPOINT}/process-text`, {
+      userText,
+      characterId,
+      conversationId,
+      language,
+    });
+    return response.data.myData;
+  } catch (error) {
+    console.error('Error processing text to video:', error);
     throw error;
   }
 }; 
