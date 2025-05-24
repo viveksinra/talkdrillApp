@@ -14,20 +14,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio, AVPlaybackStatus } from 'expo-av';
-import { Video } from 'expo-av';
 import { Colors } from '../../../constants/Colors';
 import { 
   getConversationHistory, 
   endConversation,
-  getLanguageAssessment,
-  sendTextForVideo
+  processTextViaSocket
 } from '../../../api/services/public/aiCharacters';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import { useSocket } from '../../../contexts/SocketContext';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface Message {
   sender: 'user' | 'ai';
   content: string;
   videoUrl?: string;
+  audioUrl?: string;
   timestamp: string;
 }
 
@@ -47,36 +48,27 @@ interface Conversation {
 }
 
 export default function AIVideoCallScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const [conversation, setConversation] = useState<any | null>(null);
+  const { id: routeConversationId } = useLocalSearchParams<{ id: string }>();
+  const { socket } = useSocket();
+  const { user } = useAuth();
+  const [conversation, setConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showAssessment, setShowAssessment] = useState(false);
-  const [assessment, setAssessment] = useState<{
-    metrics: {
-      fluency: number;
-      vocabulary: number;
-      grammar: number;
-      pronunciation: number;
-    };
-    feedback: string;
-  } | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [audioDuration, setAudioDuration] = useState(0);
+  const [currentPlayingAudioUrl, setCurrentPlayingAudioUrl] = useState<string | null>(null);
   const [remainingTime, setRemainingTime] = useState('00:00');
-  const timerIntervalRef = useRef(null);
   
   const scrollViewRef = useRef<ScrollView>(null);
-  const videoRef = useRef<Video>(null);
-  const audioUrl = "https://res.cloudinary.com/oasismanor/video/upload/v1748090729/talkdrill/ai-audio/ai_682c9b554c71ee39a0bf882a_1748090727359.mp3";
+  
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
+  const cleanupSocketListenersRef = useRef<(() => void) | null>(null);
   
   useEffect(() => {
-    console.log("id", id);
-    loadConversation();
+    console.log("id", routeConversationId);
+    loadConversation(routeConversationId);
     
     // Set up audio recording
     Audio.requestPermissionsAsync()
@@ -108,8 +100,11 @@ export default function AIVideoCallScreen() {
       if (sound) {
         sound.unloadAsync();
       }
+      if (cleanupSocketListenersRef.current) {
+        cleanupSocketListenersRef.current();
+      }
     };
-  }, [id]);
+  }, [routeConversationId]);
   
   useEffect(() => {
     if (conversation?.messages && conversation.messages.length > 0) {
@@ -117,10 +112,10 @@ export default function AIVideoCallScreen() {
     }
   }, [conversation?.messages]);
   
-  const loadConversation = async () => {
+  const loadConversation = async (convId: string) => {
     try {
       setLoading(true);
-      const data = await getConversationHistory("6831bf547096c0d52ae087d1");
+      const data = await getConversationHistory(convId);
       console.log("data", data.messages);
       setConversation(data);
       setLoading(false);
@@ -153,52 +148,106 @@ export default function AIVideoCallScreen() {
       const remaining = status.durationMillis - status.positionMillis;
       setRemainingTime(formatTime(remaining));
     }
+    // If playback did just finish or is not loaded, remainingTime will be reset by onPlaybackStatusUpdate logic
   };
   
-  const playAudio = async () => {
-    try {
-      if (sound) {
-        if (isPlaying) {
-          await sound.pauseAsync();
-          setIsPlaying(false);
-        } else {
-          await sound.playAsync();
-          setIsPlaying(true);
-        }
-      } else {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: audioUrl },
-          { shouldPlay: true },
-          (status) => updateTimer(status)
+  const playOrPauseAudio = async (audioUrlToPlay: string, isLectureAudio = false) => {
+    if (sound && currentPlayingAudioUrl === audioUrlToPlay && isPlaying) { // Pausing current
+      await sound.pauseAsync();
+      setIsPlaying(false);
+      // Timer will naturally stop updating via onPlaybackStatusUpdate when paused
+    } else { // Playing new, resuming paused, or playing a different audio
+      if (sound) { // If any sound is currently loaded
+        await sound.unloadAsync(); // Stop and unload it completely
+      }
+      // Reset audio states before loading/playing new sound
+      setSound(null); // Clear the sound object from state
+      setIsPlaying(false); // Reflect that momentarily no sound is playing/loading
+      setCurrentPlayingAudioUrl(null);
+      setRemainingTime("00:00"); // Reset timer display
+
+      try {
+        console.log(`[AIVideoCallScreen] Attempting to play audio: ${audioUrlToPlay}`);
+        const { sound: newSound, status } = await Audio.Sound.createAsync(
+          { uri: audioUrlToPlay },
+          { shouldPlay: true }
         );
-        
-        setSound(newSound);
+        setSound(newSound); // Set the new sound object to state
         setIsPlaying(true);
-        
-        // Get the duration once loaded
-        const status = await newSound.getStatusAsync();
-        if (status.isLoaded) {
-          setAudioDuration(status.durationMillis as number);
-          setRemainingTime(formatTime(status.durationMillis as number));
-        }
-        
-        newSound.setOnPlaybackStatusUpdate((status) => {
-          updateTimer(status);
-          
-          if (status.isLoaded && status.didJustFinish) {
-            setIsPlaying(false);
-            setRemainingTime('00:00');
+        setCurrentPlayingAudioUrl(audioUrlToPlay);
+
+        newSound.setOnPlaybackStatusUpdate((playbackStatus: AVPlaybackStatus) => {
+          if (!playbackStatus.isLoaded) {
+            // This block handles cases where sound is unloaded (e.g. by another action) or errors during playback.
+            // Check if this callback is for the sound that was meant to be active.
+            if (currentPlayingAudioUrl === audioUrlToPlay) {
+              setIsPlaying(false);
+              setCurrentPlayingAudioUrl(null);
+              setRemainingTime("00:00");
+              // If sound was unloaded externally or errored, ensure our state reflects it's gone.
+              if (sound === newSound) { // Only nullify if 'sound' state still points to this instance
+                setSound(null);
+              }
+              if (playbackStatus.error) {
+                console.error(`[AIVideoCallScreen] Playback error on URL ${audioUrlToPlay}:`, playbackStatus.error);
+                // Avoid alerting multiple times if error is caught below already
+              }
+            }
+            return;
+          }
+
+          // If sound is loaded:
+          updateTimer(playbackStatus); // Update timer based on current position and duration
+
+          if (playbackStatus.didJustFinish) {
+            // This check ensures we are reacting to the currently intended audio finishing
+            if (currentPlayingAudioUrl === audioUrlToPlay) {
+              setIsPlaying(false);
+              setCurrentPlayingAudioUrl(null);
+              setRemainingTime("00:00");
+              setSound(null); // Explicitly clear the sound state when playback finishes naturally
+            }
+            // Unload the sound from memory once it's finished.
+            // It's crucial newSound is the object from this closure.
+            newSound.unloadAsync().catch(e => {
+                console.warn(`[AIVideoCallScreen] Error unloading sound ${audioUrlToPlay} on finish:`, e);
+            });
           }
         });
+
+        // Set initial time display if duration is available from the initial load status
+        if (status.isLoaded && status.durationMillis) {
+          setRemainingTime(formatTime(status.durationMillis));
+        } else {
+          setRemainingTime("00:00"); // Default if no duration info
+        }
+
+      } catch (e: any) {
+        console.error(`[AIVideoCallScreen] Error creating or playing audio ${audioUrlToPlay}:`, e);
+        Alert.alert('Audio Playback Error', `Could not play audio: ${e.message || 'Unknown error'}`);
+        // Ensure states are fully reset on a critical error during setup
+        if (sound) { // If a sound object was partially set to state before erroring
+            await sound.unloadAsync().catch(() => {}); // Try to unload, ignore error if already gone
+        }
+        setSound(null);
+        setIsPlaying(false);
+        setCurrentPlayingAudioUrl(null);
+        setRemainingTime("00:00");
       }
-    } catch (error) {
-      console.error('Error playing audio:', error);
-      Alert.alert('Error', 'Failed to play audio. Please try again.');
     }
   };
   
   const startRecording = async () => {
     try {
+      // Stop any currently playing audio before starting recording
+      if (sound && isPlaying) {
+        await sound.stopAsync(); // stopAsync also unloads the sound
+        setIsPlaying(false);
+        setCurrentPlayingAudioUrl(null);
+        setSound(null); // Clear the sound object from state as it's now invalid
+        setRemainingTime("00:00"); // Reset timer display
+      }
+      
       setIsRecording(true);
       
       // Request permissions
@@ -242,7 +291,7 @@ export default function AIVideoCallScreen() {
       // Add error listener
       const errorListener = ExpoSpeechRecognitionModule.addListener('error', (event) => {
         console.error('Speech recognition error:', event.error, event.message);
-        Alert.alert('Error', `Speech recognition error: ${event.message}`);
+        // Alert.alert('Error', `Speech recognition error: ${event.message}`);
         setIsRecording(false);
         errorListener.remove();
       });
@@ -275,61 +324,107 @@ export default function AIVideoCallScreen() {
   };
   
   const processTranscribedText = async (text: string) => {
-    if (!conversation) return;
-    
-    try {
-      setIsProcessing(true);
-      
-      // Add the user message to UI immediately for better UX
-      const updatedConversation = {
-        ...conversation,
-        messages: [
-          ...conversation.messages,
-          {
-            sender: 'user',
-            content: text,
-            timestamp: new Date().toISOString()
-          }
-        ]
-      };
-      setConversation(updatedConversation as any);
-      
-      // Send transcribed text to server
-      const result = await sendTextForVideo(
-        text,
-        conversation.characterId._id,
-        conversation._id,
-        'en-US' // Use appropriate language code
-      );
-      
-      console.log(result);
-      
-      // Update conversation with response from API
-      if (result && result.aiResponse) {
-        const updatedWithResponseConversation = {
-          ...updatedConversation,
-          messages: [
-            ...updatedConversation.messages,
-            {
-              sender: 'ai',
-              content: result.aiResponse,
-              timestamp: new Date().toISOString()
-            }
-          ]
-        };
-        setConversation(updatedWithResponseConversation as any);
-      } else {
-        // Fallback to fetching the updated conversation
-        const refreshedConversation = await getConversationHistory(id as string);
-        setConversation(refreshedConversation);
-      }
-      
-      setIsProcessing(false);
-    } catch (err) {
-      setIsProcessing(false);
-      console.error('Error processing text:', err);
-      Alert.alert('Error', 'Failed to process your message. Please try again.');
+    if (!conversation || !conversation._id) {
+      Alert.alert("Error", "Conversation details not loaded yet. Please wait.");
+      return;
     }
+    if (!user || !user.id) {
+      Alert.alert("Error", "User not authenticated. Cannot process request.");
+      return;
+    }
+    if (!socket) {
+      Alert.alert("Error", "Socket connection not available.");
+      return;
+    }
+
+    setIsProcessing(true);
+    setProcessingStatus('Starting...');
+
+    // Add user message to UI immediately
+    const userMessageTimestamp = new Date().toISOString();
+    const updatedConvWithUserMsg = {
+      ...conversation,
+      messages: [
+        ...conversation.messages,
+        { sender: 'user', content: text, timestamp: userMessageTimestamp }
+      ]
+    };
+    setConversation(updatedConvWithUserMsg);
+
+    // Clean up any previous listeners before attaching new ones
+    if (cleanupSocketListenersRef.current) {
+        cleanupSocketListenersRef.current();
+    }
+
+    cleanupSocketListenersRef.current = processTextViaSocket(
+      socket,
+      {
+        userId: user.id,
+        characterId: conversation.characterId._id,
+        conversationId: conversation._id,
+        userText: text,
+        language: 'en-US',
+      },
+      {
+        onTextResponse: (aiResponse, updatedConvId) => {
+          setProcessingStatus('AI responded. Waiting for audio...');
+          setConversation(prevConv => {
+            if (!prevConv) return null;
+            // Add AI text message if not already present from user message update
+            // This assumes backend `generateResponse` handles DB persistence of AI text
+            const aiMessageExists = prevConv.messages.some(m => m.sender === 'ai' && m.content === aiResponse);
+            if (!aiMessageExists) {
+                return {
+                    ...prevConv,
+                    _id: updatedConvId,
+                    messages: [
+                        ...prevConv.messages,
+                        { sender: 'ai', content: aiResponse, timestamp: new Date().toISOString() }
+                    ]
+                };
+            }
+            return {...prevConv, _id: updatedConvId };
+          });
+        },
+        onStatusUpdate: (status, message) => {
+          setProcessingStatus(`${status}: ${message}`);
+        },
+        onAudioComplete: (audioUrl, completedConvId, finalAiResponse) => {
+          setProcessingStatus('Audio ready!');
+          setIsProcessing(false);
+          setConversation(prevConv => {
+            if (!prevConv) return null;
+            // Find the AI message and update its audioUrl
+            // It's safer to update based on content and lack of audioUrl
+            const newMessages = prevConv.messages.map(msg => {
+              if (msg.sender === 'ai' && msg.content === finalAiResponse && !msg.audioUrl) {
+                return { ...msg, audioUrl: audioUrl };
+              }
+              return msg;
+            });
+            // If it wasn't found (e.g. state updated weirdly), try adding it if text matches
+            const aiMessageExists = newMessages.some(m => m.sender === 'ai' && m.content === finalAiResponse && m.audioUrl === audioUrl);
+            if (!aiMessageExists) {
+                // This is a fallback, ideally the message is already there from onTextResponse
+                 const lastUserMsg = newMessages.filter(m => m.sender ==='user').pop();
+                 if (lastUserMsg && lastUserMsg.content === text) { // Ensure it's in response to the last user utterance
+                     newMessages.push({ sender: 'ai', content: finalAiResponse, audioUrl: audioUrl, timestamp: new Date().toISOString() });
+                 }
+            }
+
+            return { ...prevConv, _id: completedConvId, messages: newMessages };
+          });
+          // Automatically play the AI's audio response
+          playOrPauseAudio(audioUrl); 
+        },
+        onError: (error) => {
+          setProcessingStatus(`Error: ${error.message}`);
+          setIsProcessing(false);
+          Alert.alert('Processing Error', error.message);
+          // Optionally implement fallbackToNonStreamingMethod here if desired
+        }
+      }
+    );
   };
   
   const handleEndCall = async () => {
@@ -358,7 +453,7 @@ export default function AIVideoCallScreen() {
       <SafeAreaView style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={48} color="red" />
         <Text style={styles.errorText}>{error || 'Conversation not found'}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={loadConversation}>
+        <TouchableOpacity style={styles.retryButton} onPress={() => loadConversation(routeConversationId)}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -379,7 +474,18 @@ export default function AIVideoCallScreen() {
 
       {/* Character Avatar */}
       <View style={styles.avatarSection}>
-        <TouchableOpacity onPress={playAudio} style={styles.avatarContainer}>
+        <TouchableOpacity 
+          onPress={() => {
+            // A simple check for common audio file extensions
+            if (isPlaying && currentPlayingAudioUrl) {
+              playOrPauseAudio(currentPlayingAudioUrl, true);
+            } else {
+              console.warn(`[AIVideoCallScreen] Character profileImage (${audioUrl}) does not appear to be a playable audio file. Playback attempt skipped.`);
+              Alert.alert("Playback Issue", "The character's introductory audio is not available or in a recognized format.");
+            }
+          }}
+          style={styles.avatarContainer}
+        >
           {conversation.characterId.profileImage ? (
             <Image 
               source={{ uri: conversation.characterId.profileImage }} 
@@ -453,7 +559,7 @@ export default function AIVideoCallScreen() {
         {isProcessing && (
           <View style={styles.processingContainer}>
             <ActivityIndicator color={Colors.light.primary} size="small" />
-            <Text style={styles.processingText}>Processing your response...</Text>
+            <Text style={styles.processingText}>{processingStatus}</Text>
           </View>
         )}
       </ScrollView>

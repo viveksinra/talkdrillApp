@@ -4,10 +4,12 @@ import socketService from '../api/services/socketService';
 import { useAuth } from './AuthContext';
 import streamService from '../api/services/streamService';
 import { useRouter } from 'expo-router';
+import { Socket } from 'socket.io-client';
 
-interface SocketContextType {
+export interface SocketContextType {
   isConnected: boolean;
   onlineUsers: string[];
+  socket: Socket | null;
   joinRoom: (roomId: string) => void;
   leaveRoom: (roomId: string) => void;
   sendOffer: (roomId: string, offer: any) => void;
@@ -37,7 +39,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const router = useRouter();
   
   // Use a ref to track socket connection
-  const socketRef = useRef<any>(null);
+  const socketRef = useRef<Socket | null>(null);
   const appState = useRef(AppState.currentState);
   
   // Function to establish socket connection
@@ -235,6 +237,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     <SocketContext.Provider value={{
       isConnected,
       onlineUsers,
+      socket: socketRef.current,
       joinRoom,
       leaveRoom,
       sendOffer,

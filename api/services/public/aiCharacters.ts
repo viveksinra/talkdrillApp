@@ -1,4 +1,5 @@
 import { get, post, put } from '@/api/config/axiosConfig';
+import { Socket } from 'socket.io-client';
 
 interface AICharacter {
   _id: string;
@@ -161,4 +162,63 @@ export const sendTextForVideo = async (
     console.error('Error processing text to video:', error);
     throw error;
   }
+};
+
+interface ProcessTextViaSocketCallbacks {
+  onTextResponse: (aiResponse: string, conversationId: string) => void;
+  onStatusUpdate: (status: string, message: string) => void;
+  onAudioComplete: (audioUrl: string, conversationId: string, aiResponse: string) => void;
+  onError: (error: { message: string; details?: any }) => void;
+}
+
+interface ProcessTextViaSocketData {
+  userId: string;
+  characterId: string;
+  conversationId: string;
+  userText: string;
+  language?: string;
+}
+
+export const processTextViaSocket = (
+  socket: Socket | null,
+  data: ProcessTextViaSocketData,
+  callbacks: ProcessTextViaSocketCallbacks
+): (() => void) => {
+  if (!socket || !socket.connected) {
+    callbacks.onError({ message: 'Socket not connected or available.' });
+    return () => {};
+  }
+
+  console.log('[SOCKET_CLIENT_SEND:process_text_for_audio_socket]', data);
+  socket.emit('process_text_for_audio_socket', data);
+
+  const textResponseHandler = ({ aiResponse, conversationId }: { aiResponse: string, conversationId: string }) => {
+    console.log('[SOCKET_CLIENT_RECV:ai_text_response_socket]', { aiResponse, conversationId });
+    callbacks.onTextResponse(aiResponse, conversationId);
+  };
+  const statusHandler = ({ status, message }: { status: string, message: string }) => {
+    console.log('[SOCKET_CLIENT_RECV:audio_processing_status_socket]', { status, message });
+    callbacks.onStatusUpdate(status, message);
+  };
+  const completionHandler = ({ audioUrl, conversationId, aiResponse }: { audioUrl: string, conversationId: string, aiResponse: string }) => {
+    console.log('[SOCKET_CLIENT_RECV:audio_complete_socket]', { audioUrl, conversationId });
+    callbacks.onAudioComplete(audioUrl, conversationId, aiResponse);
+  };
+  const errorHandler = (error: { message: string; details?: any }) => {
+    console.error('[SOCKET_CLIENT_RECV:audio_error_socket]', error);
+    callbacks.onError(error);
+  };
+
+  socket.on('ai_text_response_socket', textResponseHandler);
+  socket.on('audio_processing_status_socket', statusHandler);
+  socket.on('audio_complete_socket', completionHandler);
+  socket.on('audio_error_socket', errorHandler);
+
+  return () => {
+    console.log('[SOCKET_CLIENT] Cleaning up listeners for audio processing.');
+    socket.off('ai_text_response_socket', textResponseHandler);
+    socket.off('audio_processing_status_socket', statusHandler);
+    socket.off('audio_complete_socket', completionHandler);
+    socket.off('audio_error_socket', errorHandler);
+  };
 }; 

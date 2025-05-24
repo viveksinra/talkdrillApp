@@ -10,8 +10,8 @@ import { Platform } from 'react-native';
 //   ? 'https://api.talkdrill.com' // For iOS simulator
 //   : 'https://api.talkdrill.com';  // For Android emulator
 
-export const API_BASE_URL = 'https://653a-103-215-226-189.ngrok-free.app';
-export const SOCKET_BASE_URL = 'https://653a-103-215-226-189.ngrok-free.app';
+export const API_BASE_URL = 'https://a6c3-103-215-226-189.ngrok-free.app';
+export const SOCKET_BASE_URL = 'https://a6c3-103-215-226-189.ngrok-free.app';
 
 // Types to maintain compatibility
 type AxiosResponse<T = any> = {
@@ -199,6 +199,59 @@ export const put = async <T = any>(url: string, data = {}): Promise<AxiosRespons
 
 export const del = async <T = any>(url: string): Promise<AxiosResponse<T>> => {
   return api.delete<T>(url);
+};
+
+export const fetchWithAuth = async (
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  try {
+    // Apply the same auth interceptor logic
+    const token = await SecureStore.getItemAsync('token');
+    
+    // Create headers with auth token
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> || {})
+    };
+    
+    if (token) {
+      headers.Authorization = `${token}`;
+    }
+    
+    // Create full URL
+    const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+    
+    // Create AbortController for timeout if not provided
+    const providedSignal = options.signal;
+    const controller = new AbortController();
+    const signal = providedSignal || controller.signal;
+    
+    // Set timeout if not using a provided signal
+    let timeoutId: NodeJS.Timeout | undefined;
+    if (!providedSignal) {
+      timeoutId = setTimeout(() => controller.abort(), 60000); // Default 60s timeout
+    }
+    
+    // Make the fetch request
+    const response = await fetch(fullUrl, {
+      ...options,
+      headers,
+      signal
+    });
+    
+    // Clear timeout if we set one
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    
+    // No automatic JSON parsing or error handling here
+    // because we need the raw response for streaming
+    return response;
+  } catch (error) {
+    console.error('Error in fetchWithAuth:', error);
+    throw error;
+  }
 };
 
 export default api;
