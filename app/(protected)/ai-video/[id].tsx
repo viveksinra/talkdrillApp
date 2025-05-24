@@ -8,12 +8,12 @@ import {
   Alert,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Video } from 'expo-av';
 import { Colors } from '../../../constants/Colors';
 import { 
@@ -48,7 +48,7 @@ interface Conversation {
 
 export default function AIVideoCallScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [conversation, setConversation] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -64,11 +64,18 @@ export default function AIVideoCallScreen() {
     };
     feedback: string;
   } | null>(null);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [remainingTime, setRemainingTime] = useState('00:00');
+  const timerIntervalRef = useRef(null);
   
   const scrollViewRef = useRef<ScrollView>(null);
   const videoRef = useRef<Video>(null);
+  const audioUrl = "https://res.cloudinary.com/oasismanor/video/upload/v1748090729/talkdrill/ai-audio/ai_682c9b554c71ee39a0bf882a_1748090727359.mp3";
   
   useEffect(() => {
+    console.log("id", id);
     loadConversation();
     
     // Set up audio recording
@@ -96,6 +103,11 @@ export default function AIVideoCallScreen() {
       }
       // Clean up any remaining listeners
       ExpoSpeechRecognitionModule.abort();
+      
+      // Unload audio
+      if (sound) {
+        sound.unloadAsync();
+      }
     };
   }, [id]);
   
@@ -108,7 +120,8 @@ export default function AIVideoCallScreen() {
   const loadConversation = async () => {
     try {
       setLoading(true);
-      const data = await getConversationHistory(id as string);
+      const data = await getConversationHistory("6831bf547096c0d52ae087d1");
+      console.log("data", data.messages);
       setConversation(data);
       setLoading(false);
     } catch (err) {
@@ -123,6 +136,64 @@ export default function AIVideoCallScreen() {
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
+    }
+  };
+  
+  // Function to format time in MM:SS
+  const formatTime = (timeInMillis: number) => {
+    const totalSeconds = Math.floor(timeInMillis / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+  
+  // Update timer function
+  const updateTimer = (status: AVPlaybackStatus) => {
+    if (status && status.isLoaded && !status.didJustFinish && status.durationMillis && status.positionMillis) {
+      const remaining = status.durationMillis - status.positionMillis;
+      setRemainingTime(formatTime(remaining));
+    }
+  };
+  
+  const playAudio = async () => {
+    try {
+      if (sound) {
+        if (isPlaying) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await sound.playAsync();
+          setIsPlaying(true);
+        }
+      } else {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: audioUrl },
+          { shouldPlay: true },
+          (status) => updateTimer(status)
+        );
+        
+        setSound(newSound);
+        setIsPlaying(true);
+        
+        // Get the duration once loaded
+        const status = await newSound.getStatusAsync();
+        if (status.isLoaded) {
+          setAudioDuration(status.durationMillis as number);
+          setRemainingTime(formatTime(status.durationMillis as number));
+        }
+        
+        newSound.setOnPlaybackStatusUpdate((status) => {
+          updateTimer(status);
+          
+          if (status.isLoaded && status.didJustFinish) {
+            setIsPlaying(false);
+            setRemainingTime('00:00');
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      Alert.alert('Error', 'Failed to play audio. Please try again.');
     }
   };
   
@@ -224,16 +295,35 @@ export default function AIVideoCallScreen() {
       setConversation(updatedConversation as any);
       
       // Send transcribed text to server
-      await sendTextForVideo(
+      const result = await sendTextForVideo(
         text,
         conversation.characterId._id,
         conversation._id,
         'en-US' // Use appropriate language code
       );
       
-      // Fetch updated conversation with AI response and video
-      const refreshedConversation = await getConversationHistory(id as string);
-      setConversation(refreshedConversation);
+      console.log(result);
+      
+      // Update conversation with response from API
+      if (result && result.aiResponse) {
+        const updatedWithResponseConversation = {
+          ...updatedConversation,
+          messages: [
+            ...updatedConversation.messages,
+            {
+              sender: 'ai',
+              content: result.aiResponse,
+              timestamp: new Date().toISOString()
+            }
+          ]
+        };
+        setConversation(updatedWithResponseConversation as any);
+      } else {
+        // Fallback to fetching the updated conversation
+        const refreshedConversation = await getConversationHistory(id as string);
+        setConversation(refreshedConversation);
+      }
+      
       setIsProcessing(false);
     } catch (err) {
       setIsProcessing(false);
@@ -242,30 +332,16 @@ export default function AIVideoCallScreen() {
     }
   };
   
-  const processAudio = async (audioUri: string) => {
-    // This is now handled by performSpeechRecognition and processTranscribedText
-    // We keep this for compatibility if needed
-  };
-  
   const handleEndCall = async () => {
     try {
       if (!conversation) return;
       
       await endConversation(conversation._id);
-      
-      // Get language assessment
-      const assessmentData = await getLanguageAssessment(conversation._id);
-      setAssessment(assessmentData);
-      setShowAssessment(true);
+      router.back();
     } catch (err) {
       console.error('Error ending call:', err);
       router.back();
     }
-  };
-  
-  const handleCloseAssessment = () => {
-    setShowAssessment(false);
-    router.push('/(protected)/(tabs)/ai-characters');
   };
   
   if (loading) {
@@ -289,76 +365,61 @@ export default function AIVideoCallScreen() {
     );
   }
   
-  if (showAssessment && assessment) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.assessmentContainer}>
-          <Text style={styles.assessmentTitle}>Your Language Assessment</Text>
-          
-          <View style={styles.metricsContainer}>
-            <View style={styles.metricItem}>
-              <View style={[styles.metricCircle, { backgroundColor: getMetricColor(assessment.metrics.fluency) }]}>
-                <Text style={styles.metricValue}>{assessment.metrics.fluency}</Text>
-              </View>
-              <Text style={styles.metricLabel}>Fluency</Text>
-            </View>
-            
-            <View style={styles.metricItem}>
-              <View style={[styles.metricCircle, { backgroundColor: getMetricColor(assessment.metrics.vocabulary) }]}>
-                <Text style={styles.metricValue}>{assessment.metrics.vocabulary}</Text>
-              </View>
-              <Text style={styles.metricLabel}>Vocabulary</Text>
-            </View>
-            
-            <View style={styles.metricItem}>
-              <View style={[styles.metricCircle, { backgroundColor: getMetricColor(assessment.metrics.grammar) }]}>
-                <Text style={styles.metricValue}>{assessment.metrics.grammar}</Text>
-              </View>
-              <Text style={styles.metricLabel}>Grammar</Text>
-            </View>
-            
-            <View style={styles.metricItem}>
-              <View style={[styles.metricCircle, { backgroundColor: getMetricColor(assessment.metrics.pronunciation) }]}>
-                <Text style={styles.metricValue}>{assessment.metrics.pronunciation}</Text>
-              </View>
-              <Text style={styles.metricLabel}>Pronunciation</Text>
-            </View>
-          </View>
-          
-          <Text style={styles.feedbackTitle}>Feedback</Text>
-          <ScrollView style={styles.feedbackContainer}>
-            <Text style={styles.feedbackText}>{assessment.feedback}</Text>
-          </ScrollView>
-          
-          <TouchableOpacity style={styles.closeButton} onPress={handleCloseAssessment}>
-            <Text style={styles.closeButtonText}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-  
   return (
+    <>
+    <Stack.Screen options={{ headerShown: false }} />
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.light.primary} />
+      {/* Header with timer and controls */}
+      <View style={styles.headerControls}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+          <Ionicons name="close" size={24} color="white" />
         </TouchableOpacity>
-        
-        <View style={styles.characterInfo}>
-          <Text style={styles.characterName}>
-            {conversation.characterId.name}
-          </Text>
-          <Text style={styles.characterProfession}>
-            {conversation.characterId.profession}
-          </Text>
-        </View>
-        
-        <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
-          <Ionicons name="call-outline" size={22} color="white" />
-        </TouchableOpacity>
+        <Text style={styles.timerText}>{remainingTime}</Text>
       </View>
-      
+
+      {/* Character Avatar */}
+      <View style={styles.avatarSection}>
+        <TouchableOpacity onPress={playAudio} style={styles.avatarContainer}>
+          {conversation.characterId.profileImage ? (
+            <Image 
+              source={{ uri: conversation.characterId.profileImage }} 
+              style={styles.characterAvatar}
+            />
+          ) : (
+            <View style={styles.characterAvatarPlaceholder}>
+              <Ionicons name="person" size={60} color={Colors.light.primary} />
+            </View>
+          )}
+          <View style={styles.playIconOverlay}>
+            <Ionicons 
+              name={isPlaying ? "pause" : "play"} 
+              size={30} 
+              color="white"
+            />
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.progressContainer}>
+          <View style={styles.progressItem}>
+            <View style={!isRecording ? [styles.progressDot, styles.activeDot] : styles.progressDot} />
+            <Text style={styles.progressLabel}>Lecture</Text>
+          </View>
+          <View style={styles.progressItem}>
+            <View style={isRecording ? [styles.progressDot, styles.activeDot] : styles.progressDot} />
+            <Text style={styles.progressLabelInactive}>Practice</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Lecture Section View */}
+      {/* <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="book-outline" size={24} color="white" />
+          <Text style={styles.sectionTitle}>Lecture Section</Text>
+        </View>
+      </View> */}
+
+      {/* Chat Messages */}
       <ScrollView 
         ref={scrollViewRef}
         style={styles.messagesContainer}
@@ -366,25 +427,26 @@ export default function AIVideoCallScreen() {
       >
         {conversation.messages.map((message, index) => (
           <View 
-            key={index} 
+            key={index}
             style={[
               styles.messageContainer,
               message.sender === 'user' ? styles.userMessage : styles.aiMessage
             ]}
           >
-            {message.sender === 'ai' && message.videoUrl ? (
-              <View style={styles.videoContainer}>
-                <Video
-                  ref={videoRef}
-                  source={{ uri: message.videoUrl }}
-                  style={styles.video}
-                  useNativeControls
-                  resizeMode="contain"
-                />
+             <View style={styles.messageTextContainer}>
+                {message.sender === 'ai' ? (
+                  <View style={styles.aiMessageContent}>
+                    <Text style={styles.aiMessageText}>{message.content}</Text>
+                    <TouchableOpacity style={styles.translateButton}>
+                      <Ionicons name="language-outline" size={20} color={Colors.light.primary} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.userMessageContent}>
+                    <Text style={styles.userMessageText}>{message.content}</Text>
+                  </View>
+                )}
               </View>
-            ) : (
-              <Text style={styles.messageText}>{message.content}</Text>
-            )}
           </View>
         ))}
         
@@ -396,7 +458,9 @@ export default function AIVideoCallScreen() {
         )}
       </ScrollView>
       
-      <View style={styles.controlsContainer}>
+      {/* Input Controls */}
+      <View style={styles.inputControls}>
+        
         <TouchableOpacity
           style={[
             styles.recordButton,
@@ -410,27 +474,249 @@ export default function AIVideoCallScreen() {
             size={32} 
             color="white" 
           />
-          <Text style={styles.recordButtonText}>
-            {isRecording ? 'Stop' : 'Tap to speak'}
-          </Text>
         </TouchableOpacity>
+        
       </View>
     </SafeAreaView>
+    </>
   );
 }
-
-// Helper function for metric color
-const getMetricColor = (value: number) => {
-  if (value >= 80) return Colors.light.primary;
-  if (value >= 60) return Colors.light.secondary;
-  if (value >= 40) return '#FFC107'; // Warning color - should be defined in Colors
-  return '#F44336'; // Error color - should be defined in Colors
-};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#1E3A8A', // Deep blue background
+  },
+  headerControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  timerText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  speedButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  speedText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  avatarSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  avatarContainer: {
+    position: 'relative',
+    width: 150,
+    height: 150,
+    marginBottom: 20,
+  },
+  characterAvatar: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+  },
+  characterAvatarPlaceholder: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playIconOverlay: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: 75,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  progressItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  progressDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    marginRight: 8,
+  },
+  activeDot: {
+    backgroundColor: 'white',
+  },
+  progressLabel: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  progressLabelInactive: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 16,
+  },
+  sectionCard: {
+    backgroundColor: Colors.light.secondary,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  sectionTitle: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  messagesContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  messagesContent: {
+    padding: 16,
+    paddingBottom: 80,
+  },
+  messageContainer: {
+    marginBottom: 16,
+    maxWidth: '80%',
+  },
+  aiMessage: {
+    alignSelf: 'flex-start',
+  },
+  userMessage: {
+    alignSelf: 'flex-end',
+  },
+  messageTextContainer: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  aiMessageContent: {
+    backgroundColor: '#F2F2F2',
+    padding: 12,
+    borderRadius: 16,
+    flexDirection: 'column',
+  },
+  userMessageContent: {
+    backgroundColor: Colors.light.primary,
+    padding: 12,
+    borderRadius: 16,
+  },
+  aiMessageText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  userMessageText: {
+    fontSize: 16,
+    color: 'white',
+  },
+  translateButton: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
+  videoContainer: {
+    width: 280,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  video: {
+    width: '100%',
+    height: 200,
+  },
+  processingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginVertical: 12,
+    padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 12,
+  },
+  processingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: Colors.light.secondary,
+  },
+  inputControls: {
+    position: 'absolute',
+    bottom: 60,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  typeButton: {
+    alignItems: 'center',
+  },
+  inspireButton: {
+    alignItems: 'center',
+  },
+  inputButtonText: {
+    color: Colors.light.primary,
+    marginTop: 4,
+  },
+  recordButton: {
+    backgroundColor: Colors.light.primary,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recordingButton: {
+    backgroundColor: '#F44336',
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    height: 60,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  navButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -468,181 +754,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.surface,
-    backgroundColor: 'white',
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  characterInfo: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  characterName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.light.text,
-  },
-  characterProfession: {
-    fontSize: 12,
-    color: Colors.light.secondary,
-  },
-  endCallButton: {
-    backgroundColor: '#F44336', // Error color - should be defined in Colors
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  messagesContainer: {
-    flex: 1,
-  },
-  messagesContent: {
-    padding: 16,
-  },
-  messageContainer: {
-    maxWidth: '80%',
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 16,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-  },
-  userMessage: {
-    alignSelf: 'flex-end',
-    backgroundColor: Colors.light.primary,
-  },
-  aiMessage: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'white',
-  },
-  messageText: {
-    fontSize: 16,
-    color: '#fff',
-  },
-  videoContainer: {
-    width: 280,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  video: {
-    width: '100%',
-    height: 200,
-  },
-  controlsContainer: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.surface,
-    alignItems: 'center',
-  },
-  recordButton: {
-    backgroundColor: Colors.light.secondary,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  recordingButton: {
-    backgroundColor: '#F44336', // Error color - should be defined in Colors
-  },
-  recordButtonText: {
-    color: 'white',
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  processingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginVertical: 12,
-    padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 12,
-  },
-  processingText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: Colors.light.secondary,
-  },
-  assessmentContainer: {
-    flex: 1,
-    padding: 20,
-  },
-  assessmentTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.light.text,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  metricsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  metricItem: {
-    alignItems: 'center',
-  },
-  metricCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  metricValue: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  metricLabel: {
-    fontSize: 14,
-    color: Colors.light.secondary,
-  },
-  feedbackTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.light.text,
-    marginBottom: 12,
-  },
-  feedbackContainer: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  feedbackText: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: Colors.light.secondary,
-  },
-  closeButton: {
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-}); 
+});

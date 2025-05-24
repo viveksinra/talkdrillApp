@@ -115,17 +115,10 @@ export default function AICharacterDetailScreen() {
       const conversation = await startConversation(character._id, callType);
       
       // Navigate to appropriate screen based on call type
-      if (callType === 'chat') {
-        router.push({
-          pathname: '/(protected)/ai-chat/[id]',
-          params: { id: conversation._id }
-        });
-      } else {
         router.push({
           pathname: '/(protected)/ai-video/[id]',
           params: { id: conversation._id }
         });
-      }
       
       setStartingCall(false);
     } catch (err) {

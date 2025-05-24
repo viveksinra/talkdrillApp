@@ -122,7 +122,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <ThemedView>
+    <ThemedView style={{ flex: 1 }}>
       <View style={styles.header}>
         <ThemedText style={styles.headerTitle}>TalkDrill</ThemedText>
         <View style={{ flexDirection: "row", gap: 16 }}>
@@ -167,7 +167,7 @@ export default function HomeScreen() {
               </ThemedText>
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => router.push("/ai-entry")}
+                onPress={() => router.push("/(protected)/(tabs)/ai-characters")}
               >
                 <ThemedText style={styles.actionButtonText}>
                   Start Conversation
