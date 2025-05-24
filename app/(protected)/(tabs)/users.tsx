@@ -9,6 +9,7 @@ import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUsersList } from '@/api/services/userService';
 import streamService from '@/api/services/streamService';
+import { FilterDialog, FilterOptions } from '@/components/FilterDialog';
 
 interface User {
   id: string;
@@ -24,6 +25,11 @@ export default function OnlineUsersScreen() {
   
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterDialogVisible, setFilterDialogVisible] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<FilterOptions>({
+    gender: 'any',
+    englishLevel: 'any'
+  });
   
   const fetchUsers = async (signal?: AbortSignal) => {
     try {
@@ -49,6 +55,44 @@ export default function OnlineUsersScreen() {
       if (!signal?.aborted) {
         setLoading(false);
       }
+    }
+  };
+
+  const handleApplyFilters = (filters: FilterOptions) => {
+    setActiveFilters(filters);
+    fetchUsersWithFilters(filters);
+  };
+
+  const fetchUsersWithFilters = async (filters: FilterOptions) => {
+    try {
+      setLoading(true);
+      const response = await getUsersList();
+      
+      let filteredUsers = response.users
+        .filter((u: any) => u._id !== user?.id);
+      
+      if (filters.gender !== 'any') {
+        filteredUsers = filteredUsers.filter((u: any) => 
+          u.gender === filters.gender
+        );
+      }
+      
+      if (filters.englishLevel !== 'any') {
+        filteredUsers = filteredUsers.filter((u: any) => 
+          u.englishLevel === filters.englishLevel
+        );
+      }
+      
+      const usersWithOnlineStatus = filteredUsers.map((u: any) => ({
+        ...u,
+        isOnline: onlineUsers.includes(u._id)
+      }));
+      
+      setUsers(usersWithOnlineStatus);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -160,23 +204,18 @@ export default function OnlineUsersScreen() {
   );
   
   return (
-    <>
-      <Stack.Screen
-        options={{
-          headerBackTitle: 'Back',
-          title: 'Peers',
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()}>
-              <Ionicons name="chevron-back" size={24} color="#4A86E8" />
-            </TouchableOpacity>
-          ),
-          headerRight: () => (
-            <TouchableOpacity onPress={() => fetchUsers()}>
-              <Ionicons name="refresh" size={24} color="#4A86E8" />
-            </TouchableOpacity>
-          ),
-        }}
-      />
+    <ThemedView style={styles.container}>
+        <View style={styles.header}>
+        <ThemedText style={styles.headerTitle}>Peers</ThemedText>
+        <View style={{flexDirection: 'row'}}>
+          <TouchableOpacity onPress={() => setFilterDialogVisible(true)} style={{marginRight: 16}}>
+            <Ionicons name="filter" size={24} color="#4A86E8" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => fetchUsers()}>
+            <Ionicons name="refresh" size={24} color="#4A86E8" />
+          </TouchableOpacity>
+        </View>
+      </View>
       <ThemedView style={styles.container}>
         <FlatList
           data={users}
@@ -193,13 +232,31 @@ export default function OnlineUsersScreen() {
           )}
         />
       </ThemedView>
-    </>
+      <FilterDialog
+        visible={filterDialogVisible}
+        onClose={() => setFilterDialogVisible(false)}
+        onApply={handleApplyFilters}
+        initialFilters={activeFilters}
+      />
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   userItem: {
     flexDirection: 'row',
