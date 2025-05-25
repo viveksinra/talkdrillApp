@@ -14,7 +14,10 @@
     "production": {
       "autoIncrement": true,
       "env": {
-          "ANDROID_SDK_ROOT": "/home/YourUserName/Android/Sdk"
+          "ANDROID_SDK_ROOT": "/Users/hrishikesh/Library/Android/sdk"
+      },
+      "android": {
+        "buildType": "apk"
       }
     }
   },

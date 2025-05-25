@@ -113,8 +113,8 @@ export default function AICharactersScreen() {
           </View>
         </View>
         
-        <TouchableOpacity style={styles.startSessionButton}>
-          <Text style={styles.startSessionText}>Start Session</Text>
+        <TouchableOpacity style={styles.startSessionButton} onPress={() => router.push(`/(protected)/ai-character/${item._id}`)}>
+          <Text style={styles.startSessionText}>View Details</Text>
         </TouchableOpacity>
       </View>
       
