@@ -23,11 +23,11 @@ export default function LoginScreen() {
   };
 
   const handleTermsPress = () => {
-    Linking.openURL('https://example.com/terms');
+    router.push('/terms');
   };
 
   const handlePrivacyPress = () => {
-    Linking.openURL('https://example.com/privacy');
+    router.push('/privacy');
   };
   
   return (
@@ -41,19 +41,6 @@ export default function LoginScreen() {
       <ThemedText style={styles.tagline}>Improve your English through conversation</ThemedText>
       
       <View style={styles.buttonContainer}>
-        {/* <TouchableOpacity 
-          style={styles.googleButton}
-          onPress={handleGoogleSignIn}>
-          <IconSymbol size={24} name="g.circle.fill" color="#DF4A32" />
-          <ThemedText style={styles.buttonText}>Continue with Google</ThemedText>
-        </TouchableOpacity>
-        
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <ThemedText style={styles.dividerText}>or</ThemedText>
-          <View style={styles.dividerLine} />
-        </View> */}
-        
         <TouchableOpacity 
           style={styles.mobileButton}
           onPress={handleLoginViaMobile}>

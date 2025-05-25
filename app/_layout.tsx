@@ -13,25 +13,6 @@ import { SocketProvider } from '@/contexts/SocketContext';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Root Layout Navigator that includes auth checking
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-     <Stack>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(protected)" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar 
-        backgroundColor="#00506C" 
-        // @ts-ignore
-        barStyle={Platform.OS === 'ios' ? 'dark-content' : 'light-content'} 
-      />
-    </ThemeProvider>
-  );
-}
-
 // Main layout component with auth provider
 export default function RootLayout() {
   const [loaded] = useFonts({

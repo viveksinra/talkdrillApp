@@ -100,7 +100,7 @@ export default function ReportDetailedScreen() {
   const handleShareReport = async () => {
     try {
       await Share.share({
-        message: 'Check out my language practice report from SpeakUp!',
+        message: 'Check out my language practice report from TalkDrill!',
       });
     } catch (error) {
       console.error('Error sharing report:', error);

@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
+import {Colors}  from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 function TabBarIcon(props: {
@@ -39,13 +39,6 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="chats"
-        options={{
-          title: 'Chats',
-          tabBarIcon: ({ color }) => <TabBarIcon name="comment" color={color} />,
         }}
       />
       <Tabs.Screen

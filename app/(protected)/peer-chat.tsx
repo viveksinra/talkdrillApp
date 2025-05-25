@@ -146,9 +146,11 @@ export default function PeerChatScreen() {
       const { token, apiKey } = await streamService.getToken();
       
       // Initialize Stream client
+      //@ts-ignore
       await streamService.initialize(user?.id || '', token, apiKey);
       
       // Start call with peer
+      //@ts-ignore
       const { callId, streamCallId } = await streamService.startCall(peerId as string);
       
       // Navigate to call screen
