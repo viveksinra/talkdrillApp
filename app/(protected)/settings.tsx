@@ -1,16 +1,14 @@
-import { StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import { useAuth } from '@/contexts/AuthContext';
 import React from 'react';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { logout } = useAuth();
   const [settings, setSettings] = useState({
     pushNotifications: true,
     language: 'English',
@@ -40,12 +38,6 @@ export default function SettingsScreen() {
     });
   };
   
-  const handleLogout = async () => {
-    // Mock logout
-    await logout();
-    router.replace('/login');
-  };
-  
   return (
     <>
       <Stack.Screen
@@ -71,12 +63,6 @@ export default function SettingsScreen() {
             <IconSymbol size={20} name="chevron.right" color="#888" />
           </TouchableOpacity>
         </View>
-        
-        <TouchableOpacity 
-          style={styles.logoutButton}
-          onPress={handleLogout}>
-          <ThemedText style={styles.logoutText}>Logout</ThemedText>
-        </TouchableOpacity>
       </ThemedView>
     </>
   );
@@ -105,15 +91,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  logoutButton: {
-    backgroundColor: '#FF3B30',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  logoutText: {
-    color: 'white',
-    fontWeight: '600',
-  },
+  }
 }); 

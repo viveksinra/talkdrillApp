@@ -12,8 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { fetchAICharacters } from '../../api/services/public/aiCharacters';
-import { Colors } from '../../constants/Colors';
+import { fetchAICharacters } from '@/api/services/public/aiCharacters';
+import { Colors } from '@/constants/Colors';
 
 interface AICharacter {
   _id: string;
@@ -133,7 +133,7 @@ export default function AICharactersScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>AI Language Tutors</Text>
+        <Text style={styles.title}>AI Tutors</Text>
       </View>
       
       {allTags.length > 0 && (

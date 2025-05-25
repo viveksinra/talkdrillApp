@@ -20,6 +20,7 @@ export interface SocketContextType {
   on: (event: string, callback: Function) => void;
   off: (event: string, callback: Function) => void;
   onCallEvent: (event: string, callback: Function) => void;
+  emit: (event: string, data: any) => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -50,9 +51,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       socketRef.current = socketService.connect(user.id);
       
       socketRef.current?.on('connect', () => {
-        console.log('Socket connected with ID:', socketRef.current.id);
+        console.log('Socket connected with ID:', socketRef.current?.id);
         setIsConnected(true);
-        socketRef.current.emit('user_online', { userId: user.id });
+        socketRef.current?.emit('user_online', { userId: user.id });
       });
       
       socketRef.current?.on('connect_error', (error: any) => {
@@ -232,6 +233,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const sendChatMessage = (roomId: string, message: any) => {
     socketService.sendChatMessage(roomId, message);
   };
+
+  const emit = (event: string, data: any) => {
+    socketService.emit(event, data);
+  };
   
   return (
     <SocketContext.Provider value={{
@@ -247,7 +252,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       sendAITranscription,
       on: socketService.on.bind(socketService),
       off: socketService.off.bind(socketService),
-      onCallEvent
+      onCallEvent,
+      emit
     }}>
       {children}
     </SocketContext.Provider>

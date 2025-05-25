@@ -41,6 +41,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
       />
+       <Tabs.Screen
+        name="ai-characters"
+        options={{
+          title: 'AI',
+          tabBarIcon: ({ color }) => <TabBarIcon name="android" color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="users"
         options={{

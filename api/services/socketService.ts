@@ -52,6 +52,11 @@ class SocketService {
       this.socket.on('ai_response', (data) => {
         this.triggerEvent('ai-response', data);
       });
+
+      // Peer status event
+      this.socket.on('peer_status', (data) => {
+        this.triggerEvent('peer_status', data);
+      });
     }
     return this.socket;
   }
@@ -109,6 +114,13 @@ class SocketService {
   sendAITranscription(userId: string, callId: string, message: string) {
     if (this.socket) {
       this.socket.emit('ai_transcription', { userId, callId, message });
+    }
+  }
+
+  // Generic emit function
+  emit(event: string, data: any) {
+    if (this.socket) {
+      this.socket.emit(event, data);
     }
   }
 

@@ -105,7 +105,16 @@ const makeFetchRequest = async <T>(
     };
     
     if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-      fetchOptions.body = JSON.stringify(data);
+      if (data instanceof FormData) {
+        fetchOptions.body = data;
+        // When sending FormData, let the browser set the Content-Type header
+        // so it can include the boundary.
+        if (fetchOptions.headers && (fetchOptions.headers as Record<string, string>)['Content-Type']) {
+          delete (fetchOptions.headers as Record<string, string>)['Content-Type'];
+        }
+      } else {
+        fetchOptions.body = JSON.stringify(data);
+      }
     }
     
     const response = await fetch(fullUrl, fetchOptions);

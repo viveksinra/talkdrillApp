@@ -185,9 +185,8 @@ export default function OnlineUsersScreen() {
       
       <View style={styles.actions}>
         <TouchableOpacity 
-          style={[styles.actionButton, !item.isOnline && styles.disabledButton]}
+          style={[styles.actionButton]}
           onPress={() => handleChatWithUser(item)}
-          disabled={!item.isOnline}
         >
           <Ionicons name="chatbubble" size={20} color="#4A86E8" />
         </TouchableOpacity>

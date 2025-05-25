@@ -24,7 +24,7 @@ export default function EditProfileScreen() {
   // Email validation
   const validateEmail = (emailString: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailString)) {
+    if (emailString && !emailRegex.test(emailString)) {
       setEmailError('Please enter a valid email address');
       return false;
     }
@@ -128,6 +128,16 @@ export default function EditProfileScreen() {
         </View>
 
         <View style={styles.form}>
+          <View style={styles.phoneInputContainer}>
+            <RNText style={styles.label}>Phone(can't be changed)</RNText>
+            <TextInput
+              placeholder="Enter your Phone Number"
+              readOnly
+              value={user?.phoneNumber}
+              autoCapitalize="none"
+              style={styles.phoneTextInput}
+            />
+          </View>
           <View style={styles.inputGroup}>
             <RNText style={styles.label}>Name</RNText>
             <TextInput
@@ -137,6 +147,7 @@ export default function EditProfileScreen() {
               style={styles.input}
             />
           </View>
+          
           
           <View style={styles.inputGroup}>
             <RNText style={styles.label}>Email</RNText>
@@ -261,8 +272,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 24,
-    marginBottom: Platform.OS === 'ios' ? 30 : 24, // Adjust for home indicator on iOS
-    height: 50,
+    marginBottom: Platform.OS === 'ios' ? 36 : 28, // Adjust for home indicator on iOS and provide more space
+    height: 60,
   },
   saveButtonDisabled: {
     backgroundColor: Colors.light.secondaryLight, // A more subdued color for disabled state
@@ -271,5 +282,20 @@ const styles = StyleSheet.create({
     color: '#fff', // White text for button
     fontSize: 18,
     fontWeight: '500',
+  },
+  phoneInputContainer: {
+    backgroundColor: 'lightgrey', // TODO: Replace 'lightgrey' with a color from your ColorsConstant.js
+    alignItems: 'center', // Horizontally centers children (RNText and TextInput)
+    paddingVertical: 15,   // Adds vertical padding inside the container
+    paddingHorizontal: 10, // Adds horizontal padding inside the container
+    borderRadius: 8,       // Optional: for rounded corners
+    marginVertical: 10,    // Optional: adds some space outside the container
+  },
+  phoneTextInput: {
+    width: '90%',
+    fontWeight: '500',
+    textAlign: 'center',
+    fontSize: 16,
+    color: Colors.light.text
   },
 });
