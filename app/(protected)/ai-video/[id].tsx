@@ -65,12 +65,16 @@ export default function AIVideoCallScreen() {
   
   const [processingStatus, setProcessingStatus] = useState<string | null>(null);
   const cleanupSocketListenersRef = useRef<(() => void) | null>(null);
-  
+
+  // To manage listener subscriptions and timeout for speech recognition
+  const speechResultListenerRef = useRef<any>(null);
+  const speechErrorListenerRef = useRef<any>(null);
+  const recordingTimeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     console.log("id", routeConversationId);
     loadConversation(routeConversationId);
     
-    // Set up audio recording
     Audio.requestPermissionsAsync()
       .then(({ granted }) => {
         if (!granted) {
@@ -81,7 +85,6 @@ export default function AIVideoCallScreen() {
         }
       });
     
-    // Configure audio mode
     Audio.setAudioModeAsync({
       allowsRecordingIOS: true,
       playsInSilentModeIOS: true,
@@ -90,13 +93,25 @@ export default function AIVideoCallScreen() {
     });
     
     return () => {
-      if (isRecording) {
-        stopRecording();
+      // Cleanup speech recognition
+      if (speechResultListenerRef.current) {
+        speechResultListenerRef.current.remove();
+        speechResultListenerRef.current = null;
       }
-      // Clean up any remaining listeners
-      ExpoSpeechRecognitionModule.abort();
+      if (speechErrorListenerRef.current) {
+        speechErrorListenerRef.current.remove();
+        speechErrorListenerRef.current = null;
+      }
+      if (recordingTimeoutIdRef.current) {
+        clearTimeout(recordingTimeoutIdRef.current);
+        recordingTimeoutIdRef.current = null;
+      }
+      if (isRecording) { // Ensure module is stopped if component unmounts while recording
+        ExpoSpeechRecognitionModule.stop();
+      } else {
+        ExpoSpeechRecognitionModule.abort(); // Abort if not actively recording but might have state
+      }
       
-      // Unload audio
       if (sound) {
         sound.unloadAsync();
       }
@@ -104,7 +119,7 @@ export default function AIVideoCallScreen() {
         cleanupSocketListenersRef.current();
       }
     };
-  }, [routeConversationId]);
+  }, [routeConversationId]); // isRecording removed from dependencies as it's managed internally
   
   useEffect(() => {
     if (conversation?.messages && conversation.messages.length > 0) {
@@ -155,16 +170,14 @@ export default function AIVideoCallScreen() {
     if (sound && currentPlayingAudioUrl === audioUrlToPlay && isPlaying) { // Pausing current
       await sound.pauseAsync();
       setIsPlaying(false);
-      // Timer will naturally stop updating via onPlaybackStatusUpdate when paused
     } else { // Playing new, resuming paused, or playing a different audio
-      if (sound) { // If any sound is currently loaded
-        await sound.unloadAsync(); // Stop and unload it completely
+      if (sound) { 
+        await sound.unloadAsync(); 
       }
-      // Reset audio states before loading/playing new sound
-      setSound(null); // Clear the sound object from state
-      setIsPlaying(false); // Reflect that momentarily no sound is playing/loading
-      setCurrentPlayingAudioUrl(null);
-      setRemainingTime("00:00"); // Reset timer display
+      setSound(null); 
+      setIsPlaying(false); // Momentarily set to false before loading new sound
+      setCurrentPlayingAudioUrl(null); // Clear current before setting new
+      setRemainingTime("00:00"); 
 
       try {
         console.log(`[AIVideoCallScreen] Attempting to play audio: ${audioUrlToPlay}`);
@@ -172,62 +185,53 @@ export default function AIVideoCallScreen() {
           { uri: audioUrlToPlay },
           { shouldPlay: true }
         );
-        setSound(newSound); // Set the new sound object to state
+        setSound(newSound); 
         setIsPlaying(true);
-        setCurrentPlayingAudioUrl(audioUrlToPlay);
+        setCurrentPlayingAudioUrl(audioUrlToPlay); // Set the new URL as current
 
         newSound.setOnPlaybackStatusUpdate((playbackStatus: AVPlaybackStatus) => {
           if (!playbackStatus.isLoaded) {
-            // This block handles cases where sound is unloaded (e.g. by another action) or errors during playback.
             // Check if this callback is for the sound that was meant to be active.
             if (currentPlayingAudioUrl === audioUrlToPlay) {
               setIsPlaying(false);
               setCurrentPlayingAudioUrl(null);
               setRemainingTime("00:00");
-              // If sound was unloaded externally or errored, ensure our state reflects it's gone.
-              if (sound === newSound) { // Only nullify if 'sound' state still points to this instance
+              if (sound === newSound) { 
                 setSound(null);
               }
               if (playbackStatus.error) {
                 console.error(`[AIVideoCallScreen] Playback error on URL ${audioUrlToPlay}:`, playbackStatus.error);
-                // Avoid alerting multiple times if error is caught below already
               }
             }
             return;
           }
 
-          // If sound is loaded:
-          updateTimer(playbackStatus); // Update timer based on current position and duration
+          updateTimer(playbackStatus); 
 
           if (playbackStatus.didJustFinish) {
-            // This check ensures we are reacting to the currently intended audio finishing
-            if (currentPlayingAudioUrl === audioUrlToPlay) {
+            if (currentPlayingAudioUrl === audioUrlToPlay) { // Ensures we are reacting to the currently intended audio finishing
               setIsPlaying(false);
               setCurrentPlayingAudioUrl(null);
               setRemainingTime("00:00");
-              setSound(null); // Explicitly clear the sound state when playback finishes naturally
+              setSound(null); 
             }
-            // Unload the sound from memory once it's finished.
-            // It's crucial newSound is the object from this closure.
             newSound.unloadAsync().catch(e => {
                 console.warn(`[AIVideoCallScreen] Error unloading sound ${audioUrlToPlay} on finish:`, e);
             });
           }
         });
 
-        // Set initial time display if duration is available from the initial load status
         if (status.isLoaded && status.durationMillis) {
           setRemainingTime(formatTime(status.durationMillis));
         } else {
-          setRemainingTime("00:00"); // Default if no duration info
+          setRemainingTime("00:00"); 
         }
 
       } catch (e: any) {
         console.error(`[AIVideoCallScreen] Error creating or playing audio ${audioUrlToPlay}:`, e);
         Alert.alert('Audio Playback Error', `Could not play audio: ${e.message || 'Unknown error'}`);
-        // Ensure states are fully reset on a critical error during setup
-        if (sound) { // If a sound object was partially set to state before erroring
-            await sound.unloadAsync().catch(() => {}); // Try to unload, ignore error if already gone
+        if (sound) { 
+            await sound.unloadAsync().catch(() => {}); 
         }
         setSound(null);
         setIsPlaying(false);
@@ -237,89 +241,134 @@ export default function AIVideoCallScreen() {
     }
   };
   
+  const cleanupSpeechRecognition = () => {
+    speechResultListenerRef.current?.remove();
+    speechResultListenerRef.current = null;
+    speechErrorListenerRef.current?.remove();
+    speechErrorListenerRef.current = null;
+    if (recordingTimeoutIdRef.current) {
+      clearTimeout(recordingTimeoutIdRef.current);
+      recordingTimeoutIdRef.current = null;
+    }
+  };
+
   const startRecording = async () => {
     try {
       // Stop any currently playing audio before starting recording
       if (sound && isPlaying) {
+        console.log("[AIVideoCallScreen] Stopping current audio to start recording.");
         await sound.stopAsync(); // stopAsync also unloads the sound
         setIsPlaying(false);
         setCurrentPlayingAudioUrl(null);
-        setSound(null); // Clear the sound object from state as it's now invalid
-        setRemainingTime("00:00"); // Reset timer display
+        setSound(null); 
+        setRemainingTime("00:00"); 
       }
       
-      setIsRecording(true);
-      
-      // Request permissions
+      // Request permissions if not already granted (good practice)
       const { granted: micPermission } = await Audio.requestPermissionsAsync();
       if (!micPermission) {
         Alert.alert('Microphone Permission Required', 'Please grant microphone permission to use speech recognition.');
-        setIsRecording(false);
         return;
       }
       
-      // Request speech recognition permissions
       const speechPermission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!speechPermission.granted) {
         Alert.alert('Speech Recognition Permission Required', 'Please grant speech recognition permission to continue.');
-        setIsRecording(false);
         return;
       }
+
+      setIsRecording(true); // Set recording state
       
-      // Start speech recognition
+      // Clean up any previous listeners & timeout before attaching new ones
+      cleanupSpeechRecognition();
+
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
-        interimResults: true,
+        interimResults: false, // We only care about final results
         continuous: false,
         iosTaskHint: 'unspecified',
       });
       
-      // Set up speech recognition event listeners
-      const resultListener = ExpoSpeechRecognitionModule.addListener('result', (event) => {
+      speechResultListenerRef.current = ExpoSpeechRecognitionModule.addListener('result', (event) => {
         if (event.results && event.results.length > 0) {
           const transcribedText = event.results[0].transcript;
           if (event.isFinal) {
-            // Process the final transcribed text
-            processTranscribedText(transcribedText);
-            // Remove the listener
-            resultListener.remove();
-            setIsRecording(false);
+            console.log("[AIVideoCallScreen] Speech result (final):", transcribedText);
+            cleanupSpeechRecognition();
+            setIsRecording(false); 
+            if (transcribedText && transcribedText.trim() !== '') {
+              processTranscribedText(transcribedText);
+            } else {
+              console.log("[AIVideoCallScreen] Speech recognition resulted in empty text. Not processing.");
+              // Optionally, provide subtle feedback to the user here if desired
+            }
           }
         }
       });
       
-      // Add error listener
-      const errorListener = ExpoSpeechRecognitionModule.addListener('error', (event) => {
-        console.error('Speech recognition error:', event.error, event.message);
-        // Alert.alert('Error', `Speech recognition error: ${event.message}`);
+      speechErrorListenerRef.current = ExpoSpeechRecognitionModule.addListener('error', (event) => {
+        console.error('[AIVideoCallScreen] Speech recognition error:', event.error, event.message);
+        cleanupSpeechRecognition();
         setIsRecording(false);
-        errorListener.remove();
+
+        const errorMessage = event.message?.toLowerCase() || "";
+        const errorCode = event.error?.toLowerCase() || ""; // ExpoSpeechRecognitionErrorCodes
+
+        if (errorCode === 'no-speech' || errorMessage.includes("no speech")) {
+            console.log("[AIVideoCallScreen] No speech detected by the module.");
+            // No alert for "no-speech", user can simply try again
+        } else if (errorCode === 'network' || errorMessage.includes("network")) {
+            Alert.alert('Network Error', 'A network error occurred during speech recognition. Please check your connection and try again.');
+        } else if (errorCode === 'recognitionservicebusy' || errorMessage.includes("service busy")) {
+            Alert.alert('Service Busy', 'The speech recognition service is currently busy. Please try again in a moment.');
+        } else if (errorCode === 'client' && errorMessage.includes("user denied permission")) {
+            Alert.alert('Permission Denied', 'Speech recognition permission was denied. Please enable it in settings.');
+        } else if (errorCode === 'canceled' || errorMessage.includes("cancelled") || errorMessage.includes("canceled")) {
+            console.log("[AIVideoCallScreen] Speech recognition was cancelled (e.g. by stopRecording).");
+             // This is often expected if stopRecording is called, not necessarily an error to show user.
+        } else {
+            Alert.alert('Speech Error', `Speech recognition failed: ${event.message || event.error || 'Unknown error'}`);
+        }
       });
       
-      // Auto-stop after 10 seconds to prevent indefinite recording
-      setTimeout(() => {
-        if (isRecording) {
-          stopRecording();
+      // Auto-stop after 10 seconds if no final result by then
+      recordingTimeoutIdRef.current = setTimeout(() => {
+        if (isRecording) { // Check current state, not closure
+          console.log("[AIVideoCallScreen] Recording timeout (10s) reached. Stopping speech recognition.");
+          stopRecording(); // This will call ExpoSpeechRecognitionModule.stop()
         }
       }, 10000);
+
     } catch (err) {
-      console.error('Failed to start recording:', err);
+      console.error('[AIVideoCallScreen] Failed to start recording:', err);
       Alert.alert('Error', 'Failed to start speech recognition. Please try again.');
       setIsRecording(false);
+      cleanupSpeechRecognition(); // Ensure cleanup on generic error too
     }
   };
   
   const stopRecording = async () => {
+    // Check isRecording state directly or via ref if available
+    // For this example, we assume setIsRecording updates promptly for the next check
+    if (!isRecording) {
+      console.log("[AIVideoCallScreen] stopRecording called but not currently recording.");
+      return;
+    }
+    
+    console.log("[AIVideoCallScreen] Attempting to stop recording.");
+    // setIsRecording(false); // This will be set by listeners or if module.stop fails
+
     try {
-      if (!isRecording) return;
-      
-      setIsRecording(false);
-      
-      // Stop speech recognition
       ExpoSpeechRecognitionModule.stop();
+      // Note: Calling stop() should trigger either the 'result' or 'error' listener,
+      // which will then handle setIsRecording(false) and cleanup.
+      // If stop() itself doesn't trigger a listener, then setIsRecording(false) and cleanup
+      // would need to be handled here more directly, which can be tricky with async events.
     } catch (err) {
-      console.error('Failed to stop recording:', err);
+      console.error('[AIVideoCallScreen] Failed to stop speech recognition module:', err);
+      // Fallback: ensure state is updated and resources are cleaned if stop() call throws.
       setIsRecording(false);
+      cleanupSpeechRecognition();
     }
   };
   
@@ -428,10 +477,14 @@ export default function AIVideoCallScreen() {
   };
   
   const handleEndCall = async () => {
+    if(sound){
+      await sound.pauseAsync();
+      setIsPlaying(false);
+    }
     try {
-      if (!conversation) return;
-      
-      await endConversation(conversation._id);
+      if (conversation){
+        await endConversation(conversation._id);
+      };
       router.back();
     } catch (err) {
       console.error('Error ending call:', err);
@@ -466,7 +519,7 @@ export default function AIVideoCallScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header with timer and controls */}
       <View style={styles.headerControls}>
-        <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => handleEndCall()}>
           <Ionicons name="close" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.timerText}>{remainingTime}</Text>
@@ -476,12 +529,14 @@ export default function AIVideoCallScreen() {
       <View style={styles.avatarSection}>
         <TouchableOpacity 
           onPress={() => {
-            // A simple check for common audio file extensions
-            if (isPlaying && currentPlayingAudioUrl) {
-              playOrPauseAudio(currentPlayingAudioUrl, true);
+            if (currentPlayingAudioUrl) {
+              playOrPauseAudio(currentPlayingAudioUrl); // Let playOrPauseAudio handle the toggle
             } else {
-              console.warn(`[AIVideoCallScreen] Character profileImage (${audioUrl}) does not appear to be a playable audio file. Playback attempt skipped.`);
-              Alert.alert("Playback Issue", "The character's introductory audio is not available or in a recognized format.");
+              console.warn(`[AIVideoCallScreen] Avatar pressed, but no currentPlayingAudioUrl is set. Cannot play/pause.`);
+              // Optionally, you could attempt to play a default intro audio here if desired and available
+              // For example: if (conversation?.characterId?.profileImage?.endsWith('.mp3')) { // Simple check
+              //   playOrPauseAudio(conversation.characterId.profileImage, true);
+              // }
             }
           }}
           style={styles.avatarContainer}
@@ -498,7 +553,7 @@ export default function AIVideoCallScreen() {
           )}
           <View style={styles.playIconOverlay}>
             <Ionicons 
-              name={isPlaying ? "pause" : "play"} 
+              name={isPlaying ? "pause" : "play"} // This reflects the global isPlaying state
               size={30} 
               color="white"
             />
@@ -543,9 +598,23 @@ export default function AIVideoCallScreen() {
                 {message.sender === 'ai' ? (
                   <View style={styles.aiMessageContent}>
                     <Text style={styles.aiMessageText}>{message.content}</Text>
-                    <TouchableOpacity style={styles.translateButton}>
-                      <Ionicons name="language-outline" size={20} color={Colors.light.primary} />
-                    </TouchableOpacity>
+                    <View style={styles.aiMessageControls}>
+                      {message.audioUrl && (
+                        <TouchableOpacity 
+                          style={styles.audioPlayerButton}
+                          onPress={() => playOrPauseAudio(message.audioUrl!)}
+                        >
+                          <Ionicons 
+                            name={isPlaying && currentPlayingAudioUrl === message.audioUrl ? "pause-circle-outline" : "play-circle-outline"}
+                            size={28} 
+                            color={Colors.light.primary} 
+                          />
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity style={styles.translateButton}>
+                        <Ionicons name="language-outline" size={20} color={Colors.light.primary} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ) : (
                   <View style={styles.userMessageContent}>
@@ -737,7 +806,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F2',
     padding: 12,
     borderRadius: 16,
-    flexDirection: 'column',
+    flexDirection: 'column', // Keep column for text and controls block
+  },
+  aiMessageControls: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  audioPlayerButton: {
+    marginRight: 10, // Space between play/pause and translate
   },
   userMessageContent: {
     backgroundColor: Colors.light.primary,
@@ -753,8 +831,8 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   translateButton: {
-    alignSelf: 'flex-end',
-    marginTop: 4,
+    // alignSelf: 'flex-end', // No longer needed if in aiMessageControls
+    // marginTop: 4, // No longer needed if in aiMessageControls
   },
   videoContainer: {
     width: 280,
