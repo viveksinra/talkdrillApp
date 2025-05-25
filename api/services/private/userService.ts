@@ -2,7 +2,7 @@ import { get, post, put } from '@/api/config/axiosConfig';
 
 // API endpoints
 const CURRENT_USER_ENDPOINT = '/api/v1/auth/current';
-const UPDATE_PROFILE_ENDPOINT = '/api/v1/user/update-profile';
+const UPDATE_PROFILE_ENDPOINT = '/api/v1/user/profile';
 const UPLOAD_IMAGE_ENDPOINT = '/api/v1/other/fileupload/image';
 
 /**

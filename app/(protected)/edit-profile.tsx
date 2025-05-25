@@ -1,7 +1,7 @@
 // ... existing code ...
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, TouchableOpacity, View, Image, Platform, ActivityIndicator, TextInput, Text as RNText } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -111,17 +111,11 @@ export default function EditProfileScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
-        </TouchableOpacity>
-        <RNText style={styles.headerTitle}>Edit Profile</RNText>
-        <View style={{ width: 40 }} /> 
-      </View>
-
+      <Stack.Screen
+        options={{
+          title: 'Edit Profile',
+        }}
+      />
       <View style={styles.content}>
         <View style={styles.avatarContainer}>
           <Image

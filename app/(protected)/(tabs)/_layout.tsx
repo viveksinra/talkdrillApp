@@ -42,13 +42,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="chats"
-        options={{
-          title: 'Chats',
-          tabBarIcon: ({ color }) => <TabBarIcon name="comment" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="users"
         options={{
           title: 'Peers',
