@@ -10,8 +10,8 @@ import { Platform } from 'react-native';
 //   ? 'https://api.talkdrill.com' // For iOS simulator
 //   : 'https://api.talkdrill.com';  // For Android emulator
 
-export const API_BASE_URL = 'https://a6c3-103-215-226-189.ngrok-free.app';
-export const SOCKET_BASE_URL = 'https://a6c3-103-215-226-189.ngrok-free.app';
+export const API_BASE_URL = 'https://64c0-103-215-226-189.ngrok-free.app';
+export const SOCKET_BASE_URL = 'https://64c0-103-215-226-189.ngrok-free.app';
 
 // Types to maintain compatibility
 type AxiosResponse<T = any> = {
@@ -189,17 +189,15 @@ export const get = async <T = any>(url: string, params = {}): Promise<AxiosRespo
   return api.get<T>(url, { params });
 };
 
-export const post = async <T = any>(url: string, data = {}): Promise<AxiosResponse<T>> => {
-  return api.post<T>(url, data);
+export const post = async <T = any>(url: string, data = {}, config = {}): Promise<AxiosResponse<T>> => {
+  return api.post<T>(url, data, config);
 };
 
-export const put = async <T = any>(url: string, data = {}): Promise<AxiosResponse<T>> => {
-  return api.put<T>(url, data);
-};
+export const put = async <T = any>(url: string, data?: any, config?: RequestConfig) => 
+  makeFetchRequest<T>(url, 'PUT', data, undefined, config);
 
-export const del = async <T = any>(url: string): Promise<AxiosResponse<T>> => {
-  return api.delete<T>(url);
-};
+export const del = async <T = any>(url: string, config?: RequestConfig) => 
+  makeFetchRequest<T>(url, 'DELETE', undefined, config?.params, config);
 
 export const fetchWithAuth = async (
   url: string,

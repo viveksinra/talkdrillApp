@@ -10,12 +10,11 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  console.log(user);
   
   // Use the actual routes
-  const handleViewSavedReports = () => router.push('/saved-reports');
-  const handleViewSessionHistory = () => router.push('/session-history');
-  const handleEditProfile = () => router.push('/settings');
+  // const handleViewSavedReports = () => router.push('/saved-reports');
+  // const handleViewSessionHistory = () => router.push('/session-history');
+  const handleEditProfile = () => router.push('/edit-profile');
   
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -39,7 +38,7 @@ export default function ProfileScreen() {
             <ThemedText>{user?.email || user?.phoneNumber}</ThemedText>
           </View>
           
-          <ThemedView style={styles.statsContainer}>
+          {/* <ThemedView style={styles.statsContainer}>
             <View style={styles.statItem}>
               <ThemedText type="subtitle">12</ThemedText>
               <ThemedText>Sessions</ThemedText>
@@ -54,10 +53,10 @@ export default function ProfileScreen() {
               <ThemedText type="subtitle">350</ThemedText>
               <ThemedText>Coins</ThemedText>
             </View>
-          </ThemedView>
+          </ThemedView> */}
           
           <ThemedView style={styles.menuContainer}>
-            <TouchableOpacity style={styles.menuItem} onPress={handleViewSavedReports}>
+            {/* <TouchableOpacity style={styles.menuItem} onPress={handleViewSavedReports}>
               <View style={styles.menuIcon}>
                 <IconSymbol size={24} name="doc.text.fill" color="#4A86E8" />
               </View>
@@ -78,7 +77,7 @@ export default function ProfileScreen() {
               </View>
               <IconSymbol size={20} name="chevron.right" color="#888" />
             </TouchableOpacity>
-            
+             */}
             <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
               <View style={styles.menuIcon}>
                 <IconSymbol size={24} name="pencil" color="#4A86E8" />
@@ -86,6 +85,16 @@ export default function ProfileScreen() {
               <View style={styles.menuContent}>
                 <ThemedText style={styles.menuTitle}>Edit Profile</ThemedText>
                 <ThemedText style={styles.menuDescription}>Update your profile information</ThemedText>
+              </View>
+              <IconSymbol size={20} name="chevron.right" color="#888" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings')}>
+              <View style={styles.menuIcon}>
+                <IconSymbol size={24} name="gear" color="#4A86E8" />
+              </View>
+              <View style={styles.menuContent}>
+                <ThemedText style={styles.menuTitle}>Settings</ThemedText>
+                <ThemedText style={styles.menuDescription}>Update settings</ThemedText>
               </View>
               <IconSymbol size={20} name="chevron.right" color="#888" />
             </TouchableOpacity>

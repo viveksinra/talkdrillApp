@@ -1,19 +1,21 @@
 {
   "expo": {
-    "name": "speak-up",
-    "slug": "speak-up",
+    "name": "talkdrill",
+    "slug": "talkdrill",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon.jpg",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.hrishi7.speakup",
+      "bundleIdentifier": "com.hrishi7.talkdrill",
       "bitcode": false,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone for speech recognition"
       }
     },
     "android": {
@@ -38,7 +40,7 @@
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.WAKE_LOCK"
       ],
-      "package": "com.hrishi7.speakup"
+      "package": "com.hrishi7.talkdrill"
     },
     "web": {
       "bundler": "metro",
@@ -50,7 +52,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash-icon.jpg",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -89,8 +91,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "301196e3-969b-4f53-b6ad-89dbf8b738b2"
+        "projectId": "876a21ed-67e6-4c62-8c9b-b4febdf2bfb3"
       }
-    }
+    },
+    "owner": "hrishi7"
   }
 }

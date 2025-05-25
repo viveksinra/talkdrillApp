@@ -5,14 +5,12 @@ import {
   TouchableOpacity,
   View,
   ScrollView,
-  FlatList,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
-import ParallaxScrollView from "@/components/ParallaxScrollView";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchAICharacters } from "@/api/services/public/aiCharacters";
@@ -124,14 +122,19 @@ export default function HomeScreen() {
   return (
     <ThemedView style={{ flex: 1 }}>
       <View style={styles.header}>
-        <ThemedText style={styles.headerTitle}>TalkDrill</ThemedText>
+        <Image 
+          source={require('@/assets/images/talkdrill_logo.png')}
+          style={styles.headerLogo}
+          resizeMode="contain"
+        />
         <View style={{ flexDirection: "row", gap: 16 }}>
           <TouchableOpacity onPress={() => router.push("/settings")}>
             <IconSymbol size={24} name="gear" color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push("/notifications")}>
+          {/* TODO: Add notifications */}
+          {/* <TouchableOpacity onPress={() => router.push("/notifications")}>
             <IconSymbol size={24} name="bell.fill" color="#000" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </View>
       <ScrollView style={{ flex: 1, padding: 16 }}>
@@ -139,10 +142,13 @@ export default function HomeScreen() {
           <ThemedText type="title">
             Hello, {user?.name.split(" ")[0] || "User"}!
           </ThemedText>
+          <ThemedText style={{fontWeight:'300', color: Colors.light.secondary}}>
+           Ready to improve your English today?
+          </ThemedText>
         </ThemedView>
 
         <ThemedView style={styles.sectionTitle}>
-          <ThemedText type="subtitle">Choose Your Practice Method</ThemedText>
+          <ThemedText type="defaultSemiBold">Choose Your Practice Method</ThemedText>
         </ThemedView>
 
         <ThemedView style={styles.practiceOptionsContainer}>
@@ -167,7 +173,7 @@ export default function HomeScreen() {
               </ThemedText>
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => router.push("/(protected)/(tabs)/ai-characters")}
+                onPress={() => router.push("/(protected)/ai-characters")}
               >
                 <ThemedText style={styles.actionButtonText}>
                   Start Conversation
@@ -211,7 +217,7 @@ export default function HomeScreen() {
         <ThemedView style={styles.recentSection}>
           <ThemedText type="subtitle">Popular AI Characters</ThemedText>
           <TouchableOpacity
-            onPress={() => router.push("/(protected)/(tabs)/ai-characters")}
+            onPress={() => router.push("/(protected)/ai-characters")}
           >
             <ThemedText style={styles.viewAllText}>View All</ThemedText>
           </TouchableOpacity>
@@ -257,9 +263,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
+  headerLogo: {
+    height: 32,
+    width: 120,
   },
   sectionTitle: {
     marginBottom: 16,

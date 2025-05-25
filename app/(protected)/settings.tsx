@@ -56,50 +56,18 @@ export default function SettingsScreen() {
       />
       <ThemedView style={styles.container}>
         <View style={styles.settingsGroup}>
-          <View style={styles.settingItem}>
-            <ThemedText>Push Notifications</ThemedText>
-            <Switch
-              value={settings.pushNotifications}
-              onValueChange={handleTogglePushNotifications}
-              trackColor={{ false: '#E5E5E5', true: '#A1CEDC' }}
-              thumbColor={settings.pushNotifications ? '#4A86E8' : '#fff'}
-            />
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.settingItem}
-            onPress={handleLanguageChange}>
-            <ThemedText>Language</ThemedText>
-            <View style={styles.settingValue}>
-              <ThemedText>{settings.language}</ThemedText>
-              <IconSymbol size={20} name="chevron.right" color="#888" />
-            </View>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.settingItem}
-            onPress={handleThemeChange}>
-            <ThemedText>Theme</ThemedText>
-            <View style={styles.settingValue}>
-              <ThemedText>{settings.theme}</ThemedText>
-              <IconSymbol size={20} name="chevron.right" color="#888" />
-            </View>
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.settingsGroup}>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/privacy')}>
             <ThemedText>Privacy Policy</ThemedText>
             <IconSymbol size={20} name="chevron.right" color="#888" />
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/terms')}>
             <ThemedText>Terms of Service</ThemedText>
             <IconSymbol size={20} name="chevron.right" color="#888" />
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.settingItem}>
-            <ThemedText>About SpeakUp</ThemedText>
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/about')}>
+            <ThemedText>About TalkDrill</ThemedText>
             <IconSymbol size={20} name="chevron.right" color="#888" />
           </TouchableOpacity>
         </View>
