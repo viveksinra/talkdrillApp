@@ -15,6 +15,8 @@ SplashScreen.preventAutoHideAsync();
 
 // Main layout component with auth provider
 export default function RootLayout() {
+  const colorScheme = useColorScheme();
+
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -33,7 +35,11 @@ export default function RootLayout() {
     <GestureHandlerRootView>
         <AuthProvider>
           <SocketProvider>
+             <ThemeProvider
+              value={colorScheme === "dark" ? DefaultTheme : DefaultTheme}
+            >
             <Slot />
+            </ThemeProvider>
           </SocketProvider>
         </AuthProvider>
     </GestureHandlerRootView>
