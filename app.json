@@ -82,7 +82,8 @@
           "microphonePermission": "Allow TalkDrill to use the microphone for speech recognition",
           "speechRecognitionPermission": "Allow TalkDrill to use speech recognition"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

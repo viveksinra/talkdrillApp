@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
-export const API_BASE_URL = 'https://api.talkdrill.com';
-export const SOCKET_BASE_URL = 'https://api.talkdrill.com';
+export const API_BASE_URL = 'https://1527-103-215-226-189.ngrok-free.app';
+export const SOCKET_BASE_URL = 'https://1527-103-215-226-189.ngrok-free.app';
 
 // Types to maintain compatibility
 type AxiosResponse<T = any> = {

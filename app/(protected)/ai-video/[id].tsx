@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import { Audio, Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { Colors } from '../../../constants/Colors';
 import { 
   getConversationHistory, 
@@ -23,6 +23,8 @@ import {
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { useSocket } from '../../../contexts/SocketContext';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useVideoPlayer, VideoView, VideoSource } from 'expo-video';
+import { useEvent } from 'expo';
 
 interface Message {
   sender: 'user' | 'ai';
@@ -47,6 +49,11 @@ interface Conversation {
   callType: 'video';
 }
 
+// Define video sources
+// Note: For local assets, we can use require() directly
+const idleVideoSource = require('@/assets/videos/idle.mp4');
+const speechVideoSource = require('@/assets/videos/speech.mp4');
+
 export default function AIVideoCallScreen() {
   const { id: routeConversationId } = useLocalSearchParams<{ id: string }>();
   const { socket } = useSocket();
@@ -62,6 +69,7 @@ export default function AIVideoCallScreen() {
   const [remainingTime, setRemainingTime] = useState('00:00');
   
   const scrollViewRef = useRef<ScrollView>(null);
+  const videoRef = useRef<Video>(null);
   
   const [processingStatus, setProcessingStatus] = useState<string | null>(null);
   const cleanupSocketListenersRef = useRef<(() => void) | null>(null);
@@ -70,6 +78,28 @@ export default function AIVideoCallScreen() {
   const speechResultListenerRef = useRef<any>(null);
   const speechErrorListenerRef = useRef<any>(null);
   const recordingTimeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Create players for both video states
+  const idlePlayer = useVideoPlayer(idleVideoSource, player => {
+    player.loop = true;
+  });
+  
+  const speechPlayer = useVideoPlayer(speechVideoSource, player => {
+    player.loop = true;
+  });
+  
+  // Switch between players based on audio state
+  useEffect(() => {
+    if (isPlaying && currentPlayingAudioUrl) {
+      // Speech video playing
+      idlePlayer.pause();
+      speechPlayer.play();
+    } else {
+      // Idle video playing
+      speechPlayer.pause();
+      idlePlayer.play();
+    }
+  }, [isPlaying, currentPlayingAudioUrl]);
 
   useEffect(() => {
     console.log("id", routeConversationId);
@@ -117,6 +147,9 @@ export default function AIVideoCallScreen() {
       }
       if (cleanupSocketListenersRef.current) {
         cleanupSocketListenersRef.current();
+      }
+      if (videoRef.current) {
+        videoRef.current.unloadAsync();
       }
     };
   }, [routeConversationId]); // isRecording removed from dependencies as it's managed internally
@@ -525,40 +558,26 @@ export default function AIVideoCallScreen() {
         <Text style={styles.timerText}>{remainingTime}</Text>
       </View>
 
-      {/* Character Avatar */}
+      {/* Character Video Player */}
       <View style={styles.avatarSection}>
-        <TouchableOpacity 
-          onPress={() => {
-            if (currentPlayingAudioUrl) {
-              playOrPauseAudio(currentPlayingAudioUrl); // Let playOrPauseAudio handle the toggle
-            } else {
-              console.warn(`[AIVideoCallScreen] Avatar pressed, but no currentPlayingAudioUrl is set. Cannot play/pause.`);
-              // Optionally, you could attempt to play a default intro audio here if desired and available
-              // For example: if (conversation?.characterId?.profileImage?.endsWith('.mp3')) { // Simple check
-              //   playOrPauseAudio(conversation.characterId.profileImage, true);
-              // }
-            }
-          }}
-          style={styles.avatarContainer}
-        >
-          {conversation.characterId.profileImage ? (
-            <Image 
-              source={{ uri: conversation.characterId.profileImage }} 
-              style={styles.characterAvatar}
+        <View style={styles.videoContainer}>
+          {/* Show appropriate video based on audio playback state */}
+          {isPlaying && currentPlayingAudioUrl ? (
+            <VideoView
+              player={speechPlayer}
+              style={styles.videoPlayer}
+              contentFit="cover"
+              nativeControls={false}
             />
           ) : (
-            <View style={styles.characterAvatarPlaceholder}>
-              <Ionicons name="person" size={60} color={Colors.light.primary} />
-            </View>
-          )}
-          <View style={styles.playIconOverlay}>
-            <Ionicons 
-              name={isPlaying ? "pause" : "play"} // This reflects the global isPlaying state
-              size={30} 
-              color="white"
+            <VideoView
+              player={idlePlayer}
+              style={styles.videoPlayer}
+              contentFit="cover"
+              nativeControls={false}
             />
-          </View>
-        </TouchableOpacity>
+          )}
+        </View>
 
         <View style={styles.progressContainer}>
           <View style={styles.progressItem}>
@@ -704,33 +723,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 20,
   },
-  avatarContainer: {
-    position: 'relative',
+  videoContainer: {
     width: 150,
     height: 150,
+    borderRadius: 75,
+    overflow: 'hidden',
     marginBottom: 20,
+    position: 'relative',
   },
-  characterAvatar: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-  },
-  characterAvatarPlaceholder: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playIconOverlay: {
-    position: 'absolute',
+  videoPlayer: {
     width: '100%',
     height: '100%',
-    borderRadius: 75,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   progressContainer: {
     flexDirection: 'row',
@@ -836,6 +839,7 @@ const styles = StyleSheet.create({
   },
   videoContainer: {
     width: 280,
+    height: 400,
     borderRadius: 12,
     overflow: 'hidden',
   },
