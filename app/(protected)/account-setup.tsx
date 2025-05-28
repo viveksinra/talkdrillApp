@@ -9,18 +9,26 @@ import {
   Image,
   ScrollView,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
+import * as ImagePicker from 'expo-image-picker';
+import { updateUserProfile, uploadImage } from "@/api/services/private/userService";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function AccountSetupScreen() {
   const router = useRouter();
+  const { user, updateUser } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [gender, setGender] = useState("");
+  const [languageProficiency, setLanguageProficiency] = useState("");
   const [allAvatars] = useState([
     require("@/assets/images/default-avatar-1.jpg"),
     require("@/assets/images/default-avatar-2.jpg"),
@@ -29,26 +37,133 @@ export default function AccountSetupScreen() {
     require("@/assets/images/default-avatar-5.jpg"),
   ]);
   const [selectedAvatar, setSelectedAvatar] = useState(allAvatars[0]);
+  const [customImage, setCustomImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<any>(null);
   const [username, setUsername] = useState("");
 
   // Use effect to handle navigation outside the render cycle
   useEffect(() => {
     if (isCompleted) {
       // Perform navigation in an effect, not during render
-      router.replace("/(tabs)");
+      router.replace("/(protected)/(tabs)");
     }
   }, [isCompleted, router]);
 
-  const handleNext = useCallback(() => {
-    console.log("currentStep", currentStep);
-    console.log("totalSteps", totalSteps);
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to make this work!');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setCustomImage(result.assets[0].uri);
+        setImageFile(result.assets[0]);
+        // Clear selected avatar when custom image is selected
+        setSelectedAvatar(null);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Error selecting image. Please try again.');
+    }
+  };
+
+  const handleNext = useCallback(async () => {
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Instead of immediately navigating, set a flag
-      setIsCompleted(true);
+      // On the last step, submit the profile update
+      try {
+        setIsSubmitting(true);
+        
+        // Validate required fields
+        if (!firstName || !lastName) {
+          Alert.alert("Error", "First name and last name are required");
+          return;
+        }
+        
+        if (!gender) {
+          Alert.alert("Error", "Please select your gender");
+          return;
+        }
+
+        if (!languageProficiency) {
+          Alert.alert("Error", "Please select your language proficiency");
+          return;
+        }
+        
+        // Format gender to match backend enum (lowercase)
+        let formattedGender = gender.toLowerCase();
+        if (formattedGender === "non-binary" || formattedGender === "prefer not to say") {
+          formattedGender = "others";
+        }
+        
+        // Handle image upload if custom image selected
+        let profileImageUrl = null;
+        
+        if (imageFile) {
+          try {
+            const formData = new FormData();
+            formData.append('image', {
+              uri: imageFile.uri,
+              type: 'image/jpeg',
+              name: imageFile.fileName || 'profile-image.jpg',
+            } as any);
+
+            const uploadResponse = await uploadImage(formData);
+            profileImageUrl = uploadResponse.imageUrl;
+          } catch (error) {
+            console.error('Error uploading image:', error);
+            Alert.alert('Error', 'Failed to upload profile image. Please try again.');
+            setIsSubmitting(false);
+            return;
+          }
+        }
+        
+        // Prepare data for API call
+        const profileData = {
+          name: `${firstName} ${lastName}`,
+          gender: formattedGender,
+          languageProficiency,
+          // If custom image was uploaded, use its URL
+          // Otherwise, store the avatar number (1-5) based on index
+          profileImage: profileImageUrl || 
+            (selectedAvatar ? `default-avatar-${allAvatars.indexOf(selectedAvatar) + 1}` : null),
+        };
+
+        console.log("profileData", profileData);
+        
+        // Call API to update profile
+        const response = await updateUserProfile(profileData);
+        
+        // Update local user data
+        if (response && response.myData && response.myData.user) {
+          updateUser(response.myData.user);
+        }
+        
+        // Set completed flag to trigger navigation
+        setIsCompleted(true);
+      } catch (error) {
+        console.error("Error updating profile:", error);
+        Alert.alert(
+          "Error",
+          "Failed to update profile. Please try again.",
+          [{ text: "OK" }]
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
     }
-  }, [currentStep, totalSteps]);
+  }, [currentStep, totalSteps, firstName, lastName, gender, languageProficiency, selectedAvatar, imageFile, allAvatars, updateUser]);
 
   const handleBack = () => {
     if (currentStep > 1) {
@@ -181,6 +296,73 @@ export default function AccountSetupScreen() {
           </View>
         );
       case 3:
+          return (
+            <View style={styles.stepContainer}>
+              <Text style={styles.heading}>Select your language proficiency</Text>
+              <Text style={styles.subheading}>
+                This helps us personalize your learning experience.
+              </Text>
+  
+              <TouchableOpacity
+                style={[
+                  styles.radioItem,
+                  languageProficiency === "beginner" && styles.radioItemSelected,
+                ]}
+                onPress={() => setLanguageProficiency("beginner")}
+              >
+                <View
+                  style={[
+                    styles.radioButton,
+                    languageProficiency === "beginner" && styles.radioButtonSelected,
+                  ]}
+                >
+                  {languageProficiency === "beginner" && <View style={styles.radioButtonInner} />}
+                </View>
+                <Text style={styles.radioText}>Beginner</Text>
+              </TouchableOpacity>
+  
+              <TouchableOpacity
+                style={[
+                  styles.radioItem,
+                  languageProficiency === "intermediate" && styles.radioItemSelected,
+                ]}
+                onPress={() => setLanguageProficiency("intermediate")}
+              >
+                <View
+                  style={[
+                    styles.radioButton,
+                    languageProficiency === "intermediate" && styles.radioButtonSelected,
+                  ]}
+                >
+                  {languageProficiency === "intermediate" && (
+                    <View style={styles.radioButtonInner} />
+                  )}
+                </View>
+                <Text style={styles.radioText}>Intermediate</Text>
+              </TouchableOpacity>
+  
+              <TouchableOpacity
+                style={[
+                  styles.radioItem,
+                  languageProficiency === "advanced" && styles.radioItemSelected,
+                ]}
+                onPress={() => setLanguageProficiency("advanced")}
+              >
+                <View
+                  style={[
+                    styles.radioButton,
+                    languageProficiency === "advanced" && styles.radioButtonSelected,
+                  ]}
+                >
+                  {languageProficiency === "advanced" && (
+                    <View style={styles.radioButtonInner} />
+                  )}
+                </View>
+                <Text style={styles.radioText}>Advanced</Text>
+              </TouchableOpacity>
+            </View>
+          );
+      case 4:
         return (
           <View style={styles.stepContainer}>
             <Text style={styles.heading}>Profile picture</Text>
@@ -190,10 +372,16 @@ export default function AccountSetupScreen() {
 
             <View style={styles.selectedAvatarContainer}>
               <View style={styles.avatarCircle}>
-                {/* Placeholder for avatar image */}
-                <View style={[styles.avatar, { backgroundColor: "#f0f0f0" }]}>
-                  <Image source={selectedAvatar} style={styles.avatarImage} />
-                </View>
+                {customImage ? (
+                  <Image source={{ uri: customImage }} style={styles.avatarImage} />
+                ) : (
+                  <View style={[styles.avatar, { backgroundColor: "#f0f0f0" }]}>
+                    <Image 
+                      source={selectedAvatar} 
+                      style={styles.avatarImage} 
+                    />
+                  </View>
+                )}
               </View>
             </View>
 
@@ -207,7 +395,11 @@ export default function AccountSetupScreen() {
                     styles.avatarOption,
                     selectedAvatar === avatar && styles.selectedAvatarOption,
                   ]}
-                  onPress={() => setSelectedAvatar(avatar)}
+                  onPress={() => {
+                    setSelectedAvatar(avatar);
+                    setCustomImage(null);
+                    setImageFile(null);
+                  }}
                 >
                   <View style={styles.avatarImagePlaceholder}>
                     <Image source={avatar} style={styles.avatarImage} />
@@ -216,31 +408,12 @@ export default function AccountSetupScreen() {
               ))}
             </View>
 
-            <TouchableOpacity style={styles.uploadButton}>
+            <TouchableOpacity 
+              style={styles.uploadButton}
+              onPress={pickImage}
+            >
               <Text style={styles.uploadButtonText}>Upload from library</Text>
             </TouchableOpacity>
-          </View>
-        );
-      case 4:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.heading}>Choose a username</Text>
-            <Text style={styles.subheading}>
-              This will be your unique identifier in the community.
-            </Text>
-
-            <Text style={styles.label}>Username</Text>
-            <TextInput
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-              placeholder="Enter username"
-            />
-
-            <Text style={styles.usernameHint}>
-              Username must be at least 4 characters and can include letters,
-              numbers, and underscores.
-            </Text>
           </View>
         );
       default:
@@ -254,10 +427,15 @@ export default function AccountSetupScreen() {
         <TouchableOpacity
           style={styles.continueButton}
           onPress={handleNext}
+          disabled={isSubmitting}
         >
-          <Text style={styles.continueButtonText}>
-            {currentStep < totalSteps ? "Continue" : "Complete Account Setup"}
-          </Text>
+          {isSubmitting && currentStep === totalSteps ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <Text style={styles.continueButtonText}>
+              {currentStep < totalSteps ? "Continue" : "Complete Account Setup"}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     );

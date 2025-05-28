@@ -173,12 +173,12 @@ export default function OTPVerificationScreen() {
         // Login the user
         await login(token, user);
 
-        // Navigate to the appropriate screen
-        // if (!user.isProfileCompleted) {
-        //   router.replace('account-setup' as any);
-        // } else {
-          router.replace('(tabs)' as any);
-        // }
+        // Navigate to the appropriate screen based on isAccountSetupCompleted flag
+        if (!user.isAccountSetupCompleted) {
+          router.replace('/(protected)/account-setup' as any);
+        } else {
+          router.replace('/(tabs)' as any);
+        }
       } catch (error) {
         Alert.alert(
           'Error',

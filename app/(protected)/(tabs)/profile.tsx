@@ -10,11 +10,37 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  console.log("user", user);
   
   // Use the actual routes
   // const handleViewSavedReports = () => router.push('/saved-reports');
   // const handleViewSessionHistory = () => router.push('/session-history');
   const handleEditProfile = () => router.push('/edit-profile');
+  
+  const getImageSource = (imagePath: string) => {
+    if (!imagePath) {
+      return require('@/assets/images/default-avatar-1.jpg');
+    }
+    // If it's a remote URL
+    if (imagePath.startsWith('http')) {
+      return { uri: imagePath };
+    }
+    // If it's a local path
+    if (imagePath.includes('default-avatar')) {
+      // Extract the avatar number and use require
+      const avatarNumber = imagePath.match(/default-avatar-(\d+)/)?.[1] || '1';
+      switch (avatarNumber) {
+        case '1': return require('@/assets/images/default-avatar-1.jpg');
+        case '2': return require('@/assets/images/default-avatar-2.jpg');
+        case '3': return require('@/assets/images/default-avatar-3.jpg');
+        case '4': return require('@/assets/images/default-avatar-4.jpg');
+        case '5': return require('@/assets/images/default-avatar-5.jpg');
+        default: return require('@/assets/images/default-avatar-1.jpg');
+      }
+    }
+    // Fallback to default avatar if path is invalid
+    return require('@/assets/images/default-avatar-1.jpg');
+  };
   
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -30,7 +56,7 @@ export default function ProfileScreen() {
           <View style={styles.profileHeader}>
             <View style={styles.profilePicture}>
            { user?.profileImage ? (<Image 
-              source={{ uri: user.profileImage }} 
+              source={getImageSource(user.profileImage)} 
               style={styles.avatar} 
             />) : (<IconSymbol size={60} name="person.fill" color="#FFF" />)}
             </View>
