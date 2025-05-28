@@ -107,15 +107,15 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
-  const handleApplyFilters = (filters: FilterOptions) => {
-    console.log("Applied filters:", filters);
+  const handleStartMatching = (filters: FilterOptions) => {
+    // Use the filters from your UI
     router.push({
-      pathname: "/peer-filter",
+      pathname: '/match-making',
       params: {
-        mode: "chat",
-        gender: filters.gender,
-        level: filters.englishLevel,
-      },
+        userGender: user?.gender,      // From your existing filter UI
+        partnerGender: filters.gender,   // From your existing filter UI
+        languageProficiency: filters.englishLevel // From your existing filter UI
+      }
     });
   };
 
@@ -173,7 +173,7 @@ export default function HomeScreen() {
               </ThemedText>
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => router.push("/(protected)/ai-characters")}
+                onPress={() => router.push("/(protected)/(tabs)/ai-characters")}
               >
                 <ThemedText style={styles.actionButtonText}>
                   Start Conversation
@@ -217,7 +217,7 @@ export default function HomeScreen() {
         <ThemedView style={styles.recentSection}>
           <ThemedText type="subtitle">Popular AI Characters</ThemedText>
           <TouchableOpacity
-            onPress={() => router.push("/(protected)/ai-characters")}
+            onPress={() => router.push("/(protected)/(tabs)/ai-characters")}
           >
             <ThemedText style={styles.viewAllText}>View All</ThemedText>
           </TouchableOpacity>
@@ -238,7 +238,7 @@ export default function HomeScreen() {
       <FilterDialog
         visible={filterDialogVisible}
         onClose={() => setFilterDialogVisible(false)}
-        onApply={handleApplyFilters}
+        onApply={handleStartMatching}
       />
     </ThemedView>
   );

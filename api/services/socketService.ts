@@ -75,6 +75,19 @@ class SocketService {
     }
   }
 
+  startMatching(userId: string, filters: any) {
+    if (this.socket) {
+      this.socket.emit('start_matching', { userId, filters });
+    }
+  }
+  
+  // Cancel an active matching search
+  cancelMatching(userId: string) {
+    if (this.socket) {
+      this.socket.emit('cancel_matching', { userId });
+    }
+  }
+
   // Send online status
   sendUserOnline(userId: string) {
     if (this.socket) {
