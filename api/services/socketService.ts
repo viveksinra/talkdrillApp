@@ -4,30 +4,79 @@ import { SOCKET_BASE_URL } from '../config/axiosConfig';
 class SocketService {
   private socket: Socket | null = null;
   private listeners: Map<string, Function[]> = new Map();
+  private reconnectInterval: NodeJS.Timeout | null = null;
+  private isReconnecting: boolean = false;
 
   // Initialize socket connection
   connect(userId: string) {
-    if (!this.socket) {
+    console.log('Attempting to connect socket for user:', userId, 'to URL:', SOCKET_BASE_URL);
+    
+    if (this.socket) {
+      console.log('Socket already exists, checking connection state...');
+      
+      if (!this.socket.connected) {
+        console.log('Existing socket not connected, attempting reconnect...');
+        this.socket.connect();
+      } else {
+        console.log('Socket already connected with ID:', this.socket.id);
+      }
+      
+      return this.socket;
+    }
+
+    try {
       this.socket = io(SOCKET_BASE_URL, {
-        transports: ['websocket'],
+        transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
         reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        timeout: 20000 // Increase connection timeout to 20 seconds
       });
 
       this.socket.on('connect', () => {
-        console.log('Socket connected:', this.socket?.id);
+        console.log('Socket connected successfully:', this.socket?.id);
         this.triggerEvent('connect', { socketId: this.socket?.id, userId });
+        this.clearReconnectInterval();
+        
+        // Send online status immediately after connection
+        this.sendUserOnline(userId);
       });
 
-      this.socket.on('disconnect', () => {
-        console.log('Socket disconnected');
-        this.triggerEvent('disconnect', null);
+      this.socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected, reason:', reason);
+        this.triggerEvent('disconnect', { reason });
+        
+        // Start reconnection if not already reconnecting
+        if (!this.isReconnecting) {
+          this.startReconnectInterval(userId);
+        }
+      });
+
+      this.socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        this.triggerEvent('connect_error', error);
+        
+        // Start reconnection if not already reconnecting
+        if (!this.isReconnecting) {
+          this.startReconnectInterval(userId);
+        }
+      });
+
+      this.socket.on('connect_timeout', () => {
+        console.error('Socket connection timeout');
+        this.triggerEvent('connect_timeout', null);
       });
 
       // Online users event
       this.socket.on('online_users', (users) => {
+        console.log('Received online users list:', users);
         this.triggerEvent('online_users', users);
+      });
+      
+      // Online status confirmation
+      this.socket.on('online_status_confirmed', (data) => {
+        console.log('Online status confirmed by server:', data);
+        this.triggerEvent('online_status_confirmed', data);
       });
 
       // audio/video call signaling events
@@ -41,6 +90,27 @@ class SocketService {
 
       this.socket.on('incoming_ice_candidate', (candidate) => {
         this.triggerEvent('ice-candidate', candidate);
+      });
+
+      // Match events
+      this.socket.on('search_started', (data) => {
+        console.log('Search started event received:', data);
+        this.triggerEvent('search_started', data);
+      });
+      
+      this.socket.on('match_found', (data) => {
+        console.log('Match found event received:', data);
+        this.triggerEvent('match_found', data);
+      });
+      
+      this.socket.on('search_timeout', (data) => {
+        console.log('Search timeout event received:', data);
+        this.triggerEvent('search_timeout', data);
+      });
+      
+      this.socket.on('search_error', (data) => {
+        console.log('Search error event received:', data);
+        this.triggerEvent('search_error', data);
       });
 
       // Chat events
@@ -57,8 +127,42 @@ class SocketService {
       this.socket.on('peer_status', (data) => {
         this.triggerEvent('peer_status', data);
       });
+    } catch (error) {
+      console.error('Error initializing socket:', error);
+      // Attempt to reconnect
+      this.startReconnectInterval(userId);
     }
+    
     return this.socket;
+  }
+
+  private startReconnectInterval(userId: string) {
+    if (this.reconnectInterval) {
+      clearInterval(this.reconnectInterval);
+    }
+    
+    this.isReconnecting = true;
+    this.reconnectInterval = setInterval(() => {
+      console.log('Attempting to reconnect socket...');
+      
+      // Clean up old socket
+      if (this.socket) {
+        this.socket.removeAllListeners();
+        this.socket.disconnect();
+        this.socket = null;
+      }
+      
+      // Try to reconnect
+      this.connect(userId);
+    }, 5000);
+  }
+  
+  private clearReconnectInterval() {
+    if (this.reconnectInterval) {
+      clearInterval(this.reconnectInterval);
+      this.reconnectInterval = null;
+    }
+    this.isReconnecting = false;
   }
 
   // Join room for signaling or chat

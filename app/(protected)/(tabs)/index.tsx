@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { fetchAICharacters } from "@/api/services/public/aiCharacters";
 import { Colors } from "@/constants/Colors";
 import { FilterDialog, FilterOptions } from "@/components/FilterDialog";
+import socketService from "@/api/services/socketService";
 
 // Define the AICharacter interface for type safety
 interface AICharacter {
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const [popularCharacters, setPopularCharacters] = useState<AICharacter[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterDialogVisible, setFilterDialogVisible] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<number>(0);
 
   // Fetch popular AI characters on component mount
   useEffect(() => {
@@ -50,6 +52,33 @@ export default function HomeScreen() {
 
     loadCharacters();
   }, []);
+
+  // Set up socket connection to get online user count
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Connect socket if not already connected
+    const socket = socketService.connect(user.id);
+    
+    // Register user as online
+    socketService.sendUserOnline(user.id);
+
+    // Listen for online users count updates
+    const handleOnlineUsersUpdate = (data: {count: number}) => {
+      console.log('Online users count update:', data);
+      setOnlineUsers(data.count);
+    };
+    
+    socketService.on('online_users_count', handleOnlineUsersUpdate);
+    
+    // Request online users count from server
+    socketService.emit('get_online_users_count', {});
+    
+    // Cleanup on unmount
+    return () => {
+      socketService.off('online_users_count', handleOnlineUsersUpdate);
+    };
+  }, [user?.id]);
 
   const renderCharacterItem = ({ item }: { item: AICharacter }) => (
     <TouchableOpacity
@@ -108,13 +137,24 @@ export default function HomeScreen() {
   );
 
   const handleStartMatching = (filters: FilterOptions) => {
-    // Use the filters from your UI
+    console.log('Filters:', filters);
+    // Map filter options to the format expected by the backend
+    const userGender = user?.gender || 'male';  // Default to male if not set
+    const partnerGender = filters.gender === 'any' ? 'any' : filters.gender;
+    const languageProficiency = filters.englishLevel === 'any' ? 'any' : filters.englishLevel;
+    
+    console.log('Starting match with params:', {
+      userGender,
+      partnerGender,
+      languageProficiency
+    });
+    
     router.push({
       pathname: '/match-making',
       params: {
-        userGender: user?.gender,      // From your existing filter UI
-        partnerGender: filters.gender,   // From your existing filter UI
-        languageProficiency: filters.englishLevel // From your existing filter UI
+        userGender,
+        partnerGender,
+        languageProficiency
       }
     });
   };
@@ -199,7 +239,7 @@ export default function HomeScreen() {
 
             <View style={styles.practiceCardFooter}>
               <ThemedText style={styles.availabilityText}>
-                28 users online
+                {onlineUsers} {onlineUsers === 1 ? 'user' : 'users'} online
               </ThemedText>
               <TouchableOpacity
                 style={[styles.actionButton, styles.peerActionButton]}

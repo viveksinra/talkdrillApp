@@ -1,4 +1,4 @@
-import { StyleSheet, TouchableOpacity, View, Alert } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import { Image } from 'react-native';
@@ -10,6 +10,7 @@ import socketService from '@/api/services/socketService';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { Colors } from '@/constants/Colors';
 
 // Import Stream components
 import { 
@@ -35,6 +36,8 @@ export default function PeerCallScreen() {
   
   const [callTime, setCallTime] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState('Initializing...');
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
   const [callState, setCallState] = useState<{
     client: StreamVideoClient | null;
     call: Call | null;
@@ -69,22 +72,111 @@ export default function PeerCallScreen() {
   
   // Initialize call
   useEffect(() => {
+    // Socket event handlers
+    const handlePartnerPreparing = (data: any) => {
+      console.log('Partner is preparing to join the call:', data);
+    };
+    
+    // Set up socket listeners
+    socketService.on('partner_preparing', handlePartnerPreparing);
+    
     const initializeCall = async () => {
       try {
         setIsLoading(true);
+        setConnectionStatus('Initializing connection...');
+        
+        // For automatic joining from match-making, add a small delay
+        if (autoJoin === 'true') {
+          console.log('Auto-join mode active, adding initial delay for synchronization');
+          setConnectionStatus('Synchronizing with partner...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        console.log('Initializing call with parameters:', {
+          peerId, 
+          peerName, 
+          callId, 
+          streamCallId,
+          isIncoming,
+          autoJoin
+        });
         
         // Get token from backend
+        setConnectionStatus('Getting authentication token...');
         const response = await streamService.getToken();
+        console.log('Received Stream token');
         
         // Initialize Stream client
+        setConnectionStatus('Initializing video service...');
         const client = await streamService.ensureInitialized(
           user?.id || '',
           user?.name,
           user?.profileImage
         );
+        console.log('Stream client initialized');
         
-        // Join the call
-        const call = await streamService.joinCall(streamCallId as string);
+        // Try joining the call with retries
+        let call = null;
+        let joinError = null;
+        
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            setConnectionAttempt(attempt);
+            setConnectionStatus(`Joining call (attempt ${attempt}/3)...`);
+            console.log(`Attempting to join call (attempt ${attempt}/3)`);
+            
+            // Join the call
+            call = await streamService.joinCall(streamCallId as string);
+            console.log('Successfully joined call on attempt', attempt);
+            joinError = null;
+            break;
+          } catch (error: any) {
+            joinError = error;
+            console.error(`Error joining call on attempt ${attempt}:`, error);
+            
+            // Check if it's the "Illegal State" error, which means we're actually already joined
+            if (error.message && error.message.includes('Illegal State')) {
+              console.log('Detected "Illegal State" error - treating as success');
+              setConnectionStatus('Already connected to call');
+              
+              // Try to get the current call directly
+              call = streamService.getCall();
+              if (call) {
+                joinError = null;
+                break;
+              }
+            }
+            
+            // Wait between attempts with increasing delay
+            if (attempt < 3) {
+              const delay = 1000 * attempt;
+              setConnectionStatus(`Retrying in ${delay/1000} seconds...`);
+              console.log(`Waiting ${delay}ms before retry...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+              setConnectionStatus('Failed to join call');
+            }
+          }
+        }
+        
+        if (joinError) {
+          throw joinError;
+        }
+        
+        if (!call) {
+          throw new Error('Failed to join call after multiple attempts');
+        }
+        
+        setConnectionStatus('Successfully joined call');
+        
+        // By default, start with camera off but microphone on
+        try {
+          await call.camera.disable();
+          await call.microphone.enable();
+          console.log('Default call settings applied: camera off, microphone on');
+        } catch (mediaError) {
+          console.warn('Error setting default media state:', mediaError);
+        }
         
         setCallState({
           client,
@@ -92,11 +184,21 @@ export default function PeerCallScreen() {
         });
         
         setIsLoading(false);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error setting up call:', error);
+        const errorMessage = error.message || 'Unknown error';
+        
+        // Format a user-friendly error message
+        let friendlyError = 'Failed to connect to the call.';
+        if (errorMessage.includes('Illegal State')) {
+          friendlyError = 'Error: Already connected to this call in another window.';
+        } else if (errorMessage.includes('state')) {
+          friendlyError = 'Error: Call state is invalid. Please try again.';
+        }
+        
         Alert.alert(
           'Connection Error',
-          'Failed to connect to the call. Please try again.',
+          friendlyError,
           [
             {
               text: 'OK',
@@ -111,13 +213,17 @@ export default function PeerCallScreen() {
     
     // Cleanup when component unmounts
     return () => {
+      // Remove socket listeners
+      socketService.off('partner_preparing', handlePartnerPreparing);
+      
       // End call if still active
       const call = streamService.getCall();
       if (call) {
         try {
+          console.log('Leaving call during component unmount');
           call.leave();
         } catch (e) {
-          console.error('Error leaving call:', e);
+          console.error('Error leaving call during cleanup:', e);
         }
       }
       
@@ -201,7 +307,67 @@ export default function PeerCallScreen() {
   if (isLoading || !callState.call || !callState.client) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ThemedText>Connecting to call...</ThemedText>
+        <ActivityIndicator size="large" color={Colors.light.primary} style={styles.loader} />
+        <ThemedText style={styles.loadingText}>{connectionStatus}</ThemedText>
+        {connectionAttempt > 0 && (
+          <ThemedText style={styles.attemptText}>Attempt {connectionAttempt}/3</ThemedText>
+        )}
+        
+        {/* Add manual retry button if we're having trouble connecting */}
+        {connectionAttempt >= 2 && (
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => {
+              setConnectionStatus('Retrying connection...');
+              setConnectionAttempt(0);
+              
+              // Reset connection status and restart call joining logic
+              const initCall = async () => {
+                try {
+                  setIsLoading(true);
+                  
+                  // Get a clean client
+                  const response = await streamService.getToken();
+                  const client = await streamService.ensureInitialized(
+                    user?.id || '',
+                    user?.name,
+                    user?.profileImage
+                  );
+                  
+                  // Try joining again
+                  setConnectionStatus('Joining call after manual retry...');
+                  const call = await streamService.joinCall(streamCallId as string);
+                  
+                  setCallState({
+                    client,
+                    call
+                  });
+                  
+                  setIsLoading(false);
+                } catch (error) {
+                  console.error('Error in manual retry:', error);
+                  setConnectionStatus('Connection failed after manual retry');
+                  
+                  // Show error alert
+                  Alert.alert(
+                    'Connection Failed',
+                    'Could not connect to the call after manual retry. Please try again later.',
+                    [
+                      {
+                        text: 'OK',
+                        onPress: () => router.back()
+                      }
+                    ]
+                  );
+                }
+              };
+              
+              initCall();
+            }}
+          >
+            <ThemedText style={styles.retryButtonText}>Try Manual Connection</ThemedText>
+          </TouchableOpacity>
+        )}
       </ThemedView>
     );
   }
@@ -256,5 +422,27 @@ const styles = StyleSheet.create({
   participantCount: {
     color: 'white',
     fontSize: 12,
+  },
+  loader: {
+    marginBottom: 16,
+  },
+  loadingText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  attemptText: {
+    color: 'white',
+    fontSize: 12,
+  },
+  retryButton: {
+    backgroundColor: Colors.light.primary,
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 }); 
