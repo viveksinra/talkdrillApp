@@ -9,6 +9,8 @@ interface User {
   email?: string;
   phoneNumber?: string;
   profileImage?: string;
+  gender?: string;
+  languageProficiency?: string;
 }
 
 interface AuthContextType {

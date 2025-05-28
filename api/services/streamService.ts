@@ -93,27 +93,127 @@ class StreamService {
         throw new Error('Stream client not initialized');
       }
       
-      // Get or create call
+      console.log(`Attempting to join call: ${callId} (type: ${callType})`);
+      
+      // CRITICAL FIX: First check if we already have a call object with the same ID
+      // This handles the case where we might already be in the call
+      if (this.currentCall && this.currentCall.id === callId) {
+        console.log(`Already have a call object for ${callId}, checking state...`);
+        
+        // Check if call state exists
+        if (this.currentCall.state) {
+          console.log('Call appears to be already joined, using existing call object');
+          return this.currentCall;
+        }
+      }
+      
+      // Create a fresh call object to avoid state conflicts
       this.currentCall = this.client.call(callType as string, callId);
       
-      // Join the call with retry logic
-      let retryCount = 0;
-      const maxRetries = 3;
+      // Wait briefly before joining to ensure the call is ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      while (retryCount < maxRetries) {
+      // First, try a getOrCreate to see if the call exists without joining
+      try {
+        console.log(`Checking if call ${callId} exists before joining`);
+        await this.currentCall.getOrCreate();
+        console.log(`Call ${callId} exists, will now attempt to join`);
+      } catch (error) {
+        console.log(`Error checking call existence:`, error);
+        // Continue anyway - we'll try to join below
+      }
+      
+      // Join the call with improved retry logic
+      let retryCount = 0;
+      const maxRetries = 5;
+      let joined = false;
+      
+      while (retryCount < maxRetries && !joined) {
         try {
-          await this.currentCall.join({ create: true });
-          console.log('Successfully joined call:', callId);
+          console.log(`Join attempt ${retryCount + 1} for call ${callId}`);
           
-          // Check if we have proper state after joining
-          if (!this.currentCall.state || !this.currentCall.state.participants) {
-            console.log('Call joined but state or participants are missing, retrying...');
-            retryCount++;
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            continue;
+          // For retries, create a new call object and wait longer
+          if (retryCount > 0) {
+            try {
+              console.log(`Cleaning up before retry attempt ${retryCount + 1}`);
+              
+              // Complete cleanup of previous attempt
+              if (this.currentCall) {
+                try {
+                  // Try to leave the call first
+                  await this.currentCall.leave().catch(e => {
+                    console.log('Error leaving call during retry cleanup:', e);
+                  });
+                } catch (leaveError) {
+                  console.log('Error during leave call cleanup:', leaveError);
+                }
+              }
+              
+              // Wait between retries
+              const waitTime = 1000 * retryCount;
+              console.log(`Waiting ${waitTime}ms before retry...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              
+              // Create a fresh call object for this attempt
+              this.currentCall = this.client.call(callType as string, callId);
+            } catch (cleanupError) {
+              console.log('Error during cleanup before retry:', cleanupError);
+            }
           }
           
-          break; // Successfully joined
+          // Try joining the call
+          try {
+            await this.currentCall.join({ create: true });
+            console.log(`Join attempt ${retryCount + 1} succeeded for call ${callId}`);
+            joined = true;
+          } catch (joinError: any) {
+            // Check for the "Illegal State" error which indicates we're already joined
+            if (joinError.message && joinError.message.includes('Illegal State')) {
+              console.log('Detected Illegal State error, call was already joined. Treating as success.');
+              
+              // CRITICAL FIX: When we hit this error, the call object is likely in a weird state
+              // Instead of using it directly, get a fresh call object
+              try {
+                // Get a fresh call object
+                this.currentCall = this.client.call(callType as string, callId);
+                
+                // Query the call state without joining again
+                await this.currentCall.getOrCreate();
+                
+                // If we get here, we're successfully connected to the call
+                console.log('Successfully recovered from Illegal State error');
+                joined = true;
+                break;
+              } catch (recoveryError) {
+                console.error('Failed to recover from Illegal State error:', recoveryError);
+                throw recoveryError;
+              }
+            } else {
+              throw joinError;
+            }
+          }
+          
+          // Verify call state if we've joined
+          if (joined) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            if (this.currentCall && this.currentCall.state) {
+              console.log('Call state after join:', {
+                callId: this.currentCall.id,
+                hasState: !!this.currentCall.state,
+                hasParticipants: !!this.currentCall.state.participants,
+                participantCount: this.currentCall.state.participants ? Object.keys(this.currentCall.state.participants).length : 0
+              });
+              
+              // Success! We're done
+              break;
+            } else {
+              console.log('Call joined but state is missing, will retry');
+              joined = false;
+            }
+          }
+          
+          retryCount++;
         } catch (error) {
           console.error(`Join attempt ${retryCount + 1} failed:`, error);
           retryCount++;
@@ -122,9 +222,24 @@ class StreamService {
             throw error;
           }
           
-          // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Wait before next retry
+          const waitTime = 1000 + (retryCount * 500);
+          console.log(`Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
+      }
+      
+      if (!joined) {
+        throw new Error(`Failed to join call after ${maxRetries} attempts`);
+      }
+      
+      // Enable media by default
+      try {
+        await this.currentCall.microphone.enable();
+        // Disable camera by default for all calls
+        await this.currentCall.camera.disable();
+      } catch (mediaError) {
+        console.warn('Could not set default media devices state:', mediaError);
       }
       
       return this.currentCall;

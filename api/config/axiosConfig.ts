@@ -1,7 +1,21 @@
 import * as SecureStore from 'expo-secure-store';
 
+// Use ngrok URL for development, but be sure to update when URL changes
 export const API_BASE_URL = 'https://api.talkdrill.com';
 export const SOCKET_BASE_URL = 'https://api.talkdrill.com';
+
+// Log the API and Socket URLs for debugging
+console.log('API Base URL:', API_BASE_URL);
+console.log('Socket Base URL:', SOCKET_BASE_URL);
+
+// Check if URLs are valid
+if (!API_BASE_URL || !API_BASE_URL.startsWith('http')) {
+  console.error('Invalid API Base URL:', API_BASE_URL);
+}
+
+if (!SOCKET_BASE_URL || !SOCKET_BASE_URL.startsWith('http')) {
+  console.error('Invalid Socket Base URL:', SOCKET_BASE_URL);
+}
 
 // Types to maintain compatibility
 type AxiosResponse<T = any> = {
@@ -57,6 +71,12 @@ const makeFetchRequest = async <T>(
   customConfig?: RequestConfig
 ): Promise<AxiosResponse<T>> => {
   try {
+    console.log(`API Request: ${method} ${url}`, {
+      data: data || 'none',
+      params: params || 'none',
+      timeout: customConfig?.timeout || 10000
+    });
+    
     // Apply request interceptor
     const config: RequestConfig = {
       headers: {
@@ -85,7 +105,12 @@ const makeFetchRequest = async <T>(
     
     // Create AbortController for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), interceptedConfig.timeout || 10000);
+    const timeoutValue = interceptedConfig.timeout || 10000;
+    console.log(`Request timeout set to ${timeoutValue}ms for ${method} ${url}`);
+    const timeoutId = setTimeout(() => {
+      console.log(`Request timeout triggered after ${timeoutValue}ms for ${method} ${url}`);
+      controller.abort();
+    }, timeoutValue);
     
     // Make fetch request
     const fetchOptions: RequestInit = {
@@ -107,21 +132,41 @@ const makeFetchRequest = async <T>(
       }
     }
     
+    console.log(`Sending fetch request to ${fullUrl}`, {
+      method,
+      headers: Object.fromEntries(Object.entries(fetchOptions.headers || {})),
+      bodyLength: fetchOptions.body ? String(fetchOptions.body).length : 0
+    });
+    
     const response = await fetch(fullUrl, fetchOptions);
     clearTimeout(timeoutId);
+    
+    console.log(`Response received for ${method} ${url}:`, {
+      status: response.status, 
+      statusText: response.statusText,
+      contentType: response.headers.get('content-type')
+    });
     
     let responseData;
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       responseData = await response.json();
+      console.log(`Parsed JSON response for ${method} ${url}:`, responseData);
     } else {
       responseData = await response.text();
+      console.log(`Received text response for ${method} ${url}: ${responseData.substring(0, 100)}${responseData.length > 100 ? '...' : ''}`);
     }
     
     // Apply response interceptor
     responseData = responseInterceptor(response, responseData);
     
     if (!response.ok) {
+      console.error(`Error response for ${method} ${url}:`, {
+        status: response.status,
+        statusText: response.statusText,
+        data: responseData
+      });
+      
       const error = new Error(response.statusText) as AxiosError;
       error.response = { status: response.status, data: responseData };
       error.config = config;
@@ -136,18 +181,23 @@ const makeFetchRequest = async <T>(
       config,
     };
   } catch (error: any) {
+    console.error(`Request error for ${method} ${url}:`, error);
+    
     if (error.name === 'AbortError') {
+      console.error(`Request timeout for ${method} ${url} after ${customConfig?.timeout || 10000}ms`);
       const timeoutError = new Error('Request timeout') as AxiosError;
       timeoutError.config = customConfig;
       throw timeoutError;
     }
     
     if (error.response) {
+      console.error(`Error with response for ${method} ${url}:`, error.response);
       throw error;
     }
     
     const networkError = new Error(error.message) as AxiosError;
     networkError.config = customConfig;
+    console.error(`Network error for ${method} ${url}:`, networkError);
     throw networkError;
   }
 };
