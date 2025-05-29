@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -442,6 +442,12 @@ export default function AccountSetupScreen() {
   };
 
   return (
+    <>
+     <Stack.Screen
+        options={{
+          headerShown: false,
+        }}
+      />
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         {renderProgressBar()}
@@ -471,6 +477,7 @@ export default function AccountSetupScreen() {
 
       {renderNavigation()}
     </SafeAreaView>
+    </>
   );
 }
 

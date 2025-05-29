@@ -1,6 +1,6 @@
 // ... existing code ...
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, TouchableOpacity, View, Image, Platform, ActivityIndicator, TextInput, Text as RNText, ScrollView } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Image, Platform, ActivityIndicator, TextInput, Text as RNText, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -144,8 +144,12 @@ export default function EditProfileScreen() {
         }}
       />
       
-      {/* Main content area with ScrollView */}
-      <View style={styles.contentWrapper}>
+      {/* Main content area with KeyboardAvoidingView and ScrollView */}
+      <KeyboardAvoidingView 
+        style={styles.contentWrapper}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      >
         <ScrollView 
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
@@ -285,7 +289,7 @@ export default function EditProfileScreen() {
             </View>
           </View>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
 
       {/* Save button remains outside the ScrollView */}
       <TouchableOpacity
