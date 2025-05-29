@@ -85,16 +85,41 @@ export default function HomeScreen() {
       style={styles.characterCard}
       onPress={() => router.push(`/(protected)/ai-character/${item._id}`)}
     >
+      <View style={styles.imageContainer}>
+        <Image
+          source={{
+            uri: item.profileImage || "https://via.placeholder.com/150",
+          }}
+          style={styles.characterImage}
+        />
+        <View style={[styles.badgeContainer, 
+          item.profession?.toLowerCase().includes('intermediate') 
+            ? styles.intermediateBadge 
+            : item.profession?.toLowerCase().includes('advanced') 
+              ? styles.advancedBadge 
+              : styles.beginnerBadge
+        ]}>
+          <ThemedText style={styles.badgeText}>
+            {item.profession?.toLowerCase().includes('intermediate') 
+              ? 'Intermediate' 
+              : item.profession?.toLowerCase().includes('advanced') 
+                ? 'Advanced' 
+                : 'Beginner'}
+          </ThemedText>
+        </View>
+      </View>
       <View style={styles.cardContentContainer}>
         <View style={styles.cardHeader}>
-          <ThemedText style={styles.characterName}>{item.name}</ThemedText>
+          <ThemedText style={styles.characterName} numberOfLines={1} ellipsizeMode="tail">
+            {item.name.length > 10 ? item.name.slice(0, 10) + '...' : item.name}
+          </ThemedText>
           <View style={styles.ratingContainer}>
             <Ionicons name="star" size={18} color="#FFC107" />
-            <ThemedText style={styles.ratingText}>4.8</ThemedText>
+            <ThemedText style={styles.ratingText}>4.9</ThemedText>
           </View>
         </View>
 
-        <ThemedText style={styles.characterProfession}>
+        <ThemedText style={styles.characterProfession} numberOfLines={1} ellipsizeMode="tail">
           {item.profession}
         </ThemedText>
 
@@ -103,9 +128,9 @@ export default function HomeScreen() {
             <Ionicons
               name="time-outline"
               size={16}
-              color={Colors.light.primary}
+              color="#2196F3"
             />
-            <ThemedText style={styles.sessionsText}>412 sessions</ThemedText>
+            <ThemedText style={styles.sessionsText}>238 sessions</ThemedText>
           </View>
 
           <View style={styles.statusContainer}>
@@ -122,17 +147,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.imageContainer}>
-        <Image
-          source={{
-            uri: item.profileImage || "https://via.placeholder.com/150",
-          }}
-          style={styles.characterImage}
-        />
-        <View style={styles.badgeContainer}>
-          <ThemedText style={styles.badgeText}>Intermediate</ThemedText>
-        </View>
-      </View>
+      
     </TouchableOpacity>
   );
 
@@ -383,32 +398,32 @@ const styles = StyleSheet.create({
   // Character card styles
   characterCard: {
     flexDirection: "row",
-    backgroundColor: Colors.light.background,
-    borderRadius: 12,
-    padding: 16,
-    width: 280,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "#E8E8E8",
+    elevation: 2,
+    overflow: "hidden",
   },
   cardContentContainer: {
     flex: 1,
-    marginRight: 16,
+    padding: 16,
+    justifyContent: "space-between",
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 8,
   },
   characterName: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: Colors.light.text,
+    fontSize: 20,
+    fontWeight: "600",
+    flex: 1,
+    marginRight: 4,
   },
   ratingContainer: {
     flexDirection: "row",
@@ -416,86 +431,86 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     marginLeft: 4,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
-    color: Colors.light.text,
   },
   characterProfession: {
-    fontSize: 14,
-    color: Colors.light.secondary,
-    marginBottom: 16,
+    fontSize: 16,
+    color: "#666",
+    marginBottom: 12,
   },
   statsContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
   },
   sessionsContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F0F4FF",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
+    marginRight: 16,
   },
   sessionsText: {
-    color: Colors.light.primary,
-    marginLeft: 6,
-    fontWeight: "500",
-    fontSize: 12,
+    marginLeft: 4,
+    fontSize: 14,
+    color: "#666",
   },
   statusContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E6F7EE",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
   },
   onlineIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#4CAF50",
-    marginRight: 6,
+    backgroundColor: "#4CD964",
+    marginRight: 4,
   },
   statusText: {
-    color: "#4CAF50",
-    fontWeight: "500",
-    fontSize: 12,
+    fontSize: 14,
+    color: "#4CD964",
   },
   startSessionButton: {
-    backgroundColor: Colors.light.primary,
+    backgroundColor: "#2196F3",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    paddingVertical: 10,
     alignItems: "center",
   },
   startSessionText: {
-    color: Colors.light.background,
+    color: "#FFFFFF",
+    fontSize: 16,
     fontWeight: "600",
-    fontSize: 14,
   },
   imageContainer: {
+    width: 120,
     position: "relative",
   },
   characterImage: {
-    width: 70,
-    height: 70,
-    borderRadius: 10,
+    width: 120,
+    height: "100%",
+    resizeMode: "cover",
   },
   badgeContainer: {
     position: "absolute",
-    bottom: -6,
+    bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#FF9800",
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
     alignItems: "center",
   },
+  advancedBadge: {
+    backgroundColor: "rgba(255, 100, 100, 0.8)",
+  },
+  intermediateBadge: {
+    backgroundColor: "rgba(255, 152, 0, 0.8)",
+  },
+  beginnerBadge: {
+    backgroundColor: "rgba(76, 175, 80, 0.8)",
+  },
   badgeText: {
-    color: "white",
-    fontSize: 10,
+    color: "#FFFFFF",
+    fontSize: 12,
     fontWeight: "600",
   },
   emptyState: {

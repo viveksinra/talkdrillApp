@@ -11,6 +11,7 @@ interface User {
   profileImage?: string;
   gender?: string;
   languageProficiency?: string;
+  isAccountSetupCompleted?: boolean;
 }
 
 interface AuthContextType {

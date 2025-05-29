@@ -194,6 +194,31 @@ export default function PeerChatScreen() {
     });
   };
 
+  const getImageSource = (imagePath: string) => {
+    if (!imagePath) {
+      return require('@/assets/images/default-avatar-1.jpg');
+    }
+    // If it's a remote URL
+    if (imagePath.startsWith('http')) {
+      return { uri: imagePath };
+    }
+    // If it's a local path
+    if (imagePath.includes('default-avatar')) {
+      // Extract the avatar number and use require
+      const avatarNumber = imagePath.match(/default-avatar-(\d+)/)?.[1] || '1';
+      switch (avatarNumber) {
+        case '1': return require('@/assets/images/default-avatar-1.jpg');
+        case '2': return require('@/assets/images/default-avatar-2.jpg');
+        case '3': return require('@/assets/images/default-avatar-3.jpg');
+        case '4': return require('@/assets/images/default-avatar-4.jpg');
+        case '5': return require('@/assets/images/default-avatar-5.jpg');
+        default: return require('@/assets/images/default-avatar-1.jpg');
+      }
+    }
+    // Fallback to default avatar if path is invalid
+    return require('@/assets/images/default-avatar-1.jpg');
+  };
+
   const renderMessageItem = ({ item }: { item: any }) => {
     const isUser = item.sender === user?.id;
 
@@ -204,7 +229,7 @@ export default function PeerChatScreen() {
       ]}>
         {!isUser && (
           <Image
-            source={{ uri: peerAvatar as string || 'https://img.freepik.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?semt=ais_hybrid&w=740' }}
+            source={getImageSource(peerAvatar as string)}
             style={styles.avatar}
             onError={(error) => console.error('Image loading error:', error.nativeEvent.error)}
             defaultSource={require('@/assets/images/default-avatar-1.jpg')} // Add a local fallback image
@@ -226,7 +251,7 @@ export default function PeerChatScreen() {
   const HeaderTitleWithAvatar = () => (
     <View style={styles.headerTitleContainer}>
       <Image
-        source={{ uri: (peerAvatar as string) || 'https://img.freepik.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?semt=ais_hybrid&w=740' }}
+        source={getImageSource(peerAvatar as string)}
         style={styles.headerAvatar}
         onError={(error) => console.error('Header avatar loading error:', error.nativeEvent.error)}
         defaultSource={require('@/assets/images/default-avatar-1.jpg')}
