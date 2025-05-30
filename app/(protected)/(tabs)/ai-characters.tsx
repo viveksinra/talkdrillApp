@@ -92,7 +92,7 @@ export default function AICharactersScreen() {
     >
       <View style={styles.cardContentContainer}>
         <View style={styles.cardHeader}>
-          <Text style={styles.characterName}>{item.name}</Text>
+          <Text style={styles.characterName}>{item.name.length > 15 ? item.name.slice(0, 15) + '...' : item.name}</Text>
           <View style={styles.ratingContainer}>
             <Ionicons name="star" size={18} color="#FFC107" />
             <Text style={styles.ratingText}>4.7</Text>

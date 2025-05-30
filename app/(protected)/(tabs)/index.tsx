@@ -16,7 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { fetchAICharacters } from "@/api/services/public/aiCharacters";
 import { Colors } from "@/constants/Colors";
 import { FilterDialog, FilterOptions } from "@/components/FilterDialog";
-import socketService from "@/api/services/socketService";
+import { useSocket } from "@/contexts/SocketContext";
 
 // Define the AICharacter interface for type safety
 interface AICharacter {
@@ -30,10 +30,10 @@ interface AICharacter {
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { onlineUsers } = useSocket();
   const [popularCharacters, setPopularCharacters] = useState<AICharacter[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterDialogVisible, setFilterDialogVisible] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<number>(0);
 
   // Fetch popular AI characters on component mount
   useEffect(() => {
@@ -54,31 +54,31 @@ export default function HomeScreen() {
   }, []);
 
   // Set up socket connection to get online user count
-  useEffect(() => {
-    if (!user?.id) return;
+  // useEffect(() => {
+  //   if (!user?.id) return;
 
-    // Connect socket if not already connected
-    const socket = socketService.connect(user.id);
+  //   // Connect socket if not already connected
+  //   const socket = socketService.connect(user.id);
     
-    // Register user as online
-    socketService.sendUserOnline(user.id);
+  //   // Register user as online
+  //   socketService.sendUserOnline(user.id);
 
-    // Listen for online users count updates
-    const handleOnlineUsersUpdate = (data: {count: number}) => {
-      console.log('Online users count update:', data);
-      setOnlineUsers(data.count);
-    };
+  //   // Listen for online users count updates
+  //   const handleOnlineUsersUpdate = (data: {count: number}) => {
+  //     console.log('Online users count update:', data);
+  //     setOnlineUsers(data.count);
+  //   };
     
-    socketService.on('online_users_count', handleOnlineUsersUpdate);
+  //   socketService.on('online_users_count', handleOnlineUsersUpdate);
     
-    // Request online users count from server
-    socketService.emit('get_online_users_count', {});
+  //   // Request online users count from server
+  //   socketService.emit('get_online_users_count', {});
     
-    // Cleanup on unmount
-    return () => {
-      socketService.off('online_users_count', handleOnlineUsersUpdate);
-    };
-  }, [user?.id]);
+  //   // Cleanup on unmount
+  //   return () => {
+  //     socketService.off('online_users_count', handleOnlineUsersUpdate);
+  //   };
+  // }, [user?.id]);
 
   const renderCharacterItem = ({ item }: { item: AICharacter }) => (
     <TouchableOpacity
@@ -253,9 +253,11 @@ export default function HomeScreen() {
             </ThemedText>
 
             <View style={styles.practiceCardFooter}>
-              <ThemedText style={styles.availabilityText}>
-                {onlineUsers} {onlineUsers === 1 ? 'user' : 'users'} online
-              </ThemedText>
+               
+                <ThemedText style={styles.availabilityText}>
+                  {onlineUsers.length ? onlineUsers.length - 1 === 1 ? '1 user' : onlineUsers.length - 1 > 1 ? `${onlineUsers.length - 1} users` : 'No users' : 'No users' } online
+                </ThemedText>
+              
               <TouchableOpacity
                 style={[styles.actionButton, styles.peerActionButton]}
                 onPress={() => setFilterDialogVisible(true)}

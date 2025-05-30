@@ -17,6 +17,7 @@ import { Colors } from '@/constants/Colors';
 export default function PeerChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { onlineUsers } = useSocket();
   const { joinRoom, leaveRoom, sendChatMessage, on, off, emit } = useSocket();
   const { peerId, peerName, peerAvatar } = useLocalSearchParams();
   const flatListRef = useRef<FlatList>(null);
@@ -24,8 +25,7 @@ export default function PeerChatScreen() {
 
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
-  const [isCallRequested, setIsCallRequested] = useState(false);
-  const [isPeerOnline, setIsPeerOnline] = useState(false);
+  const [isPeerOnline, setIsPeerOnline] = useState(onlineUsers.includes(peerId as string));
 
   // Create both possible room IDs to ensure messages are received in both directions
   const roomId1 = `chat_${user?.id}_${peerId}`;
@@ -81,7 +81,7 @@ export default function PeerChatScreen() {
     const handlePeerStatus = (data: { peerId: string, isOnline: boolean }) => {
       console.log('Peer status received:', data);
       if (data.peerId === peerId) {
-        setIsPeerOnline(data.isOnline);
+        setIsPeerOnline(onlineUsers.includes(peerId as string));
       }
     };
 
@@ -259,7 +259,7 @@ export default function PeerChatScreen() {
       <View>
         <ThemedText style={styles.headerName}>{peerName as string || 'Chat'}</ThemedText>
         <ThemedText style={isPeerOnline ? styles.onlineStatus : styles.offlineStatus}>
-          {isPeerOnline ? 'Online' : 'Offline'}
+          {onlineUsers.includes(peerId as string) ? 'Online' : 'Offline'}
         </ThemedText>
       </View>
     </View>

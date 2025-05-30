@@ -202,10 +202,12 @@ export default function OnlineUsersScreen() {
             item.isOnline ? styles.online : styles.offline
           ]} />
         </View>
-        <ThemedText style={styles.userName}>{item.name}</ThemedText>
-        <ThemedText style={styles.userStatus}>
-          {item.isOnline ? 'Online' : 'Offline'}
-        </ThemedText>
+        <View style={{flexDirection: 'column'}}>
+          <ThemedText style={styles.userName}>{item.name.length > 20 ? item.name.slice(0, 20) + '...' : item.name}</ThemedText>
+          <ThemedText style={styles.userStatus}>
+            {item.isOnline ? 'Online' : 'Offline'}
+          </ThemedText>
+        </View>
       </View>
       
       <View style={styles.actions}>
@@ -339,7 +341,6 @@ const styles = StyleSheet.create({
   userStatus: {
     fontSize: 14,
     color: '#8E8E93',
-    marginLeft: 8,
   },
   actions: {
     flexDirection: 'row',
