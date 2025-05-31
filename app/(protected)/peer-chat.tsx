@@ -34,8 +34,6 @@ export default function PeerChatScreen() {
   // Load chat history and join chat room
   useEffect(() => {
     if (!user?.id || !peerId) return;
-
-    console.log(`Joining rooms: ${roomId1} and ${roomId2}`);
     // Join both chat rooms to ensure we receive messages sent in either direction
     joinRoom(roomId1);
     joinRoom(roomId2);
@@ -51,7 +49,7 @@ export default function PeerChatScreen() {
 
     // Listen for new messages - create a stable reference to the handler
     const handleNewMessage = (message: any) => {
-      console.log('New message received:', message);
+ 
 
       setMessages(prev => {
         // Check if message already exists in the messages array to prevent duplicates
@@ -79,26 +77,26 @@ export default function PeerChatScreen() {
     };
 
     const handlePeerStatus = (data: { peerId: string, isOnline: boolean }) => {
-      console.log('Peer status received:', data);
+      
       if (data.peerId === peerId) {
         setIsPeerOnline(onlineUsers.includes(peerId as string));
       }
     };
 
-    console.log('Setting up new_message listener');
+    
     on('new_message', handleNewMessage);
-    console.log('Setting up peer_status listener');
+   
     on('peer_status', handlePeerStatus);
 
     // Clear function to clean up when component unmounts or dependencies change
     return () => {
       // Leave the chat rooms
-      console.log(`Leaving rooms: ${roomId1} and ${roomId2}`);
+     
       leaveRoom(roomId1);
       leaveRoom(roomId2);
-      console.log('Removing new_message listener');
+      
       off('new_message', handleNewMessage);
-      console.log('Removing peer_status listener');
+      
       off('peer_status', handlePeerStatus);
     };
   }, [user?.id, peerId, roomId1, roomId2, joinRoom, leaveRoom, on, off, emit]);
@@ -153,7 +151,6 @@ export default function PeerChatScreen() {
       sendChatMessage(roomId1, newMessage);
       sendChatMessage(roomId2, newMessage);
     } catch (error) {
-      console.log('Error sending message:', JSON.stringify(error));
       console.error('Error sending message:', error);
     }
   };

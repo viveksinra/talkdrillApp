@@ -152,17 +152,11 @@ export default function HomeScreen() {
   );
 
   const handleStartMatching = (filters: FilterOptions) => {
-    console.log('Filters:', filters);
     // Map filter options to the format expected by the backend
     const userGender = user?.gender || 'male';  // Default to male if not set
     const partnerGender = filters.gender === 'any' ? 'any' : filters.gender;
     const languageProficiency = filters.englishLevel === 'any' ? 'any' : filters.englishLevel;
     
-    console.log('Starting match with params:', {
-      userGender,
-      partnerGender,
-      languageProficiency
-    });
     
     router.push({
       pathname: '/match-making',

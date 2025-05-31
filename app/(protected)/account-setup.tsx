@@ -140,7 +140,7 @@ export default function AccountSetupScreen() {
             (selectedAvatar ? `default-avatar-${allAvatars.indexOf(selectedAvatar) + 1}` : null),
         };
 
-        console.log("profileData", profileData);
+       
         
         // Call API to update profile
         const response = await updateUserProfile(profileData);

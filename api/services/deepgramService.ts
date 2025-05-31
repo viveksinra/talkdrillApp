@@ -219,7 +219,7 @@ class DeepgramService {
       }
       
       // In a real implementation, you'd use a text-to-speech service
-      console.log("AI response:", text);
+  
       
       // Mock playing audio response
       // In a real app, you would use a TTS service or pre-recorded audio

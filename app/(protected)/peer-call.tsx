@@ -74,7 +74,6 @@ export default function PeerCallScreen() {
   useEffect(() => {
     // Socket event handlers
     const handlePartnerPreparing = (data: any) => {
-      console.log('Partner is preparing to join the call:', data);
     };
     
     // Set up socket listeners
@@ -87,24 +86,17 @@ export default function PeerCallScreen() {
         
         // For automatic joining from match-making, add a small delay
         if (autoJoin === 'true') {
-          console.log('Auto-join mode active, adding initial delay for synchronization');
+  
           setConnectionStatus('Synchronizing with partner...');
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
-        console.log('Initializing call with parameters:', {
-          peerId, 
-          peerName, 
-          callId, 
-          streamCallId,
-          isIncoming,
-          autoJoin
-        });
+        
         
         // Get token from backend
         setConnectionStatus('Getting authentication token...');
         const response = await streamService.getToken();
-        console.log('Received Stream token');
+       
         
         // Initialize Stream client
         setConnectionStatus('Initializing video service...');
@@ -113,7 +105,7 @@ export default function PeerCallScreen() {
           user?.name,
           user?.profileImage
         );
-        console.log('Stream client initialized');
+       
         
         // Try joining the call with retries
         let call = null;
@@ -123,11 +115,11 @@ export default function PeerCallScreen() {
           try {
             setConnectionAttempt(attempt);
             setConnectionStatus(`Joining call (attempt ${attempt}/3)...`);
-            console.log(`Attempting to join call (attempt ${attempt}/3)`);
+            
             
             // Join the call
             call = await streamService.joinCall(streamCallId as string);
-            console.log('Successfully joined call on attempt', attempt);
+            
             joinError = null;
             break;
           } catch (error: any) {
@@ -136,7 +128,7 @@ export default function PeerCallScreen() {
             
             // Check if it's the "Illegal State" error, which means we're actually already joined
             if (error.message && error.message.includes('Illegal State')) {
-              console.log('Detected "Illegal State" error - treating as success');
+             
               setConnectionStatus('Already connected to call');
               
               // Try to get the current call directly
@@ -151,7 +143,7 @@ export default function PeerCallScreen() {
             if (attempt < 3) {
               const delay = 1000 * attempt;
               setConnectionStatus(`Retrying in ${delay/1000} seconds...`);
-              console.log(`Waiting ${delay}ms before retry...`);
+             
               await new Promise(resolve => setTimeout(resolve, delay));
             } else {
               setConnectionStatus('Failed to join call');
@@ -173,7 +165,7 @@ export default function PeerCallScreen() {
         try {
           await call.camera.disable();
           await call.microphone.enable();
-          console.log('Default call settings applied: camera off, microphone on');
+          
         } catch (mediaError) {
           console.warn('Error setting default media state:', mediaError);
         }
@@ -220,7 +212,7 @@ export default function PeerCallScreen() {
       const call = streamService.getCall();
       if (call) {
         try {
-          console.log('Leaving call during component unmount');
+         
           call.leave();
         } catch (e) {
           console.error('Error leaving call during cleanup:', e);
@@ -278,7 +270,7 @@ export default function PeerCallScreen() {
           callId 
         });
         
-        console.log('Call ended successfully');
+    
       }
       router.back();
     } catch (error) {

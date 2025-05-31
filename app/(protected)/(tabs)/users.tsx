@@ -116,7 +116,6 @@ export default function OnlineUsersScreen() {
   }, [onlineUsers]);
 
   const handleChatWithUser = (user: User) => {
-    console.log('Chatting with user:', user);
     router.push({
       pathname: '/peer-chat',
       params: {

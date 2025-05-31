@@ -46,7 +46,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedUser = await SecureStore.getItemAsync('user');
         
         if (storedToken && storedUser) {
-          console.log('Stored user:', JSON.parse(storedUser).phoneNumber);
           setUser(JSON.parse(storedUser));
         }
       } catch (error) {
@@ -75,7 +74,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await SecureStore.deleteItemAsync('token');
       await SecureStore.deleteItemAsync('user');
       setUser(null);
-      console.log('User logged out');
     } catch (error) {
       console.error('Error removing auth data:', error);
       throw error;

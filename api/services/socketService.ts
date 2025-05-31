@@ -9,16 +9,16 @@ class SocketService {
 
   // Initialize socket connection
   connect(userId: string) {
-    console.log('Attempting to connect socket for user:', userId, 'to URL:', SOCKET_BASE_URL);
+   
     
     if (this.socket) {
-      console.log('Socket already exists, checking connection state...');
+     
       
       if (!this.socket.connected) {
-        console.log('Existing socket not connected, attempting reconnect...');
+       
         this.socket.connect();
       } else {
-        console.log('Socket already connected with ID:', this.socket.id);
+       
       }
       
       return this.socket;
@@ -34,7 +34,7 @@ class SocketService {
       });
 
       this.socket.on('connect', () => {
-        console.log('Socket connected successfully:', this.socket?.id);
+       
         this.triggerEvent('connect', { socketId: this.socket?.id, userId });
         this.clearReconnectInterval();
         
@@ -43,7 +43,7 @@ class SocketService {
       });
 
       this.socket.on('disconnect', (reason) => {
-        console.log('Socket disconnected, reason:', reason);
+       
         this.triggerEvent('disconnect', { reason });
         
         // Start reconnection if not already reconnecting
@@ -69,13 +69,13 @@ class SocketService {
 
       // Online users event
       this.socket.on('online_users', (users) => {
-        console.log('Received online users list:', users);
+       
         this.triggerEvent('online_users', users);
       });
       
       // Online status confirmation
       this.socket.on('online_status_confirmed', (data) => {
-        console.log('Online status confirmed by server:', data);
+      
         this.triggerEvent('online_status_confirmed', data);
       });
 
@@ -94,22 +94,22 @@ class SocketService {
 
       // Match events
       this.socket.on('search_started', (data) => {
-        console.log('Search started event received:', data);
+       
         this.triggerEvent('search_started', data);
       });
       
       this.socket.on('match_found', (data) => {
-        console.log('Match found event received:', data);
+       
         this.triggerEvent('match_found', data);
       });
       
       this.socket.on('search_timeout', (data) => {
-        console.log('Search timeout event received:', data);
+        
         this.triggerEvent('search_timeout', data);
       });
       
       this.socket.on('search_error', (data) => {
-        console.log('Search error event received:', data);
+       
         this.triggerEvent('search_error', data);
       });
 
@@ -143,7 +143,7 @@ class SocketService {
     
     this.isReconnecting = true;
     this.reconnectInterval = setInterval(() => {
-      console.log('Attempting to reconnect socket...');
+      
       
       // Clean up old socket
       if (this.socket) {

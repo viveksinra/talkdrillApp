@@ -10,7 +10,6 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  console.log("user", user);
   
   // Use the actual routes
   // const handleViewSavedReports = () => router.push('/saved-reports');
