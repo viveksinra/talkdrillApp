@@ -154,10 +154,8 @@ const makeFetchRequest = async <T>(
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       responseData = await response.json();
-      console.log(`Parsed JSON response for ${method} ${url}:`, responseData);
     } else {
       responseData = await response.text();
-      console.log(`Received text response for ${method} ${url}: ${responseData.substring(0, 100)}${responseData.length > 100 ? '...' : ''}`);
     }
     
     // Apply response interceptor
