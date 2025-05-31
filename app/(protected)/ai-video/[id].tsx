@@ -18,7 +18,8 @@ import { Colors } from '../../../constants/Colors';
 import { 
   getConversationHistory, 
   endConversation,
-  processTextViaSocket
+  processTextViaSocketStream,
+  startAIConversation
 } from '../../../api/services/public/aiCharacters';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { useSocket } from '../../../contexts/SocketContext';
@@ -71,8 +72,16 @@ export default function AIVideoCallScreen() {
   const speechErrorListenerRef = useRef<any>(null);
   const recordingTimeoutIdRef = useRef<NodeJS.Timeout | null>(null);
 
+  // NEW: State for streaming functionality
+  const [audioChunks, setAudioChunks] = useState<{[key: number]: {audioUrl: string, chunkText: string}}>({});
+  const [expectedTotalChunks, setExpectedTotalChunks] = useState<number>(0);
+  const [currentPlayingChunkIndex, setCurrentPlayingChunkIndex] = useState<number>(-1);
+  const [isStreamingActive, setIsStreamingActive] = useState(false);
+  const [streamingChunks, setStreamingChunks] = useState<Array<{chunkIndex: number, text: string, hasAudio: boolean}>>([]);
+  const [hasReceivedGreeting, setHasReceivedGreeting] = useState(false);
+  const [debugAudioState, setDebugAudioState] = useState('idle');
+
   useEffect(() => {
-    console.log("id", routeConversationId);
     loadConversation(routeConversationId);
     
     Audio.requestPermissionsAsync()
@@ -106,10 +115,10 @@ export default function AIVideoCallScreen() {
         clearTimeout(recordingTimeoutIdRef.current);
         recordingTimeoutIdRef.current = null;
       }
-      if (isRecording) { // Ensure module is stopped if component unmounts while recording
+      if (isRecording) {
         ExpoSpeechRecognitionModule.stop();
       } else {
-        ExpoSpeechRecognitionModule.abort(); // Abort if not actively recording but might have state
+        ExpoSpeechRecognitionModule.abort();
       }
       
       if (sound) {
@@ -119,7 +128,7 @@ export default function AIVideoCallScreen() {
         cleanupSocketListenersRef.current();
       }
     };
-  }, [routeConversationId]); // isRecording removed from dependencies as it's managed internally
+  }, [routeConversationId]);
   
   useEffect(() => {
     if (conversation?.messages && conversation.messages.length > 0) {
@@ -131,7 +140,6 @@ export default function AIVideoCallScreen() {
     try {
       setLoading(true);
       const data = await getConversationHistory(convId);
-      console.log("data", data.messages);
       setConversation(data);
       setLoading(false);
     } catch (err) {
@@ -149,7 +157,6 @@ export default function AIVideoCallScreen() {
     }
   };
   
-  // Function to format time in MM:SS
   const formatTime = (timeInMillis: number) => {
     const totalSeconds = Math.floor(timeInMillis / 1000);
     const minutes = Math.floor(totalSeconds / 60);
@@ -157,239 +164,99 @@ export default function AIVideoCallScreen() {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
   
-  // Update timer function
   const updateTimer = (status: AVPlaybackStatus) => {
     if (status && status.isLoaded && !status.didJustFinish && status.durationMillis && status.positionMillis) {
       const remaining = status.durationMillis - status.positionMillis;
       setRemainingTime(formatTime(remaining));
     }
-    // If playback did just finish or is not loaded, remainingTime will be reset by onPlaybackStatusUpdate logic
   };
   
-  const playOrPauseAudio = async (audioUrlToPlay: string, isLectureAudio = false) => {
-    if (sound && currentPlayingAudioUrl === audioUrlToPlay && isPlaying) { // Pausing current
-      await sound.pauseAsync();
-      setIsPlaying(false);
-    } else { // Playing new, resuming paused, or playing a different audio
-      if (sound) { 
-        await sound.unloadAsync(); 
-      }
-      setSound(null); 
-      setIsPlaying(false); // Momentarily set to false before loading new sound
-      setCurrentPlayingAudioUrl(null); // Clear current before setting new
-      setRemainingTime("00:00"); 
-
-      try {
-        console.log(`[AIVideoCallScreen] Attempting to play audio: ${audioUrlToPlay}`);
-        const { sound: newSound, status } = await Audio.Sound.createAsync(
-          { uri: audioUrlToPlay },
-          { shouldPlay: true }
-        );
-        setSound(newSound); 
-        setIsPlaying(true);
-        setCurrentPlayingAudioUrl(audioUrlToPlay); // Set the new URL as current
-
-        newSound.setOnPlaybackStatusUpdate((playbackStatus: AVPlaybackStatus) => {
-          if (!playbackStatus.isLoaded) {
-            // Check if this callback is for the sound that was meant to be active.
-            if (currentPlayingAudioUrl === audioUrlToPlay) {
-              setIsPlaying(false);
-              setCurrentPlayingAudioUrl(null);
-              setRemainingTime("00:00");
-              if (sound === newSound) { 
-                setSound(null);
-              }
-              if (playbackStatus.error) {
-                console.error(`[AIVideoCallScreen] Playback error on URL ${audioUrlToPlay}:`, playbackStatus.error);
-              }
-            }
-            return;
-          }
-
-          updateTimer(playbackStatus); 
-
-          if (playbackStatus.didJustFinish) {
-            if (currentPlayingAudioUrl === audioUrlToPlay) { // Ensures we are reacting to the currently intended audio finishing
-              setIsPlaying(false);
-              setCurrentPlayingAudioUrl(null);
-              setRemainingTime("00:00");
-              setSound(null); 
-            }
-            newSound.unloadAsync().catch(e => {
-                console.warn(`[AIVideoCallScreen] Error unloading sound ${audioUrlToPlay} on finish:`, e);
-            });
-          }
-        });
-
-        if (status.isLoaded && status.durationMillis) {
-          setRemainingTime(formatTime(status.durationMillis));
-        } else {
-          setRemainingTime("00:00"); 
-        }
-
-      } catch (e: any) {
-        console.error(`[AIVideoCallScreen] Error creating or playing audio ${audioUrlToPlay}:`, e);
-        Alert.alert('Audio Playback Error', `Could not play audio: ${e.message || 'Unknown error'}`);
-        if (sound) { 
-            await sound.unloadAsync().catch(() => {}); 
-        }
+  // FIXED: Complete playOrPauseAudio function
+  const playOrPauseAudio = async (audioUrl: string, audioId: string = 'default') => {
+    try {
+      console.log(`[AUDIO] 🎵 PLAY REQUEST: ${audioId}`);
+      
+      if (sound) {
+        await sound.stopAsync();
+        await sound.unloadAsync();
         setSound(null);
-        setIsPlaying(false);
-        setCurrentPlayingAudioUrl(null);
-        setRemainingTime("00:00");
-      }
-    }
-  };
-  
-  const cleanupSpeechRecognition = () => {
-    speechResultListenerRef.current?.remove();
-    speechResultListenerRef.current = null;
-    speechErrorListenerRef.current?.remove();
-    speechErrorListenerRef.current = null;
-    if (recordingTimeoutIdRef.current) {
-      clearTimeout(recordingTimeoutIdRef.current);
-      recordingTimeoutIdRef.current = null;
-    }
-  };
-
-  const startRecording = async () => {
-    try {
-      // Stop any currently playing audio before starting recording
-      if (sound && isPlaying) {
-        console.log("[AIVideoCallScreen] Stopping current audio to start recording.");
-        await sound.stopAsync(); // stopAsync also unloads the sound
-        setIsPlaying(false);
-        setCurrentPlayingAudioUrl(null);
-        setSound(null); 
-        setRemainingTime("00:00"); 
-      }
-      
-      // Request permissions if not already granted (good practice)
-      const { granted: micPermission } = await Audio.requestPermissionsAsync();
-      if (!micPermission) {
-        Alert.alert('Microphone Permission Required', 'Please grant microphone permission to use speech recognition.');
-        return;
-      }
-      
-      const speechPermission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!speechPermission.granted) {
-        Alert.alert('Speech Recognition Permission Required', 'Please grant speech recognition permission to continue.');
-        return;
       }
 
-      setIsRecording(true); // Set recording state
+      const { sound: newSound } = await Audio.Sound.createAsync({ uri: audioUrl });
+      setSound(newSound);
+      setCurrentPlayingAudioUrl(audioUrl);
       
-      // Clean up any previous listeners & timeout before attaching new ones
-      cleanupSpeechRecognition();
-
-      ExpoSpeechRecognitionModule.start({
-        lang: 'en-US',
-        interimResults: false, // We only care about final results
-        continuous: false,
-        iosTaskHint: 'unspecified',
-      });
-      
-      speechResultListenerRef.current = ExpoSpeechRecognitionModule.addListener('result', (event) => {
-        if (event.results && event.results.length > 0) {
-          const transcribedText = event.results[0].transcript;
-          if (event.isFinal) {
-            console.log("[AIVideoCallScreen] Speech result (final):", transcribedText);
-            cleanupSpeechRecognition();
-            setIsRecording(false); 
-            if (transcribedText && transcribedText.trim() !== '') {
-              processTranscribedText(transcribedText);
-            } else {
-              console.log("[AIVideoCallScreen] Speech recognition resulted in empty text. Not processing.");
-              // Optionally, provide subtle feedback to the user here if desired
-            }
+      newSound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
+        if (status.isLoaded && status.didJustFinish) {
+          console.log(`[AUDIO] ✅ FINISHED: ${audioId}`);
+          newSound.unloadAsync();
+          setSound(null);
+          setCurrentPlayingAudioUrl(null);
+          
+          // If this was a chunk, try to play next chunk
+          if (audioId.startsWith('chunk-')) {
+            const finishedChunkIndex = parseInt(audioId.replace('chunk-', ''));
+            playNextChunk(finishedChunkIndex + 1);
           }
         }
       });
-      
-      speechErrorListenerRef.current = ExpoSpeechRecognitionModule.addListener('error', (event) => {
-        console.error('[AIVideoCallScreen] Speech recognition error:', event.error, event.message);
-        cleanupSpeechRecognition();
-        setIsRecording(false);
 
-        const errorMessage = event.message?.toLowerCase() || "";
-        const errorCode = event.error?.toLowerCase() || ""; // ExpoSpeechRecognitionErrorCodes
+      await newSound.playAsync();
+      setIsPlaying(true);
+      console.log(`[AUDIO] ▶️ PLAYING: ${audioId}`);
 
-        if (errorCode === 'no-speech' || errorMessage.includes("no speech")) {
-            console.log("[AIVideoCallScreen] No speech detected by the module.");
-            // No alert for "no-speech", user can simply try again
-        } else if (errorCode === 'network' || errorMessage.includes("network")) {
-            Alert.alert('Network Error', 'A network error occurred during speech recognition. Please check your connection and try again.');
-        } else if (errorCode === 'recognitionservicebusy' || errorMessage.includes("service busy")) {
-            Alert.alert('Service Busy', 'The speech recognition service is currently busy. Please try again in a moment.');
-        } else if (errorCode === 'client' && errorMessage.includes("user denied permission")) {
-            Alert.alert('Permission Denied', 'Speech recognition permission was denied. Please enable it in settings.');
-        } else if (errorCode === 'canceled' || errorMessage.includes("cancelled") || errorMessage.includes("canceled")) {
-            console.log("[AIVideoCallScreen] Speech recognition was cancelled (e.g. by stopRecording).");
-             // This is often expected if stopRecording is called, not necessarily an error to show user.
-        } else {
-            Alert.alert('Speech Error', `Speech recognition failed: ${event.message || event.error || 'Unknown error'}`);
-        }
-      });
-      
-      // Auto-stop after 10 seconds if no final result by then
-      recordingTimeoutIdRef.current = setTimeout(() => {
-        if (isRecording) { // Check current state, not closure
-          console.log("[AIVideoCallScreen] Recording timeout (10s) reached. Stopping speech recognition.");
-          stopRecording(); // This will call ExpoSpeechRecognitionModule.stop()
-        }
-      }, 10000);
-
-    } catch (err) {
-      console.error('[AIVideoCallScreen] Failed to start recording:', err);
-      Alert.alert('Error', 'Failed to start speech recognition. Please try again.');
-      setIsRecording(false);
-      cleanupSpeechRecognition(); // Ensure cleanup on generic error too
+    } catch (e: any) {
+      console.error(`[AUDIO] ❌ ERROR:`, e.message);
+      setSound(null);
+      setIsPlaying(false);
+      setCurrentPlayingAudioUrl(null);
     }
   };
   
-  const stopRecording = async () => {
-    // Check isRecording state directly or via ref if available
-    // For this example, we assume setIsRecording updates promptly for the next check
-    if (!isRecording) {
-      console.log("[AIVideoCallScreen] stopRecording called but not currently recording.");
-      return;
+  // 2. REPLACE your audio queue effect with this improved version:
+  useEffect(() => {
+    // Only start if we have audio and nothing is playing
+    if (Object.keys(audioChunks).length > 0 && !isPlaying && currentPlayingChunkIndex === -1) {
+      console.log(`[AUDIO] 🚀 STARTING QUEUE with ${Object.keys(audioChunks).length} chunks`);
+      setCurrentPlayingChunkIndex(0);
+      
+      // Start first chunk
+      if (audioChunks[0]) {
+        setTimeout(() => playOrPauseAudio(audioChunks[0].audioUrl), 200);
+      }
     }
+  }, [Object.keys(audioChunks).length]); // Only depend on queue length
+
+  // 3. IMPROVE your playNextInQueueWithIndex function:
+  const playNextChunk = (chunkIndex: number) => {
+    console.log(`[AUDIO] 🔍 Looking for chunk ${chunkIndex}`);
     
-    console.log("[AIVideoCallScreen] Attempting to stop recording.");
-    // setIsRecording(false); // This will be set by listeners or if module.stop fails
-
-    try {
-      ExpoSpeechRecognitionModule.stop();
-      // Note: Calling stop() should trigger either the 'result' or 'error' listener,
-      // which will then handle setIsRecording(false) and cleanup.
-      // If stop() itself doesn't trigger a listener, then setIsRecording(false) and cleanup
-      // would need to be handled here more directly, which can be tricky with async events.
-    } catch (err) {
-      console.error('[AIVideoCallScreen] Failed to stop speech recognition module:', err);
-      // Fallback: ensure state is updated and resources are cleaned if stop() call throws.
-      setIsRecording(false);
-      cleanupSpeechRecognition();
+    if (audioChunks[chunkIndex]) {
+      console.log(`[AUDIO] ▶️ Playing chunk ${chunkIndex}`);
+      setCurrentPlayingChunkIndex(chunkIndex);
+      playOrPauseAudio(audioChunks[chunkIndex].audioUrl, `chunk-${chunkIndex}`);
+    } else if (chunkIndex < expectedTotalChunks) {
+      console.log(`[AUDIO] ⏳ Chunk ${chunkIndex} not ready yet, waiting...`);
+      // Wait a bit and try again
+      setTimeout(() => playNextChunk(chunkIndex), 500);
+    } else {
+      console.log(`[AUDIO] 🏁 All chunks played`);
+      setCurrentPlayingChunkIndex(-1);
     }
   };
-  
-  const processTranscribedText = async (text: string) => {
-    if (!conversation || !conversation._id) {
-      Alert.alert("Error", "Conversation details not loaded yet. Please wait.");
-      return;
-    }
-    if (!user || !user.id) {
-      Alert.alert("Error", "User not authenticated. Cannot process request.");
-      return;
-    }
-    if (!socket) {
-      Alert.alert("Error", "Socket connection not available.");
-      return;
-    }
 
+  // 4. UPDATE your processTranscribedTextStream onAudioChunk callback:
+  const processTranscribedTextStream = async (text: string) => {
+    if (!conversation || !socket || !user) return;
+
+    // SIMPLE RESET
+    setAudioChunks({});
+    setExpectedTotalChunks(0);
+    setCurrentPlayingChunkIndex(-1);
     setIsProcessing(true);
-    setProcessingStatus('Starting...');
+    setIsStreamingActive(true);
+    setStreamingChunks([]);
 
-    // Add user message to UI immediately
     const userMessageTimestamp = new Date().toISOString();
     const updatedConvWithUserMsg = {
       ...conversation,
@@ -400,12 +267,11 @@ export default function AIVideoCallScreen() {
     };
     setConversation(updatedConvWithUserMsg);
 
-    // Clean up any previous listeners before attaching new ones
     if (cleanupSocketListenersRef.current) {
-        cleanupSocketListenersRef.current();
+      cleanupSocketListenersRef.current();
     }
 
-    cleanupSocketListenersRef.current = processTextViaSocket(
+    cleanupSocketListenersRef.current = processTextViaSocketStream(
       socket,
       {
         userId: user.id,
@@ -413,68 +279,300 @@ export default function AIVideoCallScreen() {
         conversationId: conversation._id,
         userText: text,
         language: 'en-US',
+        useStreaming: true
       },
       {
-        onTextResponse: (aiResponse, updatedConvId) => {
-          setProcessingStatus('AI responded. Waiting for audio...');
+        onTextChunk: (chunkIndex, chunkText, conversationId) => {
+          console.log(`[STREAM] ✅ TEXT CHUNK ${chunkIndex}: "${chunkText}"`);
+          setStreamingChunks(prev => [...prev, { chunkIndex, chunkText }]);
+          
+          // Update conversation with streaming text
           setConversation(prevConv => {
             if (!prevConv) return null;
-            // Add AI text message if not already present from user message update
-            // This assumes backend `generateResponse` handles DB persistence of AI text
-            const aiMessageExists = prevConv.messages.some(m => m.sender === 'ai' && m.content === aiResponse);
-            if (!aiMessageExists) {
-                return {
-                    ...prevConv,
-                    _id: updatedConvId,
-                    messages: [
-                        ...prevConv.messages,
-                        { sender: 'ai', content: aiResponse, timestamp: new Date().toISOString() }
-                    ]
-                };
+            const newMessages = [...prevConv.messages];
+            const lastMessageIndex = newMessages.length - 1;
+            
+            if (lastMessageIndex >= 0 && newMessages[lastMessageIndex].sender === 'ai') {
+              // Append to existing AI message
+              newMessages[lastMessageIndex] = {
+                ...newMessages[lastMessageIndex],
+                content: newMessages[lastMessageIndex].content + ' ' + chunkText
+              };
+            } else {
+              // Create new AI message
+              newMessages.push({
+                sender: 'ai',
+                content: chunkText,
+                timestamp: new Date().toISOString()
+              });
             }
-            return {...prevConv, _id: updatedConvId };
+            
+            return { ...prevConv, messages: newMessages };
           });
         },
-        onStatusUpdate: (status, message) => {
-          setProcessingStatus(`${status}: ${message}`);
+        
+        onAudioChunk: (chunkIndex, audioUrl, chunkText, conversationId) => {
+          console.log(`[STREAM] 🎵 AUDIO CHUNK ${chunkIndex} RECEIVED: ${audioUrl}`);
+          
+          // Simply store the chunk - order doesn't matter!
+          setAudioChunks(prev => ({
+            ...prev,
+            [chunkIndex]: { audioUrl, chunkText }
+          }));
+          
+          // If this is chunk 0 and nothing is playing, start playing
+          if (chunkIndex === 0 && currentPlayingChunkIndex === -1) {
+            console.log(`[STREAM] 🚀 Starting playback with chunk 0`);
+            setTimeout(() => playNextChunk(0), 200);
+          }
         },
-        onAudioComplete: (audioUrl, completedConvId, finalAiResponse) => {
-          setProcessingStatus('Audio ready!');
+        
+        onResponseComplete: (fullResponse, conversationId, totalChunks) => {
+          console.log(`[STREAM] ✅ RESPONSE COMPLETE - Total chunks: ${totalChunks}`);
+          setExpectedTotalChunks(totalChunks);
+          setIsStreamingActive(false);
           setIsProcessing(false);
-          setConversation(prevConv => {
-            if (!prevConv) return null;
-            // Find the AI message and update its audioUrl
-            // It's safer to update based on content and lack of audioUrl
-            const newMessages = prevConv.messages.map(msg => {
-              if (msg.sender === 'ai' && msg.content === finalAiResponse && !msg.audioUrl) {
-                return { ...msg, audioUrl: audioUrl };
-              }
-              return msg;
-            });
-            // If it wasn't found (e.g. state updated weirdly), try adding it if text matches
-            const aiMessageExists = newMessages.some(m => m.sender === 'ai' && m.content === finalAiResponse && m.audioUrl === audioUrl);
-            if (!aiMessageExists) {
-                // This is a fallback, ideally the message is already there from onTextResponse
-                 const lastUserMsg = newMessages.filter(m => m.sender ==='user').pop();
-                 if (lastUserMsg && lastUserMsg.content === text) { // Ensure it's in response to the last user utterance
-                     newMessages.push({ sender: 'ai', content: finalAiResponse, audioUrl: audioUrl, timestamp: new Date().toISOString() });
-                 }
-            }
-
-            return { ...prevConv, _id: completedConvId, messages: newMessages };
-          });
-          // Automatically play the AI's audio response
-          playOrPauseAudio(audioUrl); 
+          
+          // If we haven't started playing yet, start now
+          if (currentPlayingChunkIndex === -1 && Object.keys(audioChunks).length > 0) {
+            playNextChunk(0);
+          }
+        },
+        
+        onGreetingText: () => {},
+        onGreetingAudio: () => {},
+        onStatusUpdate: (status, message) => {
+          setProcessingStatus(message);
         },
         onError: (error) => {
-          setProcessingStatus(`Error: ${error.message}`);
+          console.error('[STREAM] ❌ ERROR:', error);
           setIsProcessing(false);
-          Alert.alert('Processing Error', error.message);
-          // Optionally implement fallbackToNonStreamingMethod here if desired
+          setIsStreamingActive(false);
+          Alert.alert('Error', error.message);
         }
       }
     );
   };
+
+  // ADDED: Missing speech recognition functions
+  const cleanupSpeechRecognition = () => {
+    try {
+      if (speechResultListenerRef.current) {
+        speechResultListenerRef.current.remove();
+    speechResultListenerRef.current = null;
+      }
+      if (speechErrorListenerRef.current) {
+        speechErrorListenerRef.current.remove();
+    speechErrorListenerRef.current = null;
+      }
+    if (recordingTimeoutIdRef.current) {
+      clearTimeout(recordingTimeoutIdRef.current);
+      recordingTimeoutIdRef.current = null;
+      }
+    } catch (error) {
+      console.warn('[AIVideoCallScreen] Cleanup error:', error);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      console.log("[AIVideoCallScreen] 🎤 Starting recording...");
+      
+      // Stop any playing audio first
+      if (sound) {
+        try {
+          await sound.stopAsync();
+          await sound.unloadAsync();
+          setSound(null);
+        setIsPlaying(false);
+        setCurrentPlayingAudioUrl(null);
+        setRemainingTime("00:00"); 
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (e) {
+          console.warn("[AIVideoCallScreen] Audio cleanup error:", e);
+        }
+      }
+      
+      // Request audio permissions
+      const { granted: micPermission } = await Audio.requestPermissionsAsync();
+      if (!micPermission) {
+        Alert.alert('Microphone Permission Required', 'Please grant microphone permission in your device settings.');
+        return;
+      }
+      
+      // Request speech recognition permissions
+      const speechPermission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!speechPermission.granted) {
+        Alert.alert('Speech Recognition Permission Required', 'Please grant speech recognition permission in your device settings.');
+        return;
+      }
+
+      // Clean up any existing listeners
+      cleanupSpeechRecognition();
+
+      // Set recording state
+      setIsRecording(true);
+
+      // Start speech recognition
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: false,
+        continuous: false,
+        iosTaskHint: 'unspecified',
+      });
+      
+      // Set up result listener
+      speechResultListenerRef.current = ExpoSpeechRecognitionModule.addListener('result', (event) => {
+        console.log("[AIVideoCallScreen] 🎤 Speech result event:", event);
+        
+        if (event.results && event.results.length > 0) {
+          const transcribedText = event.results[0].transcript;
+          if (event.isFinal) {
+            console.log("[AIVideoCallScreen] 🎤 Final result:", transcribedText);
+            cleanupSpeechRecognition();
+            setIsRecording(false); 
+            
+            if (transcribedText && transcribedText.trim() !== '') {
+              processTranscribedTextStream(transcribedText);
+            } else {
+              console.log("[AIVideoCallScreen] 🎤 Empty transcription received");
+            }
+          }
+        } else {
+          console.log("[AIVideoCallScreen] 🎤 No results in speech event");
+        }
+      });
+      
+      // Set up error listener with detailed error handling
+      speechErrorListenerRef.current = ExpoSpeechRecognitionModule.addListener('error', (event) => {
+        console.error('[AIVideoCallScreen] 🎤 Speech error:', event);
+        cleanupSpeechRecognition();
+        setIsRecording(false);
+
+        // Handle different error types
+        const errorCode = event.error?.toLowerCase() || '';
+        const errorMessage = event.message?.toLowerCase() || '';
+        
+        if (errorCode === 'no-speech' || errorMessage.includes('no speech')) {
+          console.log('[AIVideoCallScreen] No speech detected - user can try again');
+          // Don't show alert for no-speech, just reset
+        } else if (errorCode === 'network' || errorMessage.includes('network')) {
+          Alert.alert('Network Error', 'Please check your internet connection and try again.');
+        } else if (errorCode === 'client' || errorMessage.includes('permission')) {
+          Alert.alert('Permission Error', 'Speech recognition permission is required. Please check your settings.');
+        } else if (errorCode === 'recognitionservicebusy' || errorMessage.includes('busy')) {
+          Alert.alert('Service Busy', 'Speech recognition service is busy. Please try again in a moment.');
+        } else {
+          console.error('[AIVideoCallScreen] Speech recognition error:', errorCode, errorMessage);
+          // Don't show alert for every error, just log it
+        }
+      });
+      
+      // Auto-stop timeout
+      recordingTimeoutIdRef.current = setTimeout(() => {
+        if (isRecording) {
+          console.log("[AIVideoCallScreen] Recording timeout reached");
+          stopRecording();
+        }
+      }, 10000);
+
+    } catch (err) {
+      console.error('[AIVideoCallScreen] Recording setup failed:', err);
+      setIsRecording(false);
+      cleanupSpeechRecognition();
+      Alert.alert('Recording Error', 'Failed to start speech recognition. Please try again.');
+    }
+  };
+  
+  const stopRecording = async () => {
+    if (!isRecording) {
+      console.log("[AIVideoCallScreen] stopRecording called but not recording");
+      return;
+    }
+    
+    console.log("[AIVideoCallScreen] Stopping recording...");
+    setIsRecording(false);
+
+    try {
+      ExpoSpeechRecognitionModule.stop();
+      cleanupSpeechRecognition();
+    } catch (err) {
+      console.error('[AIVideoCallScreen] Error stopping speech recognition:', err);
+      cleanupSpeechRecognition();
+    }
+  };
+  
+  useEffect(() => {
+    if (conversation && socket && user && !hasReceivedGreeting) {
+      // ✅ ALWAYS try to get greeting for new sessions - remove the message length check
+      console.log('[AI_VIDEO_CALL] 🎯 INITIALIZING AI CONVERSATION');
+      console.log(`[AI_VIDEO_CALL] 📊 Conversation has ${conversation.messages.length} existing messages`);
+      
+      const cleanup = startAIConversation(
+        socket,
+        {
+          userId: user.id,
+          characterId: conversation.characterId._id,
+          conversationId: conversation._id
+        },
+        {
+          onGreetingText: (greetingText, conversationId) => {
+            console.log('[AI_VIDEO_CALL] ✅ GREETING TEXT RECEIVED:', greetingText);
+            
+            // Check if this greeting already exists to avoid duplicates
+            setConversation(prevConv => {
+              if (!prevConv) return null;
+              
+              // Don't add if this exact greeting is already the last message
+              const lastMessage = prevConv.messages[prevConv.messages.length - 1];
+              if (lastMessage && lastMessage.sender === 'ai' && lastMessage.content === greetingText) {
+                console.log('[AI_VIDEO_CALL] 🔄 Greeting already exists, not adding duplicate');
+                return prevConv;
+              }
+              
+              return {
+                ...prevConv,
+                _id: conversationId,
+                messages: [
+                  ...prevConv.messages,
+                  { sender: 'ai', content: greetingText, timestamp: new Date().toISOString() }
+                ]
+              };
+            });
+          },
+          onGreetingAudio: (audioUrl, greetingText, conversationId) => {
+            console.log('[AI_VIDEO_CALL] 🎵 GREETING AUDIO RECEIVED:', audioUrl);
+            
+            setConversation(prevConv => {
+              if (!prevConv) return null;
+              const newMessages = prevConv.messages.map(msg => {
+                if (msg.sender === 'ai' && msg.content === greetingText && !msg.audioUrl) {
+                  console.log('[AI_VIDEO_CALL] ✅ UPDATED GREETING MESSAGE WITH AUDIO');
+                  return { ...msg, audioUrl: audioUrl };
+                }
+                return msg;
+              });
+              return { ...prevConv, messages: newMessages };
+            });
+            
+            setHasReceivedGreeting(true);
+            
+            setTimeout(() => {
+              console.log('[AI_VIDEO_CALL] 🎵 ATTEMPTING TO PLAY GREETING');
+              playOrPauseAudio(audioUrl); 
+            }, 1000);
+          },
+          onError: (error) => {
+            console.error('[AI_VIDEO_CALL] ❌ GREETING ERROR:', error);
+            Alert.alert('Greeting Error', error.message);
+            setHasReceivedGreeting(true);
+          }
+        }
+      );
+
+      return cleanup;
+    }
+  }, [conversation, socket, user, hasReceivedGreeting]);
   
   const handleEndCall = async () => {
     if(sound){
@@ -530,13 +628,9 @@ export default function AIVideoCallScreen() {
         <TouchableOpacity 
           onPress={() => {
             if (currentPlayingAudioUrl) {
-              playOrPauseAudio(currentPlayingAudioUrl); // Let playOrPauseAudio handle the toggle
+              playOrPauseAudio(currentPlayingAudioUrl);
             } else {
-              console.warn(`[AIVideoCallScreen] Avatar pressed, but no currentPlayingAudioUrl is set. Cannot play/pause.`);
-              // Optionally, you could attempt to play a default intro audio here if desired and available
-              // For example: if (conversation?.characterId?.profileImage?.endsWith('.mp3')) { // Simple check
-              //   playOrPauseAudio(conversation.characterId.profileImage, true);
-              // }
+              console.warn(`[AIVideoCallScreen] Avatar pressed, but no currentPlayingAudioUrl is set.`);
             }
           }}
           style={styles.avatarContainer}
@@ -553,7 +647,7 @@ export default function AIVideoCallScreen() {
           )}
           <View style={styles.playIconOverlay}>
             <Ionicons 
-              name={isPlaying ? "pause" : "play"} // This reflects the global isPlaying state
+              name={isPlaying ? "pause" : "play"}
               size={30} 
               color="white"
             />
@@ -572,70 +666,93 @@ export default function AIVideoCallScreen() {
         </View>
       </View>
 
-      {/* Lecture Section View */}
-      {/* <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="book-outline" size={24} color="white" />
-          <Text style={styles.sectionTitle}>Lecture Section</Text>
-        </View>
-      </View> */}
-
-      {/* Chat Messages */}
+      {/* Chat Messages with streaming support */}
       <ScrollView 
         ref={scrollViewRef}
         style={styles.messagesContainer}
         contentContainerStyle={styles.messagesContent}
       >
-        {conversation.messages.map((message, index) => (
-          <View 
-            key={index}
-            style={[
-              styles.messageContainer,
-              message.sender === 'user' ? styles.userMessage : styles.aiMessage
-            ]}
-          >
-             <View style={styles.messageTextContainer}>
-                {message.sender === 'ai' ? (
-                  <View style={styles.aiMessageContent}>
-                    <Text style={styles.aiMessageText}>{message.content}</Text>
-                    <View style={styles.aiMessageControls}>
-                      {message.audioUrl && (
+        {/* Add this temporarily above your messages for debugging */}
+        {__DEV__ && (
+          <View style={{ backgroundColor: 'yellow', padding: 10, margin: 10 }}>
+            <Text style={{ fontSize: 12, color: 'black' }}>
+              DEBUG - Messages: {conversation?.messages.length || 0}
+            </Text>
+            <Text style={{ fontSize: 12, color: 'black' }}>
+              Streaming Chunks: {streamingChunks.length}
+            </Text>
+            <Text style={{ fontSize: 12, color: 'black' }}>
+              Last Message: {conversation?.messages[conversation?.messages.length - 1]?.content?.substring(0, 50) || 'None'}...
+            </Text>
+          </View>
+        )}
+        
+        {conversation?.messages.map((message, index) => {
+          const isUser = message.sender === 'user';
+          const isStreaming = isStreamingActive && message.sender === 'ai' && index === conversation?.messages.length - 1;
+          
+          return (
+            <View key={index} style={[styles.messageContainer, isUser ? styles.userMessage : styles.aiMessage]}>
+              <Text style={[styles.messageText, isUser ? styles.userMessageText : styles.aiMessageText]}>
+                {message.content}
+                {isStreaming && <Text style={styles.streamingIndicator}> ●</Text>}
+              </Text>
+              
+              {/* {!isUser && message.audioUrl && (
                         <TouchableOpacity 
-                          style={styles.audioPlayerButton}
-                          onPress={() => playOrPauseAudio(message.audioUrl!)}
+                  style={styles.playButton}
+                  onPress={() => playOrPauseAudio(message.audioUrl)}
                         >
                           <Ionicons 
-                            name={isPlaying && currentPlayingAudioUrl === message.audioUrl ? "pause-circle-outline" : "play-circle-outline"}
-                            size={28} 
+                    name={currentPlayingAudioUrl === message.audioUrl && isPlaying ? "pause" : "play"} 
+                    size={16} 
                             color={Colors.light.primary} 
                           />
                         </TouchableOpacity>
-                      )}
-                      <TouchableOpacity style={styles.translateButton}>
-                        <Ionicons name="language-outline" size={20} color={Colors.light.primary} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.userMessageContent}>
-                    <Text style={styles.userMessageText}>{message.content}</Text>
-                  </View>
+                      )} */}
+              
+              {!isUser && isStreaming && (
+                <Text style={styles.streamingStatus}>
+                  Chunks: {streamingChunks.filter(c => c.hasAudio).length}/{streamingChunks.length} with audio
+                </Text>
                 )}
               </View>
-          </View>
-        ))}
+          );
+        })}
         
         {isProcessing && (
           <View style={styles.processingContainer}>
-            <ActivityIndicator color={Colors.light.primary} size="small" />
+            <ActivityIndicator size="small" color={Colors.light.primary} />
             <Text style={styles.processingText}>{processingStatus}</Text>
+            {isStreamingActive && (
+              <Text style={styles.streamingInfo}>
+                Streaming in progress... {streamingChunks.length} chunks received
+              </Text>
+            )}
           </View>
         )}
       </ScrollView>
+
+      {/* Debug Display - Remove in production */}
+      {__DEV__ && (
+        <View style={{ position: 'absolute', top: 100, right: 10, backgroundColor: 'rgba(0,0,0,0.7)', padding: 5, borderRadius: 5 }}>
+          <Text style={{ color: 'white', fontSize: 10 }}>
+            Audio State: {debugAudioState}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 10 }}>
+            Queue: {Object.keys(audioChunks).length} | Index: {currentPlayingChunkIndex}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 10 }}>
+            Playing: {isPlaying ? 'YES' : 'NO'} | Active: {Object.keys(audioChunks).length > 0 ? 'YES' : 'NO'}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 9 }}>
+            Chunks: [{Object.keys(audioChunks).join(', ')}]
+          </Text>
+        </View>
+      )}
       
       {/* Input Controls */}
       <View style={styles.inputControls}>
-        
         <TouchableOpacity
           style={[
             styles.recordButton,
@@ -650,7 +767,6 @@ export default function AIVideoCallScreen() {
             color="white" 
           />
         </TouchableOpacity>
-        
       </View>
     </SafeAreaView>
     </>
@@ -660,7 +776,7 @@ export default function AIVideoCallScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E3A8A', // Deep blue background
+    backgroundColor: '#1E3A8A',
   },
   headerControls: {
     flexDirection: 'row',
@@ -685,19 +801,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-  },
-  speedButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  speedText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
   },
   avatarSection: {
     alignItems: 'center',
@@ -760,24 +863,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     fontSize: 16,
   },
-  sectionCard: {
-    backgroundColor: Colors.light.secondary,
-    borderRadius: 20,
-    marginHorizontal: 16,
-    marginBottom: 10,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
   messagesContainer: {
     flex: 1,
     backgroundColor: 'white',
@@ -798,29 +883,9 @@ const styles = StyleSheet.create({
   userMessage: {
     alignSelf: 'flex-end',
   },
-  messageTextContainer: {
+  messageText: {
     borderRadius: 16,
     overflow: 'hidden',
-  },
-  aiMessageContent: {
-    backgroundColor: '#F2F2F2',
-    padding: 12,
-    borderRadius: 16,
-    flexDirection: 'column', // Keep column for text and controls block
-  },
-  aiMessageControls: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  audioPlayerButton: {
-    marginRight: 10, // Space between play/pause and translate
-  },
-  userMessageContent: {
-    backgroundColor: Colors.light.primary,
-    padding: 12,
-    borderRadius: 16,
   },
   aiMessageText: {
     fontSize: 16,
@@ -830,32 +895,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'white',
   },
-  translateButton: {
-    // alignSelf: 'flex-end', // No longer needed if in aiMessageControls
-    // marginTop: 4, // No longer needed if in aiMessageControls
+  playButton: {
+    marginLeft: 10,
   },
-  videoContainer: {
-    width: 280,
-    borderRadius: 12,
-    overflow: 'hidden',
+  streamingIndicator: {
+    color: Colors.light.primary,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
-  video: {
-    width: '100%',
-    height: 200,
+  streamingStatus: {
+    fontSize: 10,
+    color: Colors.light.secondary || '#666',
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   processingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
-    marginVertical: 12,
-    padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 12,
+    justifyContent: 'center',
+    padding: 10,
+    marginVertical: 5,
   },
   processingText: {
     marginLeft: 8,
-    fontSize: 14,
-    color: Colors.light.secondary,
+    fontSize: 12,
+    color: Colors.light.secondary || '#666',
+  },
+  streamingInfo: {
+    fontSize: 10,
+    color: Colors.light.primary,
+    marginLeft: 8,
+    fontStyle: 'italic',
   },
   inputControls: {
     position: 'absolute',
@@ -867,16 +937,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
   },
-  typeButton: {
-    alignItems: 'center',
-  },
-  inspireButton: {
-    alignItems: 'center',
-  },
-  inputButtonText: {
-    color: Colors.light.primary,
-    marginTop: 4,
-  },
   recordButton: {
     backgroundColor: Colors.light.primary,
     width: 70,
@@ -887,20 +947,6 @@ const styles = StyleSheet.create({
   },
   recordingButton: {
     backgroundColor: '#F44336',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    height: 60,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  navButton: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,

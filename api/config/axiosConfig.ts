@@ -1,15 +1,11 @@
 import * as SecureStore from 'expo-secure-store';
 
 // TODO: Change to api.talkdrill.com when ready
-const baseUrl = "https://api.talkdrill.com";
+const baseUrl = "https://202f-103-215-226-190.ngrok-free.app" // "https://api.talkdrill.com";
 
 // Use ngrok URL for development, but be sure to update when URL changes
 export const API_BASE_URL = baseUrl;
 export const SOCKET_BASE_URL = baseUrl;
-
-// Log the API and Socket URLs for debugging
-console.log('API Base URL:', API_BASE_URL);
-console.log('Socket Base URL:', SOCKET_BASE_URL);
 
 // Check if URLs are valid
 if (!API_BASE_URL || !API_BASE_URL.startsWith('http')) {
@@ -74,11 +70,6 @@ const makeFetchRequest = async <T>(
   customConfig?: RequestConfig
 ): Promise<AxiosResponse<T>> => {
   try {
-    console.log(`API Request: ${method} ${url}`, {
-      data: data || 'none',
-      params: params || 'none',
-      timeout: customConfig?.timeout || 10000
-    });
     
     // Apply request interceptor
     const config: RequestConfig = {
@@ -109,9 +100,9 @@ const makeFetchRequest = async <T>(
     // Create AbortController for timeout
     const controller = new AbortController();
     const timeoutValue = interceptedConfig.timeout || 10000;
-    console.log(`Request timeout set to ${timeoutValue}ms for ${method} ${url}`);
+   
     const timeoutId = setTimeout(() => {
-      console.log(`Request timeout triggered after ${timeoutValue}ms for ${method} ${url}`);
+     
       controller.abort();
     }, timeoutValue);
     
@@ -135,29 +126,20 @@ const makeFetchRequest = async <T>(
       }
     }
     
-    console.log(`Sending fetch request to ${fullUrl}`, {
-      method,
-      headers: Object.fromEntries(Object.entries(fetchOptions.headers || {})),
-      bodyLength: fetchOptions.body ? String(fetchOptions.body).length : 0
-    });
+   
     
     const response = await fetch(fullUrl, fetchOptions);
     clearTimeout(timeoutId);
-    
-    console.log(`Response received for ${method} ${url}:`, {
-      status: response.status, 
-      statusText: response.statusText,
-      contentType: response.headers.get('content-type')
-    });
+  
     
     let responseData;
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       responseData = await response.json();
-      console.log(`Parsed JSON response for ${method} ${url}:`, responseData);
+      
     } else {
       responseData = await response.text();
-      console.log(`Received text response for ${method} ${url}: ${responseData.substring(0, 100)}${responseData.length > 100 ? '...' : ''}`);
+      
     }
     
     // Apply response interceptor
