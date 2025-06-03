@@ -6,35 +6,24 @@ class SocketService {
   private listeners: Map<string, Function[]> = new Map();
   private reconnectInterval: NodeJS.Timeout | null = null;
   private isReconnecting: boolean = false;
+  private maxReconnectAttempts = 5;
+  private reconnectAttempts = 0;
 
   // Initialize socket connection
   connect(userId: string) {
-   
-    
     if (this.socket) {
-     
-      
-      if (!this.socket.connected) {
-       
-        this.socket.connect();
-      } else {
-       
-      }
-      
+      console.log('Socket already connected');
       return this.socket;
     }
 
     try {
-      this.socket = io(SOCKET_BASE_URL, {
-        transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
-        reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 1000,
-        timeout: 20000 // Increase connection timeout to 20 seconds
+      this.socket = io(SOCKET_BASE_URL || 'http://localhost:3001', {
+        transports: ['websocket', 'polling'],
+        timeout: 20000,
+        forceNew: true,
       });
 
       this.socket.on('connect', () => {
-       
         this.triggerEvent('connect', { socketId: this.socket?.id, userId });
         this.clearReconnectInterval();
         
@@ -43,7 +32,6 @@ class SocketService {
       });
 
       this.socket.on('disconnect', (reason) => {
-       
         this.triggerEvent('disconnect', { reason });
         
         // Start reconnection if not already reconnecting
@@ -69,13 +57,11 @@ class SocketService {
 
       // Online users event
       this.socket.on('online_users', (users) => {
-       
         this.triggerEvent('online_users', users);
       });
       
       // Online status confirmation
       this.socket.on('online_status_confirmed', (data) => {
-      
         this.triggerEvent('online_status_confirmed', data);
       });
 
@@ -94,22 +80,18 @@ class SocketService {
 
       // Match events
       this.socket.on('search_started', (data) => {
-       
         this.triggerEvent('search_started', data);
       });
       
       this.socket.on('match_found', (data) => {
-       
         this.triggerEvent('match_found', data);
       });
       
       this.socket.on('search_timeout', (data) => {
-        
         this.triggerEvent('search_timeout', data);
       });
       
       this.socket.on('search_error', (data) => {
-       
         this.triggerEvent('search_error', data);
       });
 
@@ -127,9 +109,63 @@ class SocketService {
       this.socket.on('peer_status', (data) => {
         this.triggerEvent('peer_status', data);
       });
+
+      // NEW: Realtime API event handlers
+      this.socket.on('realtime_session_started', (data) => {
+        console.log('[SOCKET] Realtime session started:', data);
+        this.triggerEvent('realtime_session_started', data);
+      });
+
+      this.socket.on('realtime_connection_opened', (data) => {
+        console.log('[SOCKET] Realtime connection opened');
+        this.triggerEvent('realtime_connection_opened', data);
+      });
+
+      this.socket.on('realtime_connection_closed', (data) => {
+        console.log('[SOCKET] Realtime connection closed');
+        this.triggerEvent('realtime_connection_closed', data);
+      });
+
+      this.socket.on('realtime_session_created', (data) => {
+        console.log('[SOCKET] Realtime session created:', data);
+        this.triggerEvent('realtime_session_created', data);
+      });
+
+      this.socket.on('realtime_text_delta', (data) => {
+        this.triggerEvent('realtime_text_delta', data);
+      });
+
+      this.socket.on('realtime_text_complete', (data) => {
+        console.log('[SOCKET] Text complete:', data);
+        this.triggerEvent('realtime_text_complete', data);
+      });
+
+      this.socket.on('realtime_user_transcript', (data) => {
+        console.log('[SOCKET] User transcript:', data);
+        this.triggerEvent('realtime_user_transcript', data);
+      });
+
+      this.socket.on('realtime_audio_delta', (data) => {
+        this.triggerEvent('realtime_audio_delta', data);
+      });
+
+      this.socket.on('realtime_audio_complete', (data) => {
+        console.log('[SOCKET] Audio complete:', data);
+        this.triggerEvent('realtime_audio_complete', data);
+      });
+
+      this.socket.on('realtime_response_complete', (data) => {
+        console.log('[SOCKET] Response complete:', data);
+        this.triggerEvent('realtime_response_complete', data);
+      });
+
+      this.socket.on('realtime_error', (data) => {
+        console.error('[SOCKET] Realtime error:', data);
+        this.triggerEvent('realtime_error', data);
+      });
+
     } catch (error) {
       console.error('Error initializing socket:', error);
-      // Attempt to reconnect
       this.startReconnectInterval(userId);
     }
     
@@ -143,7 +179,6 @@ class SocketService {
     
     this.isReconnecting = true;
     this.reconnectInterval = setInterval(() => {
-      
       
       // Clean up old socket
       if (this.socket) {
@@ -246,26 +281,30 @@ class SocketService {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
-    this.listeners.get(event)?.push(callback);
+    this.listeners.get(event)!.push(callback);
   }
 
   // Remove event listener
   off(event: string, callback: Function) {
-    if (this.listeners.has(event)) {
-      const callbacks = this.listeners.get(event) || [];
-      const index = callbacks.indexOf(callback);
-      if (index !== -1) {
-        callbacks.splice(index, 1);
+    const eventListeners = this.listeners.get(event);
+    if (eventListeners) {
+      const index = eventListeners.indexOf(callback);
+      if (index > -1) {
+        eventListeners.splice(index, 1);
       }
     }
   }
 
   // Trigger event
   private triggerEvent(event: string, data: any) {
-    if (this.listeners.has(event)) {
-      const callbacks = this.listeners.get(event) || [];
-      callbacks.forEach(callback => callback(data));
-    }
+    const eventListeners = this.listeners.get(event) || [];
+    eventListeners.forEach(callback => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error(`Error in event listener for ${event}:`, error);
+      }
+    });
   }
 
   // For backward compatibility
@@ -278,6 +317,47 @@ class SocketService {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
+    }
+  }
+
+  // NEW: Realtime API methods
+  startRealtimeSession(userId: string, characterId: string, conversationId?: string) {
+    if (this.socket && this.socket.connected) {
+      console.log('[SOCKET] Starting realtime session');
+      this.socket.emit('start_realtime_session', { 
+        userId, 
+        characterId, 
+        conversationId 
+      });
+    } else {
+      console.error('[SOCKET] Cannot start realtime session - socket not connected');
+    }
+  }
+
+  sendRealtimeText(text: string) {
+    if (this.socket && this.socket.connected) {
+      console.log('[SOCKET] Sending realtime text:', text);
+      this.socket.emit('send_realtime_text', { text });
+    }
+  }
+
+  sendRealtimeAudio(audioData: string) {
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('send_realtime_audio', { audioData });
+    }
+  }
+
+  commitRealtimeAudio() {
+    if (this.socket && this.socket.connected) {
+      console.log('[SOCKET] Committing realtime audio');
+      this.socket.emit('commit_realtime_audio');
+    }
+  }
+
+  endRealtimeSession() {
+    if (this.socket && this.socket.connected) {
+      console.log('[SOCKET] Ending realtime session');
+      this.socket.emit('end_realtime_session');
     }
   }
 }

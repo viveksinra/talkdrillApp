@@ -21,6 +21,11 @@ export interface SocketContextType {
   off: (event: string, callback: Function) => void;
   onCallEvent: (event: string, callback: Function) => void;
   emit: (event: string, data: any) => void;
+  startRealtimeSession: (userId: string, characterId: string, conversationId?: string) => void;
+  sendRealtimeText: (text: string) => void;
+  sendRealtimeAudio: (audioData: string) => void;
+  commitRealtimeAudio: () => void;
+  endRealtimeSession: () => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -238,6 +243,26 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     socketService.emit(event, data);
   };
   
+  const startRealtimeSession = (userId: string, characterId: string, conversationId?: string) => {
+    socketService.startRealtimeSession(userId, characterId, conversationId);
+  };
+
+  const sendRealtimeText = (text: string) => {
+    socketService.sendRealtimeText(text);
+  };
+
+  const sendRealtimeAudio = (audioData: string) => {
+    socketService.sendRealtimeAudio(audioData);
+  };
+
+  const commitRealtimeAudio = () => {
+    socketService.commitRealtimeAudio();
+  };
+
+  const endRealtimeSession = () => {
+    socketService.endRealtimeSession();
+  };
+
   return (
     <SocketContext.Provider value={{
       isConnected,
@@ -253,7 +278,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       on: socketService.on.bind(socketService),
       off: socketService.off.bind(socketService),
       onCallEvent,
-      emit
+      emit,
+      startRealtimeSession,
+      sendRealtimeText,
+      sendRealtimeAudio,
+      commitRealtimeAudio,
+      endRealtimeSession,
     }}>
       {children}
     </SocketContext.Provider>
