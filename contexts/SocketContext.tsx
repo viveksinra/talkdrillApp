@@ -23,6 +23,7 @@ export interface SocketContextType {
   emit: (event: string, data: any) => void;
   startRealtimeSession: (userId: string, characterId: string, conversationId?: string) => void;
   sendRealtimeText: (text: string) => void;
+  sendRealtimeTextChunked: (text: string, isInterim: boolean) => void;
   sendRealtimeAudio: (audioData: string) => void;
   commitRealtimeAudio: () => void;
   endRealtimeSession: () => void;
@@ -62,8 +63,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       
       socketRef.current?.on('connect_error', (error: any) => {
-        console.error('Socket connection error:', error);
-        console.log('Socket connection error:', error);
+        console.error('SocketContext.tsx Socket connection error:', error);
+        console.log('SocketContext.tsx Socket connection error:', error);
       });
       
       socketRef.current?.on('disconnect', (reason: any) => {
@@ -251,6 +252,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     socketService.sendRealtimeText(text);
   };
 
+  const sendRealtimeTextChunked = (text: string, isInterim: boolean) => {
+    socketService.sendRealtimeTextChunked(text, isInterim);
+  };
+
   const sendRealtimeAudio = (audioData: string) => {
     socketService.sendRealtimeAudio(audioData);
   };
@@ -281,6 +286,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       emit,
       startRealtimeSession,
       sendRealtimeText,
+      sendRealtimeTextChunked,
       sendRealtimeAudio,
       commitRealtimeAudio,
       endRealtimeSession,

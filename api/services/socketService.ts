@@ -41,7 +41,7 @@ class SocketService {
       });
 
       this.socket.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
+        console.error('Socket-server connection error:', error);
         this.triggerEvent('connect_error', error);
         
         // Start reconnection if not already reconnecting
@@ -162,6 +162,11 @@ class SocketService {
       this.socket.on('realtime_error', (data) => {
         console.error('[SOCKET] Realtime error:', data);
         this.triggerEvent('realtime_error', data);
+      });
+
+      this.socket.on('realtime_interim_transcript', (data) => {
+        console.log('[SOCKET] Interim transcript:', data);
+        this.triggerEvent('realtime_interim_transcript', data);
       });
 
     } catch (error) {
@@ -358,6 +363,25 @@ class SocketService {
     if (this.socket && this.socket.connected) {
       console.log('[SOCKET] Ending realtime session');
       this.socket.emit('end_realtime_session');
+    }
+  }
+
+  sendRealtimeTextChunked(text: string, isInterim: boolean = false) {
+    if (this.socket && this.socket.connected) {
+      console.log('[SOCKET] Sending chunked realtime text:', { text: text.substring(0, 50), isInterim });
+      this.socket.emit('send_realtime_text_chunked', { text, isInterim });
+    }
+  }
+
+  notifySpeechRecognitionStarted() {
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('speech_recognition_started');
+    }
+  }
+
+  notifySpeechRecognitionEnded(metrics?: any) {
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('speech_recognition_ended', metrics);
     }
   }
 }

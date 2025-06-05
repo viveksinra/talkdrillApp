@@ -1,10 +1,12 @@
 import { Audio } from 'expo-av';
 import { AudioOptimizer } from './AudioOptimization';
+import { Buffer } from 'buffer';
 
 export class AudioBufferManager {
-  private audioQueue: string[] = [];
-  private isProcessingQueue: boolean = false;
+  private audioChunks: string[] = [];
+  private isPlaying: boolean = false;
   private currentSound: Audio.Sound | null = null;
+  private mergeTimer: NodeJS.Timeout | null = null;
   private sessionMetrics = {
     chunksProcessed: 0,
     totalLatency: 0,
@@ -30,22 +32,22 @@ export class AudioBufferManager {
     const startTime = Date.now();
     
     try {
-      // Use AudioOptimizer to check if we should buffer this chunk
-      if (!AudioOptimizer.shouldBufferChunk(this.audioQueue.length)) {
-        console.warn('[AudioBuffer] Queue full, dropping chunk');
-        this.sessionMetrics.errors++;
-        return;
-      }
-
       // Optimize the audio chunk
       const optimizedChunk = AudioOptimizer.optimizeAudioChunk(base64Audio);
       
-      this.audioQueue.push(optimizedChunk);
+      this.audioChunks.push(optimizedChunk);
       this.sessionMetrics.chunksProcessed++;
       
-      if (!this.isProcessingQueue) {
-        this.processAudioQueue();
+      // Clear existing timer
+      if (this.mergeTimer) {
+        clearTimeout(this.mergeTimer);
       }
+      
+      // Set a timer to wait for more chunks before playing
+      // This allows us to collect multiple chunks and merge them
+      this.mergeTimer = setTimeout(() => {
+        this.playMergedAudio();
+      }, 500); // Wait 500ms for more chunks
       
       // Track latency
       const latency = Date.now() - startTime;
@@ -57,22 +59,49 @@ export class AudioBufferManager {
     }
   }
 
-  private async processAudioQueue() {
-    if (this.audioQueue.length === 0) return;
+  private async playMergedAudio() {
+    if (this.audioChunks.length === 0 || this.isPlaying) return;
     
-    this.isProcessingQueue = true;
+    this.isPlaying = true;
     
-    while (this.audioQueue.length > 0) {
-      const chunk = this.audioQueue.shift();
-      if (chunk) {
-        await this.playChunk(chunk);
+    try {
+      // Merge all chunks into a single audio buffer
+      const mergedAudio = this.mergeAudioChunks(this.audioChunks);
+      
+      // Clear the chunks array
+      this.audioChunks = [];
+      
+      // Play the merged audio
+      await this.playAudio(mergedAudio);
+      
+    } catch (error) {
+      console.error('[AudioBuffer] Error playing merged audio:', error);
+      this.sessionMetrics.errors++;
+    } finally {
+      this.isPlaying = false;
+      
+      // If more chunks arrived while playing, play them
+      if (this.audioChunks.length > 0) {
+        setTimeout(() => this.playMergedAudio(), 100);
       }
     }
-    
-    this.isProcessingQueue = false;
   }
 
-  private async playChunk(base64Audio: string): Promise<void> {
+  private mergeAudioChunks(chunks: string[]): string {
+    // Decode all chunks to PCM buffers
+    const pcmBuffers = chunks.map(chunk => Buffer.from(chunk, 'base64'));
+    
+    // Calculate total length
+    const totalLength = pcmBuffers.reduce((sum, buf) => sum + buf.length, 0);
+    
+    // Create merged buffer
+    const mergedPCM = Buffer.concat(pcmBuffers, totalLength);
+    
+    // Convert to base64
+    return mergedPCM.toString('base64');
+  }
+
+  private async playAudio(base64Audio: string): Promise<void> {
     const chunkStartTime = Date.now();
     
     try {
@@ -95,26 +124,55 @@ export class AudioBufferManager {
         sound.setOnPlaybackStatusUpdate((status) => {
           if (status.isLoaded && status.didJustFinish) {
             const chunkLatency = Date.now() - chunkStartTime;
-            console.log(`[AudioBuffer] Chunk played in ${chunkLatency}ms`);
+            console.log(`[AudioBuffer] Audio played in ${chunkLatency}ms`);
             sound.unloadAsync().then(() => resolve());
           }
         });
         
-        // Fallback timeout
+        // Fallback timeout based on audio duration
+        const duration = base64Audio.length / 1000 * 100; // Rough estimate
         setTimeout(() => {
           sound.unloadAsync().then(() => resolve());
-        }, 5000);
+        }, Math.max(5000, duration));
       });
     } catch (error) {
-      console.error('Error playing audio chunk:', error);
+      console.error('Error playing audio:', error);
       this.sessionMetrics.errors++;
     }
   }
 
+  /**
+   * OpenAI realtime returns raw PCM-16 (mono, 16 kHz).  
+   * To make it playable we prepend a 44-byte WAV header.
+   */
   private convertPCM16ToPlayableFormat(base64PCM: string): string {
-    // For real implementation, you might need to convert PCM16 to WAV format
-    // This is a simplified approach - you may need to add proper WAV headers
-    return `data:audio/wav;base64,${base64PCM}`;
+    const pcmBuf = Buffer.from(base64PCM, 'base64');
+    
+    const numChannels   = 1;
+    const sampleRate    = 16_000;
+    const bitsPerSample = 16;
+    const byteRate      = sampleRate * numChannels * (bitsPerSample / 8);
+    const blockAlign    = numChannels * (bitsPerSample / 8);
+    const dataSize      = pcmBuf.length;
+    const riffSize      = 36 + dataSize;
+
+    const wavBuf = Buffer.alloc(44 + dataSize);
+    wavBuf.write('RIFF', 0);                 // ChunkID
+    wavBuf.writeUInt32LE(riffSize, 4);       // ChunkSize
+    wavBuf.write('WAVE', 8);                 // Format
+    wavBuf.write('fmt ', 12);                // Subchunk1ID
+    wavBuf.writeUInt32LE(16, 16);            // Subchunk1Size (PCM)
+    wavBuf.writeUInt16LE(1, 20);             // AudioFormat (PCM)
+    wavBuf.writeUInt16LE(numChannels, 22);   // NumChannels
+    wavBuf.writeUInt32LE(sampleRate, 24);    // SampleRate
+    wavBuf.writeUInt32LE(byteRate, 28);      // ByteRate
+    wavBuf.writeUInt16LE(blockAlign, 32);    // BlockAlign
+    wavBuf.writeUInt16LE(bitsPerSample, 34); // BitsPerSample
+    wavBuf.write('data', 36);                // Subchunk2ID
+    wavBuf.writeUInt32LE(dataSize, 40);      // Subchunk2Size
+    pcmBuf.copy(wavBuf, 44);                 // PCM payload
+    
+    return `data:audio/wav;base64,${wavBuf.toString('base64')}`;
   }
 
   getSessionMetrics() {
@@ -128,17 +186,23 @@ export class AudioBufferManager {
       audioChunks: this.sessionMetrics.chunksProcessed,
       averageLatency,
       errorCount: this.sessionMetrics.errors,
-      queueSize: this.audioQueue.length
+      queueSize: this.audioChunks.length
     };
   }
 
   async cleanup() {
+    // Clear any pending timer
+    if (this.mergeTimer) {
+      clearTimeout(this.mergeTimer);
+      this.mergeTimer = null;
+    }
+    
     // Log session metrics before cleanup
     const metrics = this.getSessionMetrics();
     console.log('[AudioBuffer] Session metrics:', metrics);
     
-    this.audioQueue = [];
-    this.isProcessingQueue = false;
+    this.audioChunks = [];
+    this.isPlaying = false;
     
     if (this.currentSound) {
       try {
@@ -160,7 +224,14 @@ export class AudioBufferManager {
   }
 
   async stop() {
-    this.audioQueue = [];
+    if (this.mergeTimer) {
+      clearTimeout(this.mergeTimer);
+      this.mergeTimer = null;
+    }
+    
+    this.audioChunks = [];
+    this.isPlaying = false;
+    
     if (this.currentSound) {
       await this.currentSound.stopAsync();
     }
