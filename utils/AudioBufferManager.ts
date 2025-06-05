@@ -46,7 +46,7 @@ export class AudioBufferManager {
       // Set a timer to wait for more chunks before playing
       // This allows us to collect multiple chunks and merge them
       this.mergeTimer = setTimeout(() => {
-        this.playMergedAudio();
+        this.playMergedAudio(this.audioChunks);
       }, 500); // Wait 500ms for more chunks
       
       // Track latency
@@ -59,31 +59,22 @@ export class AudioBufferManager {
     }
   }
 
-  private async playMergedAudio() {
-    if (this.audioChunks.length === 0 || this.isPlaying) return;
+  async playMergedAudio(audioChunks: string[]) {
+    if (audioChunks.length === 0) return;
     
-    this.isPlaying = true;
+    console.log(`[AudioBuffer] Playing merged audio with ${audioChunks.length} chunks`);
     
     try {
-      // Merge all chunks into a single audio buffer
-      const mergedAudio = this.mergeAudioChunks(this.audioChunks);
-      
-      // Clear the chunks array
-      this.audioChunks = [];
+      // Merge all chunks into a single audio
+      const mergedAudio = this.mergeAudioChunks(audioChunks);
       
       // Play the merged audio
       await this.playAudio(mergedAudio);
       
+      console.log('[AudioBuffer] Merged audio playback complete');
     } catch (error) {
       console.error('[AudioBuffer] Error playing merged audio:', error);
       this.sessionMetrics.errors++;
-    } finally {
-      this.isPlaying = false;
-      
-      // If more chunks arrived while playing, play them
-      if (this.audioChunks.length > 0) {
-        setTimeout(() => this.playMergedAudio(), 100);
-      }
     }
   }
 

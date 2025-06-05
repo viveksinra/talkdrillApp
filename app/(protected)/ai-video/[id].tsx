@@ -31,7 +31,9 @@ interface Message {
   sender: 'user' | 'ai';
   content: string;
   timestamp: string;
-  isChunk?: boolean; // To identify if this is a chunk message
+  isChunk?: boolean;
+  isLoading?: boolean;
+  audioData?: boolean;
 }
 
 interface AICharacter {
@@ -76,6 +78,8 @@ export default function AIVideoCallScreen() {
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptRef = useRef<string>('');
   const hasSentFinalTranscriptRef = useRef<boolean>(false);
+  const audioChunksRef = useRef<string[]>([]);
+  const currentLoadingMessageIdRef = useRef<string | null>(null);
 
   // Speech recognition event handlers using hooks
   useSpeechRecognitionEvent('start', () => {
@@ -239,6 +243,9 @@ export default function AIVideoCallScreen() {
     // Response events
     on('realtime_response_complete', handleResponseComplete);
     on('realtime_error', handleRealtimeError);
+
+    // Add new listener for AI responding start
+    on('realtime_ai_responding_start', handleAIRespondingStart);
   };
 
   const removeSocketListeners = () => {
@@ -253,6 +260,7 @@ export default function AIVideoCallScreen() {
     off('realtime_audio_complete', handleAudioComplete);
     off('realtime_response_complete', handleResponseComplete);
     off('realtime_error', handleRealtimeError);
+    off('realtime_ai_responding_start', handleAIRespondingStart);
   };
 
   // Socket event handlers
@@ -313,19 +321,66 @@ export default function AIVideoCallScreen() {
   const handleAudioDelta = async (data: { audioData: string; itemId: string }) => {
     console.log('Audio delta received, length:', data.audioData.length);
     
-    // If user starts recording during AI response, clear audio queue
-    if (isRecording) {
-      console.log('Discarding audio - user is recording');
-      await audioBufferManager.current.cleanup();
-      return;
-    }
+    // Collect audio chunks
+    audioChunksRef.current.push(data.audioData);
     
-    // Add audio chunk to buffer for playback
-    await audioBufferManager.current.addChunk(data.audioData);
+    // Update loading message to show progress
+    if (currentLoadingMessageIdRef.current) {
+      setConversation(prev => {
+        if (!prev) return null;
+        
+        const messages = [...prev.messages];
+        const loadingMessageIndex = messages.findIndex(
+          msg => msg.isLoading && msg.sender === 'ai'
+        );
+        
+        if (loadingMessageIndex !== -1) {
+          messages[loadingMessageIndex] = {
+            ...messages[loadingMessageIndex],
+            content: `AI is speaking... (${audioChunksRef.current.length} chunks received)`
+          };
+        }
+        
+        return { ...prev, messages };
+      });
+    }
   };
 
-  const handleAudioComplete = (data: { itemId: string; conversationId: string }) => {
-    console.log('Audio complete for item:', data.itemId);
+  const handleAudioComplete = async (data: { 
+    itemId: string; 
+    conversationId: string; 
+    text?: string;
+    audioChunkCount?: number;
+  }) => {
+    console.log('Audio complete:', data);
+    
+    // Remove loading message and add final message
+    setConversation(prev => {
+      if (!prev) return null;
+      
+      const messages = prev.messages.filter(msg => !msg.isLoading);
+      
+      return {
+        ...prev,
+        messages: [
+          ...messages,
+          {
+            sender: 'ai',
+            content: data.text || 'Audio response received',
+            timestamp: new Date().toISOString(),
+            audioData: true
+          }
+        ]
+      };
+    });
+    
+    // Play merged audio
+    if (audioChunksRef.current.length > 0) {
+      await audioBufferManager.current.playMergedAudio(audioChunksRef.current);
+      audioChunksRef.current = [];
+    }
+    
+    currentLoadingMessageIdRef.current = null;
   };
 
   const handleResponseComplete = (data: { responseId: string; status: string }) => {
@@ -338,6 +393,36 @@ export default function AIVideoCallScreen() {
     Alert.alert('Error', data.message);
     setConnectionStatus(`Error: ${data.error}`);
     setIsAIResponding(false);
+  };
+
+  // New handler for AI response start
+  const handleAIRespondingStart = (data: { responseId: string; timestamp: Date }) => {
+    console.log('AI starting to respond:', data);
+    setIsAIResponding(true);
+    
+    // Clear any existing audio chunks
+    audioChunksRef.current = [];
+    
+    // Add loading message
+    const loadingMessageId = `loading-${Date.now()}`;
+    currentLoadingMessageIdRef.current = loadingMessageId;
+    
+    setConversation(prev => {
+      if (!prev) return null;
+      
+      return {
+        ...prev,
+        messages: [
+          ...prev.messages,
+          {
+            sender: 'ai',
+            content: 'AI is thinking...',
+            timestamp: new Date().toISOString(),
+            isLoading: true
+          }
+        ]
+      };
+    });
   };
 
   // Recording functions
@@ -498,17 +583,32 @@ export default function AIVideoCallScreen() {
           style={[
             styles.messageBubble,
             isUser ? styles.userBubble : styles.aiBubble,
-            message.isChunk && styles.chunkBubble
+            message.isChunk && styles.chunkBubble,
+            message.isLoading && styles.loadingBubble
           ]}
         >
-          <Text
-            style={[
-              styles.messageText,
-              isUser ? styles.userText : styles.aiText,
-            ]}
-          >
-            {message.content}
-          </Text>
+          {message.isLoading ? (
+            <View style={styles.messageLoadingContainer}>
+              <Text style={styles.loadingText}>{message.content}</Text>
+              <LoadingDots />
+            </View>
+          ) : (
+            <>
+              <Text
+                style={[
+                  styles.messageText,
+                  isUser ? styles.userText : styles.aiText,
+                ]}
+              >
+                {message.content}
+              </Text>
+              {message.audioData && (
+                <View style={styles.audioIndicator}>
+                  <Ionicons name="volume-medium" size={16} color={Colors.light.text} />
+                </View>
+              )}
+            </>
+          )}
         </View>
       </View>
     );
@@ -612,6 +712,24 @@ export default function AIVideoCallScreen() {
     </SafeAreaView>
   );
 }
+
+// Add LoadingDots component
+const LoadingDots = () => {
+  const [dots, setDots] = useState('');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots(prev => {
+        if (prev.length >= 3) return '';
+        return prev + '.';
+      });
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return <Text style={styles.loadingDots}>{dots}</Text>;
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -756,6 +874,25 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     backgroundColor: '#F44336',
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingBubble: {
+    backgroundColor: Colors.light.surface,
+    opacity: 0.9,
+  },
+  messageLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loadingDots: {
+    fontSize: 16,
+    color: Colors.light.primary,
+    width: 30,
+    marginLeft: 4,
+  },
+  audioIndicator: {
+    marginTop: 4,
+    flexDirection: 'row',
     alignItems: 'center',
   },
 });
