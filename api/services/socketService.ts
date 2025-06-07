@@ -326,13 +326,14 @@ class SocketService {
   }
 
   // NEW: Realtime API methods
-  startRealtimeSession(userId: string, characterId: string, conversationId?: string) {
+  startRealtimeSession(userId: string, characterId: string, conversationId?: string, filters?: any) {
     if (this.socket && this.socket.connected) {
       console.log('[SOCKET] Starting realtime session');
       this.socket.emit('start_realtime_session', { 
         userId, 
         characterId, 
-        conversationId 
+        conversationId,
+        filters
       });
     } else {
       console.error('[SOCKET] Cannot start realtime session - socket not connected');

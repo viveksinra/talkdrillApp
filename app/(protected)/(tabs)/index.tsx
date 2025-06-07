@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   View,
   ScrollView,
+  Alert,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,6 +18,7 @@ import { fetchAICharacters } from "@/api/services/public/aiCharacters";
 import { Colors } from "@/constants/Colors";
 import { FilterDialog, FilterOptions } from "@/components/FilterDialog";
 import { useSocket } from "@/contexts/SocketContext";
+import { post } from "@/api/config/axiosConfig";
 
 // Define the AICharacter interface for type safety
 interface AICharacter {
@@ -25,6 +27,8 @@ interface AICharacter {
   profession: string;
   profileImage: string;
   tags: string[];
+  expertiseLevel: string;
+  gender: string;
 }
 
 export default function HomeScreen() {
@@ -34,6 +38,13 @@ export default function HomeScreen() {
   const [popularCharacters, setPopularCharacters] = useState<AICharacter[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterDialogVisible, setFilterDialogVisible] = useState(false);
+  const [filterDialogHeaderTitle, setFilterDialogHeaderTitle] =
+    useState("Find Partner");
+  const [filterDialogHeaderSubtitle, setFilterDialogHeaderSubtitle] = useState(
+    "Customize your conversation partner"
+  );
+  const [isFindAIAssistant, setIsFindAIAssistant] = useState(false);
+  const [allCharacters, setAllCharacters] = useState<AICharacter[]>([]);
 
   // Fetch popular AI characters on component mount
   useEffect(() => {
@@ -41,6 +52,7 @@ export default function HomeScreen() {
       try {
         setLoading(true);
         const data = await fetchAICharacters();
+        setAllCharacters(data); // store all
         // Take first 5 characters for the popular section
         setPopularCharacters(data.slice(0, 6));
       } catch (error) {
@@ -52,33 +64,6 @@ export default function HomeScreen() {
 
     loadCharacters();
   }, []);
-
-  // Set up socket connection to get online user count
-  // useEffect(() => {
-  //   if (!user?.id) return;
-
-  //   // Connect socket if not already connected
-  //   const socket = socketService.connect(user.id);
-    
-  //   // Register user as online
-  //   socketService.sendUserOnline(user.id);
-
-  //   // Listen for online users count updates
-  //   const handleOnlineUsersUpdate = (data: {count: number}) => {
-  //     console.log('Online users count update:', data);
-  //     setOnlineUsers(data.count);
-  //   };
-    
-  //   socketService.on('online_users_count', handleOnlineUsersUpdate);
-    
-  //   // Request online users count from server
-  //   socketService.emit('get_online_users_count', {});
-    
-  //   // Cleanup on unmount
-  //   return () => {
-  //     socketService.off('online_users_count', handleOnlineUsersUpdate);
-  //   };
-  // }, [user?.id]);
 
   const renderCharacterItem = ({ item }: { item: AICharacter }) => (
     <TouchableOpacity
@@ -92,26 +77,33 @@ export default function HomeScreen() {
           }}
           style={styles.characterImage}
         />
-        <View style={[styles.badgeContainer, 
-          item.profession?.toLowerCase().includes('intermediate') 
-            ? styles.intermediateBadge 
-            : item.profession?.toLowerCase().includes('advanced') 
-              ? styles.advancedBadge 
-              : styles.beginnerBadge
-        ]}>
+        <View
+          style={[
+            styles.badgeContainer,
+            item.profession?.toLowerCase().includes("intermediate")
+              ? styles.intermediateBadge
+              : item.profession?.toLowerCase().includes("advanced")
+              ? styles.advancedBadge
+              : styles.beginnerBadge,
+          ]}
+        >
           <ThemedText style={styles.badgeText}>
-            {item.profession?.toLowerCase().includes('intermediate') 
-              ? 'Intermediate' 
-              : item.profession?.toLowerCase().includes('advanced') 
-                ? 'Advanced' 
-                : 'Beginner'}
+            {item.profession?.toLowerCase().includes("intermediate")
+              ? "Intermediate"
+              : item.profession?.toLowerCase().includes("advanced")
+              ? "Advanced"
+              : "Beginner"}
           </ThemedText>
         </View>
       </View>
       <View style={styles.cardContentContainer}>
         <View style={styles.cardHeader}>
-          <ThemedText style={styles.characterName} numberOfLines={1} ellipsizeMode="tail">
-            {item.name.length > 10 ? item.name.slice(0, 10) + '...' : item.name}
+          <ThemedText
+            style={styles.characterName}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {item.name.length > 10 ? item.name.slice(0, 10) + "..." : item.name}
           </ThemedText>
           <View style={styles.ratingContainer}>
             <Ionicons name="star" size={18} color="#FFC107" />
@@ -119,17 +111,17 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <ThemedText style={styles.characterProfession} numberOfLines={1} ellipsizeMode="tail">
+        <ThemedText
+          style={styles.characterProfession}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
           {item.profession}
         </ThemedText>
 
         <View style={styles.statsContainer}>
           <View style={styles.sessionsContainer}>
-            <Ionicons
-              name="time-outline"
-              size={16}
-              color="#2196F3"
-            />
+            <Ionicons name="time-outline" size={16} color="#2196F3" />
             <ThemedText style={styles.sessionsText}>238 sessions</ThemedText>
           </View>
 
@@ -146,33 +138,103 @@ export default function HomeScreen() {
           <ThemedText style={styles.startSessionText}>Start Session</ThemedText>
         </TouchableOpacity>
       </View>
-
-      
     </TouchableOpacity>
   );
 
-  const handleStartMatching = (filters: FilterOptions) => {
+  const handleStartMatching = async (filters: FilterOptions) => {
     // Map filter options to the format expected by the backend
-    const userGender = user?.gender || 'male';  // Default to male if not set
-    const partnerGender = filters.gender === 'any' ? 'any' : filters.gender;
-    const languageProficiency = filters.englishLevel === 'any' ? 'any' : filters.englishLevel;
-    
-    
-    router.push({
-      pathname: '/match-making',
-      params: {
-        userGender,
-        partnerGender,
-        languageProficiency
+    const userGender = user?.gender || "male"; // Default to male if not set
+
+    const partnerGender = filters.gender === "any" ? "any" : filters.gender;
+    const partnerAccent =
+      filters.accent === "indian" ? "indian" : filters.accent;
+    const languageProficiency =
+      filters.englishLevel === "any" ? "any" : filters.englishLevel;
+
+    if (isFindAIAssistant) {
+      console.log(partnerGender, languageProficiency);
+      // find appropriate ai character based on filters
+      const aiCharacter = allCharacters.find(
+        (character) =>
+          (partnerGender === "any" ||
+            character.gender === partnerGender) &&
+          (languageProficiency === "any" ||
+            character.expertiseLevel === languageProficiency)
+      );
+
+      // if no ai character found, show a message
+      if (!aiCharacter) {
+        Alert.alert("No AI character found");
+        return;
       }
-    });
+
+      // start a conversation with the ai character
+      let conversationId = await handleStartConversation(
+        aiCharacter._id,
+        "video"
+      );
+
+      // if conversation is not started, show a message
+      if (!conversationId) {
+        Alert.alert(
+          "Error",
+          "Failed to start conversation. Please try again later."
+        );
+        return;
+      }
+
+      // navigate to the conversation screen
+      router.push({
+        pathname: "/(protected)/ai-video/[id]",
+        params: {
+          id: conversationId,
+          gender: partnerGender === "any" ? "male" : partnerGender,
+          accent: partnerAccent,
+          languageProficiency: languageProficiency,
+          aiCharacterName: aiCharacter.name
+        },
+      });
+    } else {
+      router.push({
+        pathname: "/match-making",
+        params: {
+          userGender,
+          partnerGender,
+          languageProficiency,
+        },
+      });
+    }
+  };
+
+  const handleStartConversation = async (
+    characterId: string,
+    callType: "video"
+  ) => {
+    if (!characterId) return null;
+
+    try {
+      const response = await post("/api/v1/ai-conversations", {
+        characterId,
+        callType,
+      });
+      const conversation = response.data.data;
+      // Navigate to appropriate screen based on call type
+      return conversation._id;
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        "Failed to start conversation. Please try again later."
+      );
+      console.error("Error starting conversation:", err);
+      return null;
+    }
   };
 
   return (
     <ThemedView style={{ flex: 1 }}>
       <View style={styles.header}>
-        <Image 
-          source={require('@/assets/images/talkdrill_logo.png')}
+        <Image
+          source={require("@/assets/images/talkdrill_logo.png")}
           style={styles.headerLogo}
           resizeMode="contain"
         />
@@ -191,13 +253,17 @@ export default function HomeScreen() {
           <ThemedText type="title">
             Hello, {user?.name.split(" ")[0] || "User"}!
           </ThemedText>
-          <ThemedText style={{fontWeight:'300', color: Colors.light.secondary}}>
-           Ready to improve your English today?
+          <ThemedText
+            style={{ fontWeight: "300", color: Colors.light.secondary }}
+          >
+            Ready to improve your English today?
           </ThemedText>
         </ThemedView>
 
         <ThemedView style={styles.sectionTitle}>
-          <ThemedText type="defaultSemiBold">Choose Your Practice Method</ThemedText>
+          <ThemedText type="defaultSemiBold">
+            Choose Your Practice Method
+          </ThemedText>
         </ThemedView>
 
         <ThemedView style={styles.practiceOptionsContainer}>
@@ -222,7 +288,14 @@ export default function HomeScreen() {
               </ThemedText>
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => router.push("/(protected)/(tabs)/ai-characters")}
+                onPress={() => {
+                  setIsFindAIAssistant(true);
+                  setFilterDialogVisible(true);
+                  setFilterDialogHeaderTitle("Find AI Assistant");
+                  setFilterDialogHeaderSubtitle(
+                    "Customize your conversation AI assistant"
+                  );
+                }}
               >
                 <ThemedText style={styles.actionButtonText}>
                   Start Conversation
@@ -247,14 +320,27 @@ export default function HomeScreen() {
             </ThemedText>
 
             <View style={styles.practiceCardFooter}>
-               
-                <ThemedText style={styles.availabilityText}>
-                  {onlineUsers.length ? onlineUsers.length - 1 === 1 ? '1 user' : onlineUsers.length - 1 > 1 ? `${onlineUsers.length - 1} users` : 'No users' : 'No users' } online
-                </ThemedText>
-              
+              <ThemedText style={styles.availabilityText}>
+                {onlineUsers.length
+                  ? onlineUsers.length - 1 === 1
+                    ? "1 user"
+                    : onlineUsers.length - 1 > 1
+                    ? `${onlineUsers.length - 1} users`
+                    : "No users"
+                  : "No users"}{" "}
+                online
+              </ThemedText>
+
               <TouchableOpacity
                 style={[styles.actionButton, styles.peerActionButton]}
-                onPress={() => setFilterDialogVisible(true)}
+                onPress={() => {
+                  setIsFindAIAssistant(false);
+                  setFilterDialogVisible(true);
+                  setFilterDialogHeaderTitle("Find Peer");
+                  setFilterDialogHeaderSubtitle(
+                    "Customize your conversation peer"
+                  );
+                }}
               >
                 <ThemedText style={styles.actionButtonText}>
                   Find Partner
@@ -287,6 +373,8 @@ export default function HomeScreen() {
         </ScrollView>
       </ScrollView>
       <FilterDialog
+        headerTitle={filterDialogHeaderTitle}
+        headerSubtitle={filterDialogHeaderSubtitle}
         visible={filterDialogVisible}
         onClose={() => setFilterDialogVisible(false)}
         onApply={handleStartMatching}

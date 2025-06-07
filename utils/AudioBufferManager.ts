@@ -69,10 +69,9 @@ export class AudioBufferManager {
       const mergedAudio = this.mergeAudioChunks(audioChunks);
       
       // before to play an audio please check if any existing audio is playing
-      if (this.currentSound) {
-        await this.currentSound.stopAsync();
-        await this.currentSound.unloadAsync();
-      }
+      // if (this.currentSound) {
+      //   await this.currentSound.stopAsync();
+      // }
       
       // Play the merged audio
       await this.playAudio(mergedAudio);

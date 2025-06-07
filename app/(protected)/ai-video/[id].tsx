@@ -34,6 +34,7 @@ interface Message {
   timestamp: string;
   isChunk?: boolean;
   isLoading?: boolean;
+  hidden?: boolean;
   audioData?: boolean;
 }
 
@@ -53,9 +54,10 @@ interface Conversation {
 }
 
 export default function AIVideoCallScreen() {
-  const { id: routeConversationId } = useLocalSearchParams<{ id: string }>();
+  const { id: routeConversationId, gender, accent, languageProficiency } = 
+  useLocalSearchParams<{ id: string, gender: string, accent: string, languageProficiency: string, aiCharacterName: string }>();
+ 
   const {
-    socket,
     startRealtimeSession,
     sendRealtimeText,
     endRealtimeSession,
@@ -181,7 +183,11 @@ export default function AIVideoCallScreen() {
   const initializeSession = async () => {
     try {
       await requestPermissions();
-      await loadConversation(routeConversationId);
+      await loadConversation(routeConversationId, {
+        gender,
+        accent,
+        languageProficiency
+      });
       setupSocketListeners();
     } catch (err) {
       console.error("Error initializing session:", err);
@@ -218,7 +224,7 @@ export default function AIVideoCallScreen() {
     });
   };
 
-  const loadConversation = async (convId: string) => {
+  const loadConversation = async (convId: string, filters: any) => {
     try {
       setLoading(true);
       const data = await getConversationHistory(convId);
@@ -227,7 +233,7 @@ export default function AIVideoCallScreen() {
       if (data && user) {
         console.log("Conversation loaded, starting realtime session");
         //@ts-ignore
-        startRealtimeSession(user.id, data.characterId._id, data._id);
+        startRealtimeSession(user.id, data.characterId._id, data._id, filters);
       }
 
       setLoading(false);
@@ -302,7 +308,17 @@ export default function AIVideoCallScreen() {
     setConnectionStatus("Ready To Talk");
     setIsConnected(true);
     setIsAIResponding(false);
+
+      // calla function with basic filters automatically , so that ai canreply back and as end user thought that ai is initiating the conversation
+      triggerAIForConversation();
   };
+
+  function triggerAIForConversation(){
+    sendRealtimeText(`Hello, first please introduce yourself and behave like a human being. 
+      Please act like a teacher who will initiate the conversation and keep is going by asking questions and
+      keep the conversation going for 10 minutes at least. and if user is proactive enough then you can just help them talking and practicing.
+      `);
+  }
 
   const handleTextDelta = (data: { delta: string; itemId: string }) => {
     console.log("Text delta:", data.delta);
@@ -312,17 +328,20 @@ export default function AIVideoCallScreen() {
     setConversation((prev) => {
       if (!prev) return null;
 
+      const lastMessage = prev.messages[prev.messages.length - 1];
+      if (lastMessage && lastMessage.sender === "ai") {
+        lastMessage.content += data.delta;
+      } else {
+        prev.messages.push({
+          sender: "ai",
+          content: data.delta,
+          timestamp: new Date().toISOString(),
+          isChunk: true,
+        });
+      }
+
       return {
         ...prev,
-        messages: [
-          ...prev.messages,
-          {
-            sender: "ai",
-            content: data.delta,
-            timestamp: new Date().toISOString(),
-            isChunk: true,
-          },
-        ],
       };
     });
   };
@@ -334,45 +353,35 @@ export default function AIVideoCallScreen() {
   }) => {
     console.log("Text complete:", data.text);
     // Text complete doesn't need to do anything since we're showing chunks
+    // Add each chunk as a separate message
+    setConversation((prev) => {
+      if (!prev) return null;
+
+      const lastMessage = prev.messages[prev.messages.length - 1];
+      if (lastMessage.sender === "ai") {
+        lastMessage.content = data.text;
+      } else {
+        prev.messages.push({
+          sender: "ai",
+          content: data.text,
+          timestamp: new Date().toISOString(),
+          isChunk: true,
+        });
+      }
+
+      return {
+        ...prev,
+      };
+    });
+    scrollToBottom();
   };
 
   const handleAudioDelta = async (data: {
     audioData: string;
     itemId: string;
   }) => {
-    console.log("Audio delta received, length:", data.audioData.length);
-
     // Collect audio chunks
     audioChunksRef.current.push(data.audioData);
-
-    // Update loading message to show progress
-
-    setConversation((prev) => {
-      if (!prev) return null;
-
-      const messages = [...prev.messages];
-      const loadingMessageIndex = messages.findIndex(
-        (msg) => msg.isLoading && msg.sender === "ai"
-      );
-
-      if (loadingMessageIndex !== -1) {
-        messages[loadingMessageIndex] = {
-          sender: "ai",
-          content: `AI is speaking`,
-          timestamp: new Date().toISOString(),
-          isLoading: true,
-        };
-      } else {
-        messages.push({
-          sender: "ai",
-          content: `AI is speaking`,
-          timestamp: new Date().toISOString(),
-          isLoading: true,
-        });
-      }
-
-      return { ...prev, messages };
-    });
   };
 
   const handleAudioComplete = async (data: {
@@ -382,26 +391,6 @@ export default function AIVideoCallScreen() {
     audioChunkCount?: number;
   }) => {
     console.log("Audio complete:", data);
-
-    // Remove loading message and add final message
-    setConversation((prev) => {
-      if (!prev) return null;
-
-      const messages = prev.messages.filter((msg) => !msg.isLoading);
-
-      return {
-        ...prev,
-        messages: [
-          ...messages,
-          {
-            sender: "ai",
-            content: data.text || "Audio response received",
-            timestamp: new Date().toISOString(),
-            audioData: true,
-          },
-        ],
-      };
-    });
 
     // Play merged audio
     if (audioChunksRef.current.length > 0) {
@@ -437,27 +426,7 @@ export default function AIVideoCallScreen() {
 
     // Clear any existing audio chunks
     audioChunksRef.current = [];
-
-    // Add loading message
-    const loadingMessageId = `loading-${Date.now()}`;
-    currentLoadingMessageIdRef.current = loadingMessageId;
-
-    setConversation((prev) => {
-      if (!prev) return null;
-
-      return {
-        ...prev,
-        messages: [
-          ...prev.messages,
-          {
-            sender: "ai",
-            content: "AI is thinking...",
-            timestamp: new Date().toISOString(),
-            isLoading: true,
-          },
-        ],
-      };
-    });
+    audioBufferManager.current.cleanup();
   };
 
   // Recording functions
@@ -700,7 +669,7 @@ export default function AIVideoCallScreen() {
       />
       <View>
         <ThemedText style={styles.headerName}>
-          {(conversation?.characterId.name as string) || "AI"}
+          {(conversation?.characterId.name as string).length > 15 ? (conversation?.characterId.name as string).slice(0, 15) + "..." : (conversation?.characterId.name as string)}
         </ThemedText>
         <View
           style={{ flexDirection: "row", alignItems: "center", width: 200 }}
@@ -711,7 +680,11 @@ export default function AIVideoCallScreen() {
               { backgroundColor: isConnected ? "#4CAF50" : "#F44336" },
             ]}
           />
-          <Text style={styles.statusText}>{connectionStatus.length > 20 ? connectionStatus.substring(0, 20) + "..." : connectionStatus}</Text>
+          <Text style={styles.statusText}>
+            {connectionStatus.length > 20
+              ? connectionStatus.substring(0, 20) + "..."
+              : connectionStatus}
+          </Text>
           {isAIResponding && (
             <ActivityIndicator
               size="small"
@@ -748,32 +721,34 @@ export default function AIVideoCallScreen() {
     conversation?.messages &&
     conversation?.messages.length &&
     conversation?.messages.length > 0 ? (
-      <View style={{flex: 1}}>
-         <View style={styles.sectionHeader}>
+      <View style={{ flex: 1 }}>
+        <View style={styles.sectionHeader}>
           <Ionicons name="book-outline" size={24} color="white" />
           <Text style={styles.sectionTitle}>Lecture Section</Text>
         </View>
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-      >
-        {conversation?.messages.map((message, index) =>
-          renderMessage(message, index)
-        )}
-      </ScrollView>
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+        >
+          {conversation?.messages.map((message, index) =>
+            renderMessage(message, index)
+          )}
+        </ScrollView>
       </View>
     ) : (
-      <View style={{flex: 1}}>
-          <View style={styles.sectionHeader}>
+      <View style={{ flex: 1 }}>
+        <View style={styles.sectionHeader}>
           <Ionicons name="book-outline" size={24} color="white" />
           <Text style={styles.sectionTitle}>Lecture Section</Text>
         </View>
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <Text style={{ fontSize: 16, color: Colors.light.text }}>
-          No messages yet
-        </Text>
-      </View>
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <Text style={{ fontSize: 16, color: Colors.light.text }}>
+            No messages yet
+          </Text>
+        </View>
       </View>
     );
 
@@ -962,8 +937,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 16,
     backgroundColor: Colors.light.secondaryDark,
@@ -971,9 +946,9 @@ const styles = StyleSheet.create({
     margin: 16,
   },
   sectionTitle: {
-    color: 'white',
+    color: "white",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginLeft: 10,
   },
   characterAvatarPlaceholder: {

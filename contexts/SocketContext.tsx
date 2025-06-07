@@ -21,7 +21,7 @@ export interface SocketContextType {
   off: (event: string, callback: Function) => void;
   onCallEvent: (event: string, callback: Function) => void;
   emit: (event: string, data: any) => void;
-  startRealtimeSession: (userId: string, characterId: string, conversationId?: string) => void;
+  startRealtimeSession: (userId: string, characterId: string, conversationId?: string, filters?: any) => void;
   sendRealtimeText: (text: string) => void;
   sendRealtimeTextChunked: (text: string, isInterim: boolean) => void;
   sendRealtimeAudio: (audioData: string) => void;
@@ -244,8 +244,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     socketService.emit(event, data);
   };
   
-  const startRealtimeSession = (userId: string, characterId: string, conversationId?: string) => {
-    socketService.startRealtimeSession(userId, characterId, conversationId);
+  const startRealtimeSession = (userId: string, characterId: string, conversationId?: string, filters?: any) => {
+    socketService.startRealtimeSession(userId, characterId, conversationId, filters);
   };
 
   const sendRealtimeText = (text: string) => {
