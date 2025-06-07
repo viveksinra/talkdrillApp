@@ -5,7 +5,9 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   Pressable,
-  Image
+  Image,
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from './ThemedText';
@@ -14,17 +16,22 @@ import { Colors } from '@/constants/Colors';
 
 export interface FilterOptions {
   gender: 'any' | 'male' | 'female';
+  accent: 'indian' | 'american' | 'british' | 'australian';
   englishLevel: 'any' | 'beginner' | 'intermediate' | 'advanced';
 }
 
 interface FilterDialogProps {
+  headerTitle: string;
+  headerSubtitle: string;
   visible: boolean;
   onClose: () => void;
-  onApply: (filters: FilterOptions) => void;
+  onApply: (filters: FilterOptions) => Promise<void>;
   initialFilters?: Partial<FilterOptions>;
 }
 
 export function FilterDialog({ 
+  headerTitle,
+  headerSubtitle,
   visible, 
   onClose, 
   onApply,
@@ -32,11 +39,15 @@ export function FilterDialog({
 }: FilterDialogProps) {
   const [filters, setFilters] = useState<FilterOptions>({
     gender: initialFilters?.gender || 'any',
+    accent: initialFilters?.accent || 'indian',
     englishLevel: initialFilters?.englishLevel || 'any',
   });
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleApply = () => {
-    onApply(filters);
+  const handleApply = async () => {
+    setIsProcessing(true);
+    await onApply(filters);
+    setIsProcessing(false);
     onClose();
   };
 
@@ -47,131 +58,188 @@ export function FilterDialog({
       visible={visible}
       onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.container} onPress={e => e.stopPropagation()}>
-          <View style={styles.header}>
-            <ThemedText type="subtitle" style={styles.title}>Filter Settings</ThemedText>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Ionicons name="close" size={24} color="#888" />
-            </TouchableOpacity>
-          </View>
-          
-          <ThemedText style={styles.subtitle}>Customize your conversation partner</ThemedText>
-          
-          <View style={styles.section}>
-            <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Assistant Gender</ThemedText>
-            
-            <View style={styles.options}>
-              <TouchableOpacity 
-                style={[
-                  styles.option, 
-                  filters.gender === 'any' && styles.selectedOption
-                ]}
-                onPress={() => setFilters({...filters, gender: 'any'})}
-              >
-                {filters.gender === 'any' && (
-                  <View style={styles.checkIcon}>
-                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                  </View>
-                )}
-                <ThemedText style={styles.optionText}>Any</ThemedText>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[
-                  styles.option, 
-                  filters.gender === 'male' && styles.selectedOption
-                ]}
-                onPress={() => setFilters({...filters, gender: 'male'})}
-              >
-                <ThemedText style={styles.optionText}>Male</ThemedText>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[
-                  styles.option, 
-                  filters.gender === 'female' && styles.selectedOption
-                ]}
-                onPress={() => setFilters({...filters, gender: 'female'})}
-              >
-                <ThemedText style={styles.optionText}>Female</ThemedText>
-              </TouchableOpacity>
-            </View>
-          </View>
-          
-          <View style={styles.section}>
-            <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>English Level</ThemedText>
-            
-            <View style={styles.options}>
-              <TouchableOpacity 
-                style={[
-                  styles.option, 
-                  filters.englishLevel === 'any' && styles.selectedOption
-                ]}
-                onPress={() => setFilters({...filters, englishLevel: 'any'})}
-              >
-                {filters.englishLevel === 'any' && (
-                  <View style={styles.checkIcon}>
-                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                  </View>
-                )}
-                <ThemedText style={styles.optionText}>Any</ThemedText>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[
-                  styles.option, 
-                  filters.englishLevel === 'beginner' && styles.selectedOption
-                ]}
-                onPress={() => setFilters({...filters, englishLevel: 'beginner'})}
-              >
-                <ThemedText style={styles.optionText}>Beginner</ThemedText>
+     
+
+      
+        <Pressable style={styles.overlay} onPress={onClose}>
+          <Pressable style={styles.container} onPress={e => e.stopPropagation()}>
+            <ScrollView>
+            <View style={styles.header}>
+              <ThemedText type="subtitle" style={styles.title}>{headerTitle}</ThemedText>
+              <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                <Ionicons name="close" size={24} color="#888" />
               </TouchableOpacity>
             </View>
             
-            <View style={styles.options}>
-              <TouchableOpacity 
-                style={[
-                  styles.option, 
-                  filters.englishLevel === 'intermediate' && styles.selectedOption
-                ]}
-                onPress={() => setFilters({...filters, englishLevel: 'intermediate'})}
-              >
-                <ThemedText style={styles.optionText}>Intermediate</ThemedText>
-              </TouchableOpacity>
+            <ThemedText style={styles.subtitle}>{headerSubtitle}</ThemedText>
+            
+            {/* gender */}
+            <View style={styles.section}>
+              <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Assistant Gender</ThemedText>
               
-              <TouchableOpacity 
-                style={[
-                  styles.option, 
-                  filters.englishLevel === 'advanced' && styles.selectedOption
-                ]}
-                onPress={() => setFilters({...filters, englishLevel: 'advanced'})}
-              >
-                <ThemedText style={styles.optionText}>Advanced</ThemedText>
-              </TouchableOpacity>
+              <View style={styles.options}>
+                <TouchableOpacity 
+                  style={[
+                    styles.option, 
+                    filters.gender === 'any' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, gender: 'any'})}
+                >
+                  {filters.gender === 'any' && (
+                    <View style={styles.checkIcon}>
+                      <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    </View>
+                  )}
+                  <ThemedText style={styles.optionText}>Any</ThemedText>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.option, 
+                    filters.gender === 'male' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, gender: 'male'})}
+                >
+                  <ThemedText style={styles.optionText}>Male</ThemedText>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.option, 
+                    filters.gender === 'female' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, gender: 'female'})}
+                >
+                  <ThemedText style={styles.optionText}>Female</ThemedText>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-          
-          <View style={styles.costSection}>
-            <View style={styles.costIcon}>
-              <Ionicons name="wallet-outline" size={24} color="#FF9800" />
+
+            {/* accent */}
+            <View style={styles.section}>
+              <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Accent</ThemedText>
+              <View style={styles.options}>
+                <TouchableOpacity 
+                  style={[
+                    styles.option, 
+                    filters.accent === 'indian' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, accent: 'indian'})}
+                >
+                  <ThemedText style={styles.optionText}>Indian</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.option, 
+                    filters.accent === 'american' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, accent: 'american'})}
+                >
+                  <ThemedText style={styles.optionText}>American</ThemedText>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.options}>
+                <TouchableOpacity
+                  style={[
+                    styles.option, 
+                    filters.accent === 'british' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, accent: 'british'})}
+                >
+                  <ThemedText style={styles.optionText}>British</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.option, 
+                    filters.accent === 'australian' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, accent: 'australian'})}
+                >
+                  <ThemedText style={styles.optionText}>Australian</ThemedText>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View>
-              <ThemedText style={styles.costLabel}>Cost per filter:</ThemedText>
-              <ThemedText style={styles.costValue}>
-                Free for all filters
+            
+            {/* language level */}
+            <View style={styles.section}>
+              <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>English Level</ThemedText>
+              
+              <View style={styles.options}>
+                <TouchableOpacity 
+                  style={[
+                    styles.option, 
+                    filters.englishLevel === 'any' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, englishLevel: 'any'})}
+                >
+                  {filters.englishLevel === 'any' && (
+                    <View style={styles.checkIcon}>
+                      <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    </View>
+                  )}
+                  <ThemedText style={styles.optionText}>Any</ThemedText>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.option, 
+                    filters.englishLevel === 'beginner' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, englishLevel: 'beginner'})}
+                >
+                  <ThemedText style={styles.optionText}>Beginner</ThemedText>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.options}>
+                <TouchableOpacity 
+                  style={[
+                    styles.option, 
+                    filters.englishLevel === 'intermediate' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, englishLevel: 'intermediate'})}
+                >
+                  <ThemedText style={styles.optionText}>Intermediate</ThemedText>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.option, 
+                    filters.englishLevel === 'advanced' && styles.selectedOption
+                  ]}
+                  onPress={() => setFilters({...filters, englishLevel: 'advanced'})}
+                >
+                  <ThemedText style={styles.optionText}>Advanced</ThemedText>
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            <View style={styles.costSection}>
+              <View style={styles.costIcon}>
+                <Ionicons name="wallet-outline" size={24} color="#FF9800" />
+              </View>
+              <View>
+                <ThemedText style={styles.costLabel}>Cost per filter:</ThemedText>
+                <ThemedText style={styles.costValue}>
+                  Free for all filters
+                </ThemedText>
+              </View>
+            </View>
+            
+            <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
+              {isProcessing ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+              <ThemedText style={styles.applyButtonText}>
+                Apply Filters
+                <Ionicons name="arrow-forward" size={20} color="#fff" style={{marginLeft: 8, marginTop: 8}} />
               </ThemedText>
-            </View>
-          </View>
-          
-          <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
-            <ThemedText style={styles.applyButtonText}>
-              Apply Filters
-              <Ionicons name="arrow-forward" size={20} color="#fff" style={{marginLeft: 8, marginTop: 8}} />
-            </ThemedText>
-          </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+            </ScrollView>
+          </Pressable>
         </Pressable>
-      </Pressable>
+       
     </Modal>
   );
 }
@@ -188,7 +256,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 24,
-    maxHeight: '80%',
+    maxHeight: '95%',
+    height: 'auto',
   },
   header: {
     flexDirection: 'row',
@@ -208,10 +277,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 5,
   },
   sectionTitle: {
-    marginBottom: 16,
+    marginBottom: 8,
     fontSize: 18,
   },
   options: {
@@ -231,6 +300,7 @@ const styles = StyleSheet.create({
   },
   selectedOption: {
     backgroundColor: '#5933F9',
+    color:'#fafafa'
   },
   optionText: {
     color: '#333',

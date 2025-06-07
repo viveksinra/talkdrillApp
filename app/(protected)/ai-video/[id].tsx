@@ -1,36 +1,41 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  ActivityIndicator, 
+import React, { useState, useEffect, useRef } from "react";
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
   Alert,
-  Platform,
   ScrollView,
   Image,
-  BackHandler,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router, Stack } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Audio, AVPlaybackStatus } from 'expo-av';
-import { Colors } from '../../../constants/Colors';
-import { 
-  getConversationHistory, 
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, router, Stack } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { Audio } from "expo-av";
+import { Colors } from "../../../constants/Colors";
+import {
+  getConversationHistory,
   endConversation,
-  processTextViaSocket
-} from '../../../api/services/public/aiCharacters';
-import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
-import { useSocket } from '../../../contexts/SocketContext';
-import { useAuth } from '../../../contexts/AuthContext';
+} from "../../../api/services/public/aiCharacters";
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+  ExpoSpeechRecognitionOptions,
+} from "expo-speech-recognition";
+import { useSocket } from "../../../contexts/SocketContext";
+import { useAuth } from "../../../contexts/AuthContext";
+import { AudioBufferManager } from "../../../utils/AudioBufferManager";
+import { ThemedText } from "@/components/ThemedText";
 
 interface Message {
-  sender: 'user' | 'ai';
+  sender: "user" | "ai";
   content: string;
-  videoUrl?: string;
-  audioUrl?: string;
   timestamp: string;
+  isChunk?: boolean;
+  isLoading?: boolean;
+  hidden?: boolean;
+  audioData?: boolean;
 }
 
 interface AICharacter {
@@ -45,104 +50,452 @@ interface Conversation {
   _id: string;
   characterId: AICharacter;
   messages: Message[];
-  callType: 'video';
+  callType: "video";
 }
 
 export default function AIVideoCallScreen() {
-  const { id: routeConversationId } = useLocalSearchParams<{ id: string }>();
-  const { socket } = useSocket();
+  const { id: routeConversationId, gender, accent, languageProficiency } = 
+  useLocalSearchParams<{ id: string, gender: string, accent: string, languageProficiency: string, aiCharacterName: string }>();
+ 
+  const {
+    startRealtimeSession,
+    sendRealtimeText,
+    endRealtimeSession,
+    on,
+    off,
+  } = useSocket();
   const { user } = useAuth();
+
+  // State management - Simplified
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentPlayingAudioUrl, setCurrentPlayingAudioUrl] = useState<string | null>(null);
-  const [remainingTime, setRemainingTime] = useState('00:00');
-  
-  const scrollViewRef = useRef<ScrollView>(null);
-  
-  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
-  const cleanupSocketListenersRef = useRef<(() => void) | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] =
+    useState<string>("Initializing...");
+  const [isAIResponding, setIsAIResponding] = useState(false);
 
-  // To manage listener subscriptions and timeout for speech recognition
-  const speechResultListenerRef = useRef<any>(null);
-  const speechErrorListenerRef = useRef<any>(null);
-  const recordingTimeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+  // Refs
+  const scrollViewRef = useRef<ScrollView>(null);
+  const audioBufferManager = useRef(new AudioBufferManager());
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const transcriptRef = useRef<string>("");
+  const hasSentFinalTranscriptRef = useRef<boolean>(false);
+  const audioChunksRef = useRef<string[]>([]);
+  const currentLoadingMessageIdRef = useRef<string | null>(null);
+
+  const [renderMode, setRenderMode] = useState<"video" | "chat">("video");
+
+  // Speech recognition event handlers using hooks
+  useSpeechRecognitionEvent("start", () => {
+    console.log("[SPEECH] Speech recognition started");
+    hasSentFinalTranscriptRef.current = false; // Reset flag
+  });
+
+  useSpeechRecognitionEvent("end", () => {
+    console.log("[SPEECH] Speech recognition ended");
+    setIsRecording(false);
+
+    // Clear silence timer
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+
+    // Send final transcript if we haven't already
+    if (transcriptRef.current && !hasSentFinalTranscriptRef.current) {
+      console.log(
+        "[SPEECH] Sending final transcript on end:",
+        transcriptRef.current
+      );
+      sendTranscriptToServer(transcriptRef.current);
+      hasSentFinalTranscriptRef.current = true;
+    }
+  });
+
+  useSpeechRecognitionEvent("result", (event) => {
+    console.log("[SPEECH] Result event:", event);
+
+    if (event.isFinal && event.results && event.results.length > 0) {
+      // Final transcript - send to server
+      const finalTranscript = event.results[0]?.transcript;
+      if (finalTranscript && !hasSentFinalTranscriptRef.current) {
+        console.log("[SPEECH] Final transcript:", finalTranscript);
+        sendTranscriptToServer(finalTranscript);
+        hasSentFinalTranscriptRef.current = true;
+
+        // Stop recording after final result
+        setTimeout(() => {
+          stopRecording();
+        }, 100);
+      }
+    } else if (event.results && event.results.length > 0) {
+      // Interim transcript - update current transcript
+      const interimTranscript = event.results[0]?.transcript || "";
+      transcriptRef.current = interimTranscript;
+      console.log("[SPEECH] Interim transcript:", interimTranscript);
+
+      // Reset silence timer
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+
+      // Set new silence timer
+      silenceTimeoutRef.current = setTimeout(() => {
+        // Silence detected - stop recording
+        console.log("[SPEECH] Silence detected, stopping recording");
+        if (!hasSentFinalTranscriptRef.current && transcriptRef.current) {
+          sendTranscriptToServer(transcriptRef.current);
+          hasSentFinalTranscriptRef.current = true;
+        }
+        stopRecording();
+      }, 2000); // Increased to 2 seconds of silence
+    }
+  });
+
+  useSpeechRecognitionEvent("error", (event) => {
+    console.error("[SPEECH] Speech recognition error:", event);
+    setIsRecording(false);
+    Alert.alert(
+      "Speech Recognition Error",
+      event.message || "Failed to recognize speech. Please try again."
+    );
+  });
 
   useEffect(() => {
-    console.log("id", routeConversationId);
-    loadConversation(routeConversationId);
-    
-    Audio.requestPermissionsAsync()
-      .then(({ granted }) => {
-        if (!granted) {
-          Alert.alert(
-            'Microphone Permission Required',
-            'Please grant microphone permission to use the audio call feature.'
-          );
-        }
-      });
-    
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-    });
-    
+    console.log(
+      "Starting AI Video Call with conversation ID:",
+      routeConversationId
+    );
+    initializeSession();
     return () => {
-      // Cleanup speech recognition
-      if (speechResultListenerRef.current) {
-        speechResultListenerRef.current.remove();
-        speechResultListenerRef.current = null;
-      }
-      if (speechErrorListenerRef.current) {
-        speechErrorListenerRef.current.remove();
-        speechErrorListenerRef.current = null;
-      }
-      if (recordingTimeoutIdRef.current) {
-        clearTimeout(recordingTimeoutIdRef.current);
-        recordingTimeoutIdRef.current = null;
-      }
-      if (isRecording) { // Ensure module is stopped if component unmounts while recording
-        ExpoSpeechRecognitionModule.stop();
-      } else {
-        ExpoSpeechRecognitionModule.abort(); // Abort if not actively recording but might have state
-      }
-      
-      if (sound) {
-        sound.unloadAsync();
-      }
-      if (cleanupSocketListenersRef.current) {
-        cleanupSocketListenersRef.current();
-      }
+      cleanup();
     };
-  }, [routeConversationId]); // isRecording removed from dependencies as it's managed internally
-  
+  }, [routeConversationId]);
+
   useEffect(() => {
     if (conversation?.messages && conversation.messages.length > 0) {
       scrollToBottom();
     }
   }, [conversation?.messages]);
-  
-  const loadConversation = async (convId: string) => {
+
+  const initializeSession = async () => {
+    try {
+      await requestPermissions();
+      await loadConversation(routeConversationId, {
+        gender,
+        accent,
+        languageProficiency
+      });
+      setupSocketListeners();
+    } catch (err) {
+      console.error("Error initializing session:", err);
+      setError("Failed to initialize session. Please try again.");
+    }
+  };
+
+  const requestPermissions = async () => {
+    // Request both audio and speech recognition permissions
+    const audioPermission = await Audio.requestPermissionsAsync();
+    if (!audioPermission.granted) {
+      Alert.alert(
+        "Microphone Permission Required",
+        "Please grant microphone permission to use the audio call feature."
+      );
+      return;
+    }
+
+    const speechPermission =
+      await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!speechPermission.granted) {
+      Alert.alert(
+        "Speech Recognition Permission Required",
+        "Please grant speech recognition permission to use this feature."
+      );
+      return;
+    }
+
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+    });
+  };
+
+  const loadConversation = async (convId: string, filters: any) => {
     try {
       setLoading(true);
       const data = await getConversationHistory(convId);
-      console.log("data", data.messages);
-      //@ts-ignore
-      setConversation(data);
+      setConversation(data as unknown as Conversation);
+
+      if (data && user) {
+        console.log("Conversation loaded, starting realtime session");
+        //@ts-ignore
+        startRealtimeSession(user.id, data.characterId._id, data._id, filters);
+      }
+
       setLoading(false);
     } catch (err) {
-      setError('Failed to load conversation. Please try again later.');
+      setError("Failed to load conversation. Please try again later.");
       setLoading(false);
-      // console.error('Error loading conversation:', err);
     }
   };
-  
+
+  const setupSocketListeners = () => {
+    console.log("Setting up socket listeners for realtime");
+
+    // Session events
+    on("realtime_session_started", handleSessionStarted);
+    on("realtime_connection_opened", handleConnectionOpened);
+    on("realtime_connection_closed", handleConnectionClosed);
+    on("realtime_session_created", handleSessionCreated);
+
+    // Text events
+    on("realtime_text_delta", handleTextDelta);
+    on("realtime_text_complete", handleTextComplete);
+
+    // Audio events
+    on("realtime_audio_delta", handleAudioDelta);
+    on("realtime_audio_complete", handleAudioComplete);
+
+    // Response events
+    on("realtime_response_complete", handleResponseComplete);
+    on("realtime_error", handleRealtimeError);
+
+    // Add new listener for AI responding start
+    on("realtime_ai_responding_start", handleAIRespondingStart);
+  };
+
+  const removeSocketListeners = () => {
+    console.log("Removing socket listeners");
+    off("realtime_session_started", handleSessionStarted);
+    off("realtime_connection_opened", handleConnectionOpened);
+    off("realtime_connection_closed", handleConnectionClosed);
+    off("realtime_session_created", handleSessionCreated);
+    off("realtime_text_delta", handleTextDelta);
+    off("realtime_text_complete", handleTextComplete);
+    off("realtime_audio_delta", handleAudioDelta);
+    off("realtime_audio_complete", handleAudioComplete);
+    off("realtime_response_complete", handleResponseComplete);
+    off("realtime_error", handleRealtimeError);
+    off("realtime_ai_responding_start", handleAIRespondingStart);
+  };
+
+  // Socket event handlers
+  const handleSessionStarted = (data: any) => {
+    console.log("Realtime session started:", data);
+    setConnectionStatus("Session started");
+  };
+
+  const handleConnectionOpened = () => {
+    console.log("Realtime connection opened");
+    setIsConnected(true);
+    setConnectionStatus("Connected");
+    setIsAIResponding(false);
+  };
+
+  const handleConnectionClosed = () => {
+    console.log("Realtime connection closed");
+    setIsConnected(false);
+    setConnectionStatus("Disconnected");
+    setIsAIResponding(false);
+  };
+
+  const handleSessionCreated = (data: any) => {
+    console.log("Realtime session created:", data.sessionId);
+    setConnectionStatus("Ready To Talk");
+    setIsConnected(true);
+    setIsAIResponding(false);
+
+      // calla function with basic filters automatically , so that ai canreply back and as end user thought that ai is initiating the conversation
+      triggerAIForConversation();
+  };
+
+  function triggerAIForConversation(){
+    sendRealtimeText(`Hello, first please introduce yourself and behave like a human being. 
+      Please act like a teacher who will initiate the conversation and keep is going by asking questions and
+      keep the conversation going for 10 minutes at least. and if user is proactive enough then you can just help them talking and practicing.
+      `);
+  }
+
+  const handleTextDelta = (data: { delta: string; itemId: string }) => {
+    console.log("Text delta:", data.delta);
+    setIsAIResponding(true);
+
+    // Add each chunk as a separate message
+    setConversation((prev) => {
+      if (!prev) return null;
+
+      const lastMessage = prev.messages[prev.messages.length - 1];
+      if (lastMessage && lastMessage.sender === "ai") {
+        lastMessage.content += data.delta;
+      } else {
+        prev.messages.push({
+          sender: "ai",
+          content: data.delta,
+          timestamp: new Date().toISOString(),
+          isChunk: true,
+        });
+      }
+
+      return {
+        ...prev,
+      };
+    });
+  };
+
+  const handleTextComplete = (data: {
+    text: string;
+    itemId: string;
+    conversationId: string;
+  }) => {
+    console.log("Text complete:", data.text);
+    // Text complete doesn't need to do anything since we're showing chunks
+    // Add each chunk as a separate message
+    setConversation((prev) => {
+      if (!prev) return null;
+
+      const lastMessage = prev.messages[prev.messages.length - 1];
+      if (lastMessage.sender === "ai") {
+        lastMessage.content = data.text;
+      } else {
+        prev.messages.push({
+          sender: "ai",
+          content: data.text,
+          timestamp: new Date().toISOString(),
+          isChunk: true,
+        });
+      }
+
+      return {
+        ...prev,
+      };
+    });
+    scrollToBottom();
+  };
+
+  const handleAudioDelta = async (data: {
+    audioData: string;
+    itemId: string;
+  }) => {
+    // Collect audio chunks
+    audioChunksRef.current.push(data.audioData);
+  };
+
+  const handleAudioComplete = async (data: {
+    itemId: string;
+    conversationId: string;
+    text?: string;
+    audioChunkCount?: number;
+  }) => {
+    console.log("Audio complete:", data);
+
+    // Play merged audio
+    if (audioChunksRef.current.length > 0) {
+      await audioBufferManager.current.playMergedAudio(audioChunksRef.current);
+      audioChunksRef.current = [];
+    }
+
+    currentLoadingMessageIdRef.current = null;
+  };
+
+  const handleResponseComplete = (data: {
+    responseId: string;
+    status: string;
+  }) => {
+    console.log("Response complete:", data);
+    setIsAIResponding(false);
+  };
+
+  const handleRealtimeError = (data: { message: string; error: string }) => {
+    console.error("Realtime error:", data);
+    Alert.alert("Error", data.message);
+    setConnectionStatus(`Error: ${data.error}, please restart the app`);
+    setIsAIResponding(false);
+  };
+
+  // New handler for AI response start
+  const handleAIRespondingStart = (data: {
+    responseId: string;
+    timestamp: Date;
+  }) => {
+    console.log("AI starting to respond:", data);
+    setIsAIResponding(true);
+
+    // Clear any existing audio chunks
+    audioChunksRef.current = [];
+    audioBufferManager.current.cleanup();
+  };
+
+  // Recording functions
+  const startRecording = async () => {
+    try {
+      console.log("[SPEECH] Starting speech recognition...");
+
+      if (!isConnected) {
+        Alert.alert(
+          "Not Connected",
+          "Please wait for the connection to be established."
+        );
+        return;
+      }
+
+      if (isAIResponding) {
+        // Interrupt AI response
+        console.log("[SPEECH] Interrupting AI response");
+        await audioBufferManager.current.stop();
+        await audioBufferManager.current.cleanup();
+        setIsAIResponding(false);
+      }
+
+      setIsRecording(true);
+      transcriptRef.current = "";
+
+      // Configure speech recognition options
+      const options: ExpoSpeechRecognitionOptions = {
+        lang: "en-US",
+        interimResults: true,
+        maxAlternatives: 1,
+        continuous: true,
+        requiresOnDeviceRecognition: false,
+      };
+
+      console.log("[SPEECH] Starting with options:", options);
+
+      // Start speech recognition
+      ExpoSpeechRecognitionModule.start(options);
+    } catch (error) {
+      console.error("[SPEECH] Error starting speech recognition:", error);
+      setIsRecording(false);
+      Alert.alert(
+        "Error",
+        "Failed to start speech recognition. Please try again."
+      );
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      console.log("[SPEECH] Stopping speech recognition...");
+
+      // Clear silence timer
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+
+      setIsRecording(false);
+
+      // Stop speech recognition
+      ExpoSpeechRecognitionModule.stop();
+    } catch (error) {
+      console.error("[SPEECH] Error stopping speech recognition:", error);
+      setIsRecording(false);
+    }
+  };
+
   const scrollToBottom = () => {
     if (scrollViewRef.current) {
       setTimeout(() => {
@@ -150,792 +503,561 @@ export default function AIVideoCallScreen() {
       }, 100);
     }
   };
-  
-  // Function to format time in MM:SS
-  const formatTime = (timeInMillis: number) => {
-    const totalSeconds = Math.floor(timeInMillis / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-  
-  // Update timer function
-  const updateTimer = (status: AVPlaybackStatus) => {
-    if (status && status.isLoaded && !status.didJustFinish && status.durationMillis && status.positionMillis) {
-      const remaining = status.durationMillis - status.positionMillis;
-      setRemainingTime(formatTime(remaining));
+
+  const handleEndCall = async () => {
+    try {
+      console.log("Ending realtime session");
+      endRealtimeSession();
+      await audioBufferManager.current.cleanup();
+
+      if (conversation) {
+        await endConversation(conversation._id);
+      }
+
+      router.back();
+    } catch (error) {
+      console.error("Error ending call:", error);
+      router.back();
     }
-    // If playback did just finish or is not loaded, remainingTime will be reset by onPlaybackStatusUpdate logic
   };
-  
-  // Add this new function to centrally manage all audio and speech state resets
-  const resetAllAudioAndSpeechStates = async (shouldUnloadSound = true) => {
-    console.log("[AIVideoCallScreen] Resetting all audio and speech states");
-    
-    // Reset audio states
-    setIsPlaying(false);
-    setCurrentPlayingAudioUrl(null);
-    setRemainingTime("00:00");
-    
-    // Unload sound if requested and exists
-    if (shouldUnloadSound && sound) {
-      console.log("[AIVideoCallScreen] Unloading sound");
+
+  const cleanup = async () => {
+    console.log("Cleanup function called");
+
+    // Clear timers
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+
+    removeSocketListeners();
+    endRealtimeSession();
+    await audioBufferManager.current.cleanup();
+
+    // Stop speech recognition if active
+    if (isRecording) {
       try {
-        await sound.stopAsync();
-        await sound.unloadAsync();
+        ExpoSpeechRecognitionModule.stop();
       } catch (e) {
-        console.warn("[AIVideoCallScreen] Error unloading sound during reset:", e);
-      }
-    }
-    setSound(null);
-    
-    // Reset speech recognition states
-    setIsRecording(false);
-    cleanupSpeechRecognition();
-  };
-
-  const playOrPauseAudio = async (audioUrlToPlay: string, isLectureAudio = false) => {
-    if (sound && currentPlayingAudioUrl === audioUrlToPlay && isPlaying) { // Pausing current
-      await sound.pauseAsync();
-      setIsPlaying(false);
-    } else { // Playing new, resuming paused, or playing a different audio
-      // Reset states before starting new audio
-      if (sound) { 
-        await resetAllAudioAndSpeechStates(true);
-      } else {
-        await resetAllAudioAndSpeechStates(false);
-      }
-
-      try {
-        console.log(`[AIVideoCallScreen] Attempting to play audio: ${audioUrlToPlay}`);
-        const { sound: newSound, status } = await Audio.Sound.createAsync(
-          { uri: audioUrlToPlay },
-          { shouldPlay: true }
-        );
-        setSound(newSound); 
-        setIsPlaying(true);
-        setCurrentPlayingAudioUrl(audioUrlToPlay); // Set the new URL as current
-
-        newSound.setOnPlaybackStatusUpdate((playbackStatus: AVPlaybackStatus) => {
-          if (!playbackStatus.isLoaded) {
-            // Only reset if this was the intended audio
-            if (currentPlayingAudioUrl === audioUrlToPlay) {
-              resetAllAudioAndSpeechStates(false); // Don't unload here as it's already unloaded
-            }
-            if (playbackStatus.error) {
-              // console.error(`[AIVideoCallScreen] Playback error on URL ${audioUrlToPlay}:`, playbackStatus.error);
-              Alert.alert('Audio Playback Error', `Could not play audio: due to unknown error`);
-            }
-            return;
-          }
-
-          updateTimer(playbackStatus); 
-
-          if (playbackStatus.didJustFinish) {
-            console.log(`[AIVideoCallScreen] Audio finished playing: ${audioUrlToPlay}`);
-            // Reset all states when audio finishes
-            resetAllAudioAndSpeechStates(false); // Don't unload here as playback finished
-            newSound.unloadAsync().catch(e => {
-                console.warn(`[AIVideoCallScreen] Error unloading sound ${audioUrlToPlay} on finish:`, e);
-            });
-          }
-        });
-
-        if (status.isLoaded && status.durationMillis) {
-          setRemainingTime(formatTime(status.durationMillis));
-        } else {
-          setRemainingTime("00:00"); 
-        }
-
-      } catch (e: any) {
-        // console.error(`[AIVideoCallScreen] Error creating or playing audio ${audioUrlToPlay}:`, e);
-        Alert.alert('Audio Playback Error', `Could not play audio: ${e.message || 'Unknown error'}`);
-        await resetAllAudioAndSpeechStates(true);
+        console.warn("Error stopping speech recognition:", e);
       }
     }
   };
-  
-  const cleanupSpeechRecognition = () => {
-    speechResultListenerRef.current?.remove();
-    speechResultListenerRef.current = null;
-    speechErrorListenerRef.current?.remove();
-    speechErrorListenerRef.current = null;
-    if (recordingTimeoutIdRef.current) {
-      clearTimeout(recordingTimeoutIdRef.current);
-      recordingTimeoutIdRef.current = null;
-    }
+
+  // Helper function to send transcript to server
+  const sendTranscriptToServer = (transcript: string) => {
+    if (!transcript.trim()) return;
+
+    // Add user message to UI
+    setConversation((prev) => {
+      if (!prev) return null;
+
+      return {
+        ...prev,
+        messages: [
+          ...prev.messages,
+          {
+            sender: "user",
+            content: transcript,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      };
+    });
+
+    // Send to server
+    sendRealtimeText(transcript);
+    transcriptRef.current = "";
   };
 
-  const startRecording = async () => {
-    try {
-      // Stop any currently playing audio and reset all states before starting recording
-      if (sound || isPlaying) {
-        console.log("[AIVideoCallScreen] Stopping current audio to start recording.");
-        if (sound) {
-          await sound.stopAsync(); // stopAsync also unloads the sound
-        }
-        await resetAllAudioAndSpeechStates(false); // Sound already unloaded by stopAsync
-      }
-      
-      // Request permissions if not already granted (good practice)
-      const { granted: micPermission } = await Audio.requestPermissionsAsync();
-      if (!micPermission) {
-        Alert.alert('Microphone Permission Required', 'Please grant microphone permission to use speech recognition.');
-        return;
-      }
-      
-      const speechPermission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!speechPermission.granted) {
-        Alert.alert('Speech Recognition Permission Required', 'Please grant speech recognition permission to continue.');
-        return;
-      }
+  // Render methods
+  const renderMessage = (message: Message, index: number) => {
+    const isUser = message.sender === "user";
 
-      setIsRecording(true); // Set recording state
-      
-      // Clean up any previous listeners & timeout before attaching new ones
-      cleanupSpeechRecognition();
-
-      ExpoSpeechRecognitionModule.start({
-        lang: 'en-US',
-        interimResults: false, // We only care about final results
-        continuous: false,
-        iosTaskHint: 'unspecified',
-      });
-      
-      speechResultListenerRef.current = ExpoSpeechRecognitionModule.addListener('result', (event) => {
-        if (event.results && event.results.length > 0) {
-          const transcribedText = event.results[0].transcript;
-          if (event.isFinal) {
-            console.log("[AIVideoCallScreen] Speech result (final):", transcribedText);
-            cleanupSpeechRecognition();
-            setIsRecording(false); 
-            if (transcribedText && transcribedText.trim() !== '') {
-              processTranscribedText(transcribedText);
-            } else {
-              console.log("[AIVideoCallScreen] Speech recognition resulted in empty text. Not processing.");
-            }
-          }
-        }
-      });
-      
-      speechErrorListenerRef.current = ExpoSpeechRecognitionModule.addListener('error', (event) => {
-        // console.error('[AIVideoCallScreen] Speech recognition error:', event.error, event.message);
-        // Reset all states on speech error
-        resetAllAudioAndSpeechStates(true);
-
-        const errorMessage = event.message?.toLowerCase() || "";
-        const errorCode = event.error?.toLowerCase() || "";
-
-        if (errorCode === 'no-speech' || errorMessage.includes("no speech")) {
-            console.log("[AIVideoCallScreen] No speech detected by the module.");
-        } else if (errorCode === 'network' || errorMessage.includes("network")) {
-            Alert.alert('Network Error', 'A network error occurred during speech recognition. Please check your connection and try again.');
-        } else if (errorCode === 'recognitionservicebusy' || errorMessage.includes("service busy")) {
-            Alert.alert('Service Busy', 'The speech recognition service is currently busy. Please try again in a moment.');
-        } else if (errorCode === 'client' && errorMessage.includes("user denied permission")) {
-            Alert.alert('Permission Denied', 'Speech recognition permission was denied. Please enable it in settings.');
-        } else if (errorCode === 'canceled' || errorMessage.includes("cancelled") || errorMessage.includes("canceled")) {
-            console.log("[AIVideoCallScreen] Speech recognition was cancelled (e.g. by stopRecording).");
-        } else {
-            Alert.alert('Speech Error', `Speech recognition failed: ${event.message || event.error || 'Unknown error'}`);
-        }
-      });
-      
-      // Auto-stop after 50 seconds if no final result by then
-      recordingTimeoutIdRef.current = setTimeout(() => {
-        console.log("[AIVideoCallScreen] Recording timeout (50s) reached. Stopping speech recognition.");
-        stopRecording();
-      }, 50000);
-
-    } catch (err) {
-      // console.error('[AIVideoCallScreen] Failed to start recording:', err);
-      await resetAllAudioAndSpeechStates(true);
-      Alert.alert('Error', 'Failed to start speech recognition. Please try again.');
-    }
-  };
-  
-  const stopRecording = async () => {
-    if (!isRecording) {
-      console.log("[AIVideoCallScreen] stopRecording called but not currently recording.");
-      return;
-    }
-    
-    console.log("[AIVideoCallScreen] Attempting to stop recording.");
-
-    try {
-      ExpoSpeechRecognitionModule.stop();
-    } catch (err) {
-      // console.error('[AIVideoCallScreen] Failed to stop speech recognition module:', err);
-      // Fallback: ensure state is updated and resources are cleaned if stop() call throws.
-      setIsRecording(false);
-      cleanupSpeechRecognition();
-    }
-  };
-  
-  const processTranscribedText = async (text: string) => {
-    if (!conversation || !conversation._id) {
-      Alert.alert("Error", "Conversation details not loaded yet. Please wait.");
-      return;
-    }
-    if (!user || !user.id) {
-      Alert.alert("Error", "User not authenticated. Cannot process request.");
-      return;
-    }
-    if (!socket) {
-      Alert.alert("Error", "Socket connection not available.");
-      return;
-    }
-
-    setIsProcessing(true);
-    setProcessingStatus('Starting...');
-
-    // Add user message to UI immediately
-    const userMessageTimestamp = new Date().toISOString();
-    const updatedConvWithUserMsg = {
-      ...conversation,
-      messages: [
-        ...conversation.messages,
-        { sender: 'user', content: text, timestamp: userMessageTimestamp }
-      ]
-    };
-    setConversation(updatedConvWithUserMsg);
-
-    // Clean up any previous listeners before attaching new ones
-    if (cleanupSocketListenersRef.current) {
-        cleanupSocketListenersRef.current();
-    }
-
-    cleanupSocketListenersRef.current = processTextViaSocket(
-      socket,
-      {
-        userId: user.id,
-        characterId: conversation.characterId._id,
-        conversationId: conversation._id,
-        userText: text,
-        language: 'en-US',
-      },
-      {
-        onTextResponse: (aiResponse, updatedConvId) => {
-          setProcessingStatus('AI responded. Waiting for audio...');
-          setConversation(prevConv => {
-            if (!prevConv) return null;
-            // Add AI text message if not already present from user message update
-            // This assumes backend `generateResponse` handles DB persistence of AI text
-            const aiMessageExists = prevConv.messages.some(m => m.sender === 'ai' && m.content === aiResponse);
-            if (!aiMessageExists) {
-                return {
-                    ...prevConv,
-                    _id: updatedConvId,
-                    messages: [
-                        ...prevConv.messages,
-                        { sender: 'ai', content: aiResponse, timestamp: new Date().toISOString() }
-                    ]
-                };
-            }
-            return {...prevConv, _id: updatedConvId };
-          });
-        },
-        onStatusUpdate: (status, message) => {
-          setProcessingStatus(`${status}: ${message}`);
-        },
-        onAudioComplete: (audioUrl, completedConvId, finalAiResponse) => {
-          setProcessingStatus('Audio ready!');
-          setIsProcessing(false);
-          setConversation(prevConv => {
-            if (!prevConv) return null;
-            // Find the AI message and update its audioUrl
-            // It's safer to update based on content and lack of audioUrl
-            const newMessages = prevConv.messages.map(msg => {
-              if (msg.sender === 'ai' && msg.content === finalAiResponse && !msg.audioUrl) {
-                return { ...msg, audioUrl: audioUrl };
-              }
-              return msg;
-            });
-            // If it wasn't found (e.g. state updated weirdly), try adding it if text matches
-            const aiMessageExists = newMessages.some(m => m.sender === 'ai' && m.content === finalAiResponse && m.audioUrl === audioUrl);
-            if (!aiMessageExists) {
-                // This is a fallback, ideally the message is already there from onTextResponse
-                 const lastUserMsg = newMessages.filter(m => m.sender ==='user').pop();
-                 if (lastUserMsg && lastUserMsg.content === text) { // Ensure it's in response to the last user utterance
-                     newMessages.push({ sender: 'ai', content: finalAiResponse, audioUrl: audioUrl, timestamp: new Date().toISOString() });
-                 }
-            }
-
-            return { ...prevConv, _id: completedConvId, messages: newMessages };
-          });
-          // Automatically play the AI's audio response
-          playOrPauseAudio(audioUrl); 
-        },
-        onError: (error) => {
-          setProcessingStatus(`Error: ${error.message}`);
-          setIsProcessing(false);
-          Alert.alert('Processing Error', error.message);
-          // Optionally implement fallbackToNonStreamingMethod here if desired
-        }
-      }
+    return (
+      <View
+        key={index}
+        style={[
+          styles.messageContainer,
+          isUser ? styles.userMessage : styles.aiMessage,
+        ]}
+      >
+        {!isUser && (
+          <Image
+            source={{ uri: conversation?.characterId.profileImage }}
+            style={styles.characterAvatar}
+          />
+        )}
+        <View
+          style={[
+            styles.messageBubble,
+            isUser ? styles.userBubble : styles.aiBubble,
+            message.isChunk && styles.chunkBubble,
+            message.isLoading && styles.loadingBubble,
+          ]}
+        >
+          {message.isLoading ? (
+            <View style={styles.messageLoadingContainer}>
+              <Text style={styles.loadingText}>{message.content}</Text>
+              <LoadingDots />
+            </View>
+          ) : (
+            <>
+              <Text
+                style={[
+                  styles.messageText,
+                  isUser ? styles.userText : styles.aiText,
+                ]}
+              >
+                {message.content}
+              </Text>
+              {message.audioData && (
+                <View style={styles.audioIndicator}>
+                  <Ionicons
+                    name="volume-medium"
+                    size={16}
+                    color={Colors.light.text}
+                  />
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      </View>
     );
   };
-  
-  const handleEndCall = async () => {
-    // Reset all states before ending call
-    await resetAllAudioAndSpeechStates(true);
-    try {
-      if (conversation){
-        await endConversation(conversation._id);
-      };
-      router.back();
-    } catch (err) {
-      console.error('Error ending call:', err);
-      router.back();
-    }
-  };
-  
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.light.primary} />
-        <Text style={styles.loadingText}>Setting up your call...</Text>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+          <Text style={styles.loadingText}>Loading conversation...</Text>
+        </View>
       </SafeAreaView>
     );
   }
-  
-  if (error || !conversation) {
+
+  if (error) {
     return (
-      <SafeAreaView style={styles.errorContainer}>
-        <Ionicons name="alert-circle-outline" size={48} color="red" />
-        <Text style={styles.errorText}>{error || 'Conversation not found'}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => loadConversation(routeConversationId)}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              setError(null);
+              initializeSession();
+            }}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
-  
-  return (
-    <>
-    <Stack.Screen options={{ headerShown: false }} />
-    <SafeAreaView style={styles.container}>
-      {/* Header with timer and controls */}
-      <View style={styles.headerControls}>
-        <TouchableOpacity style={styles.closeButton} onPress={() => handleEndCall()}>
-          <Ionicons name="close" size={24} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.timerText}>{remainingTime}</Text>
-      </View>
 
-      {/* Character Avatar */}
-      <View style={styles.avatarSection}>
-      <View style={styles.progressContainer}>
-          <View style={styles.progressItem}>
-            <View style={!isRecording ? [styles.progressDot, styles.activeDot] : styles.progressDot} />
-            <Text style={styles.progressLabel}>Lecture</Text>
-          </View>
-          <View style={styles.progressItem}>
-            <View style={isRecording ? [styles.progressDot, styles.activeDot] : styles.progressDot} />
-            <Text style={styles.progressLabelInactive}>Practice</Text>
-          </View>
-        </View>
-        <View 
-          // onPress={() => {
-          //   if (currentPlayingAudioUrl) {
-          //     playOrPauseAudio(currentPlayingAudioUrl); // Let playOrPauseAudio handle the toggle
-          //   } else {
-          //     console.warn(`[AIVideoCallScreen] Avatar pressed, but no currentPlayingAudioUrl is set. Cannot play/pause.`);
-          //     // Optionally, you could attempt to play a default intro audio here if desired and available
-          //     // For example: if (conversation?.characterId?.profileImage?.endsWith('.mp3')) { // Simple check
-          //     //   playOrPauseAudio(conversation.characterId.profileImage, true);
-          //     // }
-          //   }
-          // }}
-          style={styles.avatarContainer}
+  const HeaderTitleWithAvatar = () => (
+    <View style={styles.headerTitleContainer}>
+      <Image
+        source={{ uri: conversation?.characterId.profileImage }}
+        style={styles.headerAvatar}
+        onError={(error) =>
+          console.error("Header avatar loading error:", error.nativeEvent.error)
+        }
+        defaultSource={require("@/assets/images/default-avatar-1.jpg")}
+      />
+      <View>
+        <ThemedText style={styles.headerName}>
+          {(conversation?.characterId.name as string).length > 15 ? (conversation?.characterId.name as string).slice(0, 15) + "..." : (conversation?.characterId.name as string)}
+        </ThemedText>
+        <View
+          style={{ flexDirection: "row", alignItems: "center", width: 200 }}
         >
-          {conversation.characterId.profileImage ? (
-            <Image 
-              source={{ uri: conversation.characterId.profileImage }} 
-              style={styles.characterAvatar}
+          <View
+            style={[
+              styles.statusIndicator,
+              { backgroundColor: isConnected ? "#4CAF50" : "#F44336" },
+            ]}
+          />
+          <Text style={styles.statusText}>
+            {connectionStatus.length > 20
+              ? connectionStatus.substring(0, 20) + "..."
+              : connectionStatus}
+          </Text>
+          {isAIResponding && (
+            <ActivityIndicator
+              size="small"
+              color={Colors.light.primary}
+              style={styles.processingIndicator}
             />
-          ) : (
-            <View style={styles.characterAvatarPlaceholder}>
-              <Ionicons name="person" size={60} color={Colors.light.primary} />
-            </View>
           )}
-          {/* <View style={styles.playIconOverlay}>
-            <Ionicons 
-              name={isPlaying ? "pause" : "play"} // This reflects the global isPlaying state
-              size={30} 
-              color="white"
-            />
-          </View> */}
         </View>
-
-        
       </View>
+    </View>
+  );
 
-      {/* Lecture Section View */}
-      {/* <View style={styles.sectionCard}>
+  const renderControls = () => (
+    <View style={styles.controlsContainer}>
+      <TouchableOpacity
+        style={[
+          styles.recordButton,
+          isRecording && styles.recordingButton,
+          !isConnected && styles.disabledButton,
+        ]}
+        onPress={isRecording ? stopRecording : startRecording}
+        disabled={!isConnected}
+      >
+        <Ionicons name={isRecording ? "stop" : "mic"} size={24} color="white" />
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
+        <Ionicons name="call" size={24} color="white" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderMessages = () =>
+    conversation?.messages &&
+    conversation?.messages.length &&
+    conversation?.messages.length > 0 ? (
+      <View style={{ flex: 1 }}>
         <View style={styles.sectionHeader}>
           <Ionicons name="book-outline" size={24} color="white" />
           <Text style={styles.sectionTitle}>Lecture Section</Text>
         </View>
-      </View> */}
-
-      {/* Chat Messages */}
-      <ScrollView 
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-      >
-        {conversation.messages.map((message, index) => (
-          <View 
-            key={index}
-            style={[
-              styles.messageContainer,
-              message.sender === 'user' ? styles.userMessage : styles.aiMessage
-            ]}
-          >
-             <View style={styles.messageTextContainer}>
-                {message.sender === 'ai' ? (
-                  <View style={styles.aiMessageContent}>
-                    <Text style={styles.aiMessageText}>{message.content}</Text>
-                    <View style={styles.aiMessageControls}>
-                      {/* {message.audioUrl && (
-                        <TouchableOpacity 
-                          style={styles.audioPlayerButton}
-                          onPress={() => playOrPauseAudio(message.audioUrl!)}
-                        >
-                          <Ionicons 
-                            name={isPlaying && currentPlayingAudioUrl === message.audioUrl ? "pause-circle-outline" : "play-circle-outline"}
-                            size={28} 
-                            color={Colors.light.primary} 
-                          />
-                        </TouchableOpacity>
-                      )} */}
-                      <TouchableOpacity style={styles.translateButton}>
-                        <Ionicons name="language-outline" size={20} color={Colors.light.primary} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.userMessageContent}>
-                    <Text style={styles.userMessageText}>{message.content}</Text>
-                  </View>
-                )}
-              </View>
-          </View>
-        ))}
-        
-        {isProcessing && (
-          <View style={styles.processingContainer}>
-            <ActivityIndicator color={Colors.light.primary} size="small" />
-            <Text style={styles.processingText}>{processingStatus}</Text>
-          </View>
-        )}
-      </ScrollView>
-      
-      {/* Input Controls */}
-      <View style={styles.inputControls}>
-        
-        <TouchableOpacity
-          style={[
-            styles.recordButton,
-            isRecording ? styles.recordingButton : null
-          ]}
-          onPress={isRecording ? stopRecording : startRecording}
-          disabled={isProcessing}
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
         >
-          <Ionicons 
-            name={isRecording ? "stop" : "mic"} 
-            size={32} 
-            color="white" 
-          />
-        </TouchableOpacity>
-        
+          {conversation?.messages.map((message, index) =>
+            renderMessage(message, index)
+          )}
+        </ScrollView>
       </View>
+    ) : (
+      <View style={{ flex: 1 }}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="book-outline" size={24} color="white" />
+          <Text style={styles.sectionTitle}>Lecture Section</Text>
+        </View>
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <Text style={{ fontSize: 16, color: Colors.light.text }}>
+            No messages yet
+          </Text>
+        </View>
+      </View>
+    );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerTitle: () => <HeaderTitleWithAvatar />,
+          headerLeft: () => (
+            <TouchableOpacity onPress={handleEndCall} style={styles.backButton}>
+              <Ionicons name="close" size={24} color={Colors.light.text} />
+            </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() =>
+                setRenderMode(renderMode === "video" ? "chat" : "video")
+              }
+              style={styles.renderModeButton}
+            >
+              <Ionicons
+                name={renderMode === "video" ? "chatbox-ellipses" : "videocam"}
+                size={24}
+                color={Colors.light.text}
+              />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+
+      {renderMode === "video" ? (
+        <View style={{ flex: 1 }}>
+          <View style={{ height: 150, backgroundColor: "#155269" }}>
+            <View
+              style={{
+                position: "relative",
+                width: 100,
+                height: 100,
+                marginBottom: 5,
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+                alignSelf: "center",
+              }}
+            >
+              {conversation?.characterId.profileImage ? (
+                <Image
+                  source={{ uri: conversation?.characterId.profileImage }}
+                  style={{
+                    width: 100,
+                    height: 100,
+                    borderRadius: 75,
+                  }}
+                />
+              ) : (
+                <View style={styles.characterAvatarPlaceholder}>
+                  <Ionicons
+                    name="person"
+                    size={60}
+                    color={Colors.light.primary}
+                  />
+                </View>
+              )}
+            </View>
+          </View>
+          {renderMessages()}
+        </View>
+      ) : (
+        <View style={{ flex: 1 }}>{renderMessages()}</View>
+      )}
+
+      {renderControls()}
     </SafeAreaView>
-    </>
   );
 }
+
+// Add LoadingDots component
+const LoadingDots = () => {
+  const [dots, setDots] = useState("");
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots((prev) => {
+        if (prev.length >= 3) return "";
+        return prev + ".";
+      });
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return <Text style={styles.loadingDots}>{dots}</Text>;
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E3A8A', // Deep blue background
-  },
-  headerControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  timerText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  speedButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  speedText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  avatarSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: 5,
-  },
-  avatarContainer: {
-    position: 'relative',
-    width: 100,
-    height: 100,
-    marginBottom: 5,
-  },
-  characterAvatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 75,
-  },
-  characterAvatarPlaceholder: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playIconOverlay: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    borderRadius: 75,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressContainer: {
-    flexDirection: 'column',
-    marginTop: 10,
-  },
-  progressItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 10,
-  },
-  progressDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-    marginRight: 8,
-  },
-  activeDot: {
-    backgroundColor: 'white',
-  },
-  progressLabel: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  progressLabelInactive: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 16,
-  },
-  sectionCard: {
-    backgroundColor: Colors.light.secondary,
-    borderRadius: 20,
-    marginHorizontal: 16,
-    marginBottom: 10,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
-  messagesContainer: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  messagesContent: {
-    padding: 16,
-    paddingBottom: 80,
-  },
-  messageContainer: {
-    marginBottom: 16,
-    maxWidth: '80%',
-  },
-  aiMessage: {
-    alignSelf: 'flex-start',
-  },
-  userMessage: {
-    alignSelf: 'flex-end',
-  },
-  messageTextContainer: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  aiMessageContent: {
-    backgroundColor: '#F2F2F2',
-    padding: 12,
-    borderRadius: 16,
-    flexDirection: 'column', // Keep column for text and controls block
-  },
-  aiMessageControls: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  audioPlayerButton: {
-    marginRight: 10, // Space between play/pause and translate
-  },
-  userMessageContent: {
-    backgroundColor: Colors.light.primary,
-    padding: 12,
-    borderRadius: 16,
-  },
-  aiMessageText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  userMessageText: {
-    fontSize: 16,
-    color: 'white',
-  },
-  translateButton: {
-    // alignSelf: 'flex-end', // No longer needed if in aiMessageControls
-    // marginTop: 4, // No longer needed if in aiMessageControls
-  },
-  videoContainer: {
-    width: 280,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  video: {
-    width: '100%',
-    height: 200,
-  },
-  processingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginVertical: 12,
-    padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 12,
-  },
-  processingText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: Colors.light.secondary,
-  },
-  inputControls: {
-    position: 'absolute',
-    bottom: 10,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  typeButton: {
-    alignItems: 'center',
-  },
-  inspireButton: {
-    alignItems: 'center',
-  },
-  inputButtonText: {
-    color: Colors.light.primary,
-    marginTop: 4,
-  },
-  recordButton: {
-    backgroundColor: Colors.light.secondaryDark,
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  recordingButton: {
-    backgroundColor: '#F44336',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    height: 60,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  navButton: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: Colors.light.background,
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    justifyContent: "center",
+    alignItems: "center",
   },
   loadingText: {
-    marginTop: 10,
-    color: '#555',
+    marginTop: 16,
     fontSize: 16,
+    color: Colors.light.text,
   },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   errorText: {
-    marginTop: 10,
-    marginBottom: 20,
-    color: '#555',
     fontSize: 16,
-    textAlign: 'center',
+    color: "#F44336",
+    textAlign: "center",
+    marginBottom: 20,
   },
   retryButton: {
     backgroundColor: Colors.light.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 5,
+    borderRadius: 8,
   },
   retryButtonText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 16,
+  },
+  statusBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: Colors.light.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E0E0E0",
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    color: Colors.light.text,
+    flex: 1,
+  },
+  renderModeButton: {
+    padding: 8,
+    marginRight: 16,
+  },
+  processingIndicator: {
+    marginLeft: 8,
+  },
+  messagesContainer: {
+    flex: 1,
+    margin: 16,
+  },
+  messagesContent: {
+    paddingBottom: 20,
+  },
+  messageContainer: {
+    flexDirection: "row",
+    marginVertical: 4,
+  },
+  userMessage: {
+    justifyContent: "flex-end",
+  },
+  aiMessage: {
+    justifyContent: "flex-start",
+  },
+  characterAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 8,
+    marginTop: 4,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: Colors.light.secondaryDark,
+    borderRadius: 16,
+    margin: 16,
+  },
+  sectionTitle: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginLeft: 10,
+  },
+  characterAvatarPlaceholder: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  messageBubble: {
+    maxWidth: "80%",
+    padding: 12,
+    borderRadius: 16,
+  },
+  userBubble: {
+    backgroundColor: Colors.light.primary,
+    marginLeft: 40,
+  },
+  aiBubble: {
+    backgroundColor: Colors.light.surface,
+    marginRight: 40,
+  },
+  chunkBubble: {
+    marginVertical: 2,
+    padding: 8,
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  userText: {
+    color: "white",
+  },
+  aiText: {
+    color: Colors.light.text,
+  },
+  controlsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 10,
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: Colors.light.surface,
+  },
+  recordButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: Colors.light.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  recordingButton: {
+    backgroundColor: "#F44336",
+  },
+  disabledButton: {
+    backgroundColor: "#CCCCCC",
+  },
+  endCallButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#F44336",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingBubble: {
+    backgroundColor: Colors.light.surface,
+    opacity: 0.9,
+  },
+  messageLoadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  loadingDots: {
+    fontSize: 16,
+    color: Colors.light.primary,
+    width: 30,
+    marginLeft: 4,
+  },
+  audioIndicator: {
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  headerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 10,
+  },
+  headerName: {
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  onlineStatus: {
+    fontSize: 12,
+    color: "#4CD964", // Or your preferred online color
+  },
+  offlineStatus: {
+    fontSize: 12,
+    color: "#8E8E93", // Or your preferred offline color
   },
 });

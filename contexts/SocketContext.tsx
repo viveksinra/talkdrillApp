@@ -21,6 +21,12 @@ export interface SocketContextType {
   off: (event: string, callback: Function) => void;
   onCallEvent: (event: string, callback: Function) => void;
   emit: (event: string, data: any) => void;
+  startRealtimeSession: (userId: string, characterId: string, conversationId?: string, filters?: any) => void;
+  sendRealtimeText: (text: string) => void;
+  sendRealtimeTextChunked: (text: string, isInterim: boolean) => void;
+  sendRealtimeAudio: (audioData: string) => void;
+  commitRealtimeAudio: () => void;
+  endRealtimeSession: () => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -57,8 +63,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       
       socketRef.current?.on('connect_error', (error: any) => {
-        console.error('Socket connection error:', error);
-        console.log('Socket connection error:', error);
+        console.error('SocketContext.tsx Socket connection error:', error);
+        console.log('SocketContext.tsx Socket connection error:', error);
       });
       
       socketRef.current?.on('disconnect', (reason: any) => {
@@ -238,6 +244,30 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     socketService.emit(event, data);
   };
   
+  const startRealtimeSession = (userId: string, characterId: string, conversationId?: string, filters?: any) => {
+    socketService.startRealtimeSession(userId, characterId, conversationId, filters);
+  };
+
+  const sendRealtimeText = (text: string) => {
+    socketService.sendRealtimeText(text);
+  };
+
+  const sendRealtimeTextChunked = (text: string, isInterim: boolean) => {
+    socketService.sendRealtimeTextChunked(text, isInterim);
+  };
+
+  const sendRealtimeAudio = (audioData: string) => {
+    socketService.sendRealtimeAudio(audioData);
+  };
+
+  const commitRealtimeAudio = () => {
+    socketService.commitRealtimeAudio();
+  };
+
+  const endRealtimeSession = () => {
+    socketService.endRealtimeSession();
+  };
+
   return (
     <SocketContext.Provider value={{
       isConnected,
@@ -253,7 +283,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       on: socketService.on.bind(socketService),
       off: socketService.off.bind(socketService),
       onCallEvent,
-      emit
+      emit,
+      startRealtimeSession,
+      sendRealtimeText,
+      sendRealtimeTextChunked,
+      sendRealtimeAudio,
+      commitRealtimeAudio,
+      endRealtimeSession,
     }}>
       {children}
     </SocketContext.Provider>
