@@ -75,6 +75,8 @@ export default function AIVideoCallScreen() {
   const [connectionStatus, setConnectionStatus] =
     useState<string>("Initializing...");
   const [isAIResponding, setIsAIResponding] = useState(false);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const [isGeneratingText, setIsGeneratingText] = useState(false);
 
   // Refs
   const scrollViewRef = useRef<ScrollView>(null);
@@ -91,11 +93,13 @@ export default function AIVideoCallScreen() {
   useSpeechRecognitionEvent("start", () => {
     console.log("[SPEECH] Speech recognition started");
     hasSentFinalTranscriptRef.current = false; // Reset flag
+    setIsProcessingVoice(true);
   });
 
   useSpeechRecognitionEvent("end", () => {
     console.log("[SPEECH] Speech recognition ended");
     setIsRecording(false);
+    setIsProcessingVoice(false);
 
     // Clear silence timer
     if (silenceTimeoutRef.current) {
@@ -352,6 +356,10 @@ export default function AIVideoCallScreen() {
     conversationId: string;
   }) => {
     console.log("Text complete:", data.text);
+    
+    // Stop text generation loading
+    setIsGeneratingText(false);
+    
     // Text complete doesn't need to do anything since we're showing chunks
     // Add each chunk as a separate message
     setConversation((prev) => {
@@ -565,6 +573,9 @@ export default function AIVideoCallScreen() {
       };
     });
 
+    // Start text generation loading
+    setIsGeneratingText(true);
+
     // Send to server
     sendRealtimeText(transcript);
     transcriptRef.current = "";
@@ -699,17 +710,34 @@ export default function AIVideoCallScreen() {
 
   const renderControls = () => (
     <View style={styles.controlsContainer}>
-      <TouchableOpacity
-        style={[
-          styles.recordButton,
-          isRecording && styles.recordingButton,
-          !isConnected && styles.disabledButton,
-        ]}
-        onPress={isRecording ? stopRecording : startRecording}
-        disabled={!isConnected}
-      >
-        <Ionicons name={isRecording ? "stop" : "mic"} size={24} color="white" />
-      </TouchableOpacity>
+      <View style={styles.recordButtonContainer}>
+        <TouchableOpacity
+          style={[
+            styles.recordButton,
+            isRecording && styles.recordingButton,
+            !isConnected && styles.disabledButton,
+          ]}
+          onPress={isRecording ? stopRecording : startRecording}
+          disabled={!isConnected}
+        >
+          <Ionicons name={isRecording ? "stop" : "mic"} size={24} color="white" />
+        </TouchableOpacity>
+        
+        {/* Circular loading indicator for voice recording */}
+        {isProcessingVoice && (
+          <View style={styles.circularLoader}>
+            <ActivityIndicator size="large" color={Colors.light.primary} />
+          </View>
+        )}
+        
+        {/* Status text */}
+        {isProcessingVoice && (
+          <Text style={styles.recordingStatusText}>Processing voice...</Text>
+        )}
+        {isGeneratingText && (
+          <Text style={styles.recordingStatusText}>Generating response...</Text>
+        )}
+      </View>
 
       <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
         <Ionicons name="call" size={24} color="white" />
@@ -995,6 +1023,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     backgroundColor: Colors.light.surface,
   },
+  recordButtonContainer: {
+    alignItems: "center",
+    position: "relative",
+  },
   recordButton: {
     width: 50,
     height: 50,
@@ -1002,6 +1034,23 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary,
     justifyContent: "center",
     alignItems: "center",
+  },
+  circularLoader: {
+    position: "absolute",
+    top: -10,
+    left: -10,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+  },
+  recordingStatusText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: Colors.light.primary,
+    textAlign: "center",
   },
   recordingButton: {
     backgroundColor: "#F44336",
