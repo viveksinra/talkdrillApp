@@ -8,6 +8,7 @@ import {
   Alert,
   ScrollView,
   Image,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
@@ -36,6 +37,7 @@ interface Message {
   isLoading?: boolean;
   hidden?: boolean;
   audioData?: boolean;
+  loadingType?: "voice_processing" | "text_generating";
 }
 
 interface AICharacter {
@@ -52,6 +54,47 @@ interface Conversation {
   messages: Message[];
   callType: "video";
 }
+
+// Add CircularProgress component
+const CircularProgress = ({ size = 32, color = Colors.light.primary }) => {
+  const spinValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [spinValue]);
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <View style={[styles.circularProgressContainer, { width: size, height: size }]}>
+      <Animated.View
+        style={[
+          styles.circularProgressBorder,
+          { 
+            width: size, 
+            height: size, 
+            borderColor: color,
+            transform: [{ rotate: spin }] 
+          }
+        ]}
+      />
+      <View style={[styles.circularProgressCenter, { 
+        width: size - 4, 
+        height: size - 4,
+        backgroundColor: 'white'
+      }]} />
+    </View>
+  );
+};
 
 export default function AIVideoCallScreen() {
   const { id: routeConversationId, gender, accent, languageProficiency } = 
@@ -88,6 +131,9 @@ export default function AIVideoCallScreen() {
   const currentLoadingMessageIdRef = useRef<string | null>(null);
 
   const [renderMode, setRenderMode] = useState<"video" | "chat">("video");
+
+  // Add loading message state
+  const [userLoadingMessageId, setUserLoadingMessageId] = useState<string | null>(null);
 
   // Speech recognition event handlers using hooks
   useSpeechRecognitionEvent("start", () => {
@@ -328,24 +374,40 @@ export default function AIVideoCallScreen() {
     console.log("Text delta:", data.delta);
     setIsAIResponding(true);
 
-    // Add each chunk as a separate message
     setConversation((prev) => {
       if (!prev) return null;
 
-      const lastMessage = prev.messages[prev.messages.length - 1];
-      if (lastMessage && lastMessage.sender === "ai") {
-        lastMessage.content += data.delta;
-      } else {
-        prev.messages.push({
+      const messages = [...prev.messages];
+      const lastMessageIndex = messages.length - 1;
+      
+      // If the last message is AI loading, replace it with the delta
+      if (lastMessageIndex >= 0 && 
+          messages[lastMessageIndex].sender === "ai" && 
+          messages[lastMessageIndex].isLoading) {
+        messages[lastMessageIndex] = {
           sender: "ai",
           content: data.delta,
           timestamp: new Date().toISOString(),
           isChunk: true,
-        });
+        };
+      } else {
+        // Find the last AI message and append delta
+        const lastAIMessage = messages[lastMessageIndex];
+        if (lastAIMessage && lastAIMessage.sender === "ai") {
+          lastAIMessage.content += data.delta;
+        } else {
+          messages.push({
+            sender: "ai",
+            content: data.delta,
+            timestamp: new Date().toISOString(),
+            isChunk: true,
+          });
+        }
       }
 
       return {
         ...prev,
+        messages,
       };
     });
   };
@@ -552,11 +614,14 @@ export default function AIVideoCallScreen() {
     }
   };
 
-  // Helper function to send transcript to server
+  // Update sendTranscriptToServer function
   const sendTranscriptToServer = (transcript: string) => {
     if (!transcript.trim()) return;
 
-    // Add user message to UI
+    // Generate unique ID for this message
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // First, add a loading message for voice processing
     setConversation((prev) => {
       if (!prev) return null;
 
@@ -566,19 +631,67 @@ export default function AIVideoCallScreen() {
           ...prev.messages,
           {
             sender: "user",
-            content: transcript,
+            content: "",
             timestamp: new Date().toISOString(),
+            isLoading: true,
+            loadingType: "voice_processing",
           },
         ],
       };
     });
 
-    // Start text generation loading
-    setIsGeneratingText(true);
+    setUserLoadingMessageId(messageId);
 
-    // Send to server
-    sendRealtimeText(transcript);
-    transcriptRef.current = "";
+    // After a short delay, replace with actual transcript
+    setTimeout(() => {
+      setConversation((prev) => {
+        if (!prev) return null;
+
+        const messages = [...prev.messages];
+        const lastMessageIndex = messages.length - 1;
+        
+        if (lastMessageIndex >= 0 && messages[lastMessageIndex].isLoading) {
+          messages[lastMessageIndex] = {
+            sender: "user",
+            content: transcript,
+            timestamp: new Date().toISOString(),
+            isLoading: false,
+          };
+        }
+
+        return {
+          ...prev,
+          messages,
+        };
+      });
+
+      setUserLoadingMessageId(null);
+      // Start text generation loading for AI
+      setIsGeneratingText(true);
+      
+      // Add AI loading message
+      setConversation((prev) => {
+        if (!prev) return null;
+
+        return {
+          ...prev,
+          messages: [
+            ...prev.messages,
+            {
+              sender: "ai",
+              content: "",
+              timestamp: new Date().toISOString(),
+              isLoading: true,
+              loadingType: "text_generating",
+            },
+          ],
+        };
+      });
+
+      // Send to server
+      sendRealtimeText(transcript);
+      transcriptRef.current = "";
+    }, 1000); // Show loading for 1 second
   };
 
   // Render methods
@@ -609,8 +722,16 @@ export default function AIVideoCallScreen() {
         >
           {message.isLoading ? (
             <View style={styles.messageLoadingContainer}>
-              <Text style={styles.loadingText}>{message.content}</Text>
-              <LoadingDots />
+              <CircularProgress size={24} color={isUser ? "white" : Colors.light.primary} />
+              <Text style={[
+                styles.loadingMessageText,
+                { color: isUser ? "white" : Colors.light.text }
+              ]}>
+                {message.loadingType === "voice_processing" 
+                  ? "Processing voice..." 
+                  : "Generating response..."
+                }
+              </Text>
             </View>
           ) : (
             <>
@@ -1073,6 +1194,7 @@ const styles = StyleSheet.create({
   messageLoadingContainer: {
     flexDirection: "row",
     alignItems: "center",
+    paddingVertical: 4,
   },
   loadingDots: {
     fontSize: 16,
@@ -1108,5 +1230,27 @@ const styles = StyleSheet.create({
   offlineStatus: {
     fontSize: 12,
     color: "#8E8E93", // Or your preferred offline color
+  },
+  circularProgressContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circularProgressBorder: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderRadius: 999,
+    borderRightColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderTopColor: Colors.light.primary,
+    borderLeftColor: Colors.light.primary,
+  },
+  circularProgressCenter: {
+    borderRadius: 999,
+  },
+  loadingMessageText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontStyle: 'italic',
   },
 });

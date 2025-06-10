@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, ActivityIndicator, Image, TouchableOpacity, Alert, Platform } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, Image, TouchableOpacity, Alert, Platform, Animated } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
@@ -30,6 +30,44 @@ interface MatchInfo {
   connectingIn?: number;
   [key: string]: any; // Allow additional properties
 }
+
+// Add CircularProgress component for match-making
+const CircularProgress = ({ size = 200 }) => {
+  const spinValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [spinValue]);
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <View style={[styles.circularProgressContainer, { width: size, height: size }]}>
+      <Animated.View
+        style={[
+          styles.circularProgressBorder,
+          { 
+            width: size, 
+            height: size, 
+            transform: [{ rotate: spin }] 
+          }
+        ]}
+      />
+      <View style={styles.searchIcon}>
+        <Ionicons name="search" size={40} color={Colors.light.primary} />
+      </View>
+    </View>
+  );
+};
 
 export default function MatchMakingScreen() {
   const router = useRouter();
@@ -541,7 +579,7 @@ export default function MatchMakingScreen() {
       case MatchingStatus.INITIALIZING:
         return (
           <View style={styles.centerContent}>
-            <ActivityIndicator size="large" color={Colors.light.primary} />
+            <CircularProgress size={150} />
             <ThemedText style={styles.statusText}>Initializing search...</ThemedText>
           </View>
         );
@@ -549,23 +587,44 @@ export default function MatchMakingScreen() {
       case MatchingStatus.SEARCHING:
         return (
           <View style={styles.centerContent}>
-            <View style={styles.searchingAnimation}>
-              <View style={styles.loaderContainer}>
-                <ActivityIndicator 
-                  size="large" 
-                  color={Colors.light.primary} 
-                  style={styles.searchingIndicator} 
-                />
-              </View>
-              <View style={styles.iconContainer}>
-                <Ionicons name="people" size={40} color={Colors.light.primary} />
-              </View>
+            <View style={styles.heroSection}>
+              <ThemedText style={styles.heroTitle}>Finding a practice partner...</ThemedText>
+              <ThemedText style={styles.heroSubtitle}>
+                We're connecting you with someone who matches your language level. This may take a moment.
+              </ThemedText>
             </View>
-            <ThemedText style={styles.statusText}>Searching for a partner...</ThemedText>
-            <ThemedText style={styles.timerText}>{formatTime(searchTime)}</ThemedText>
-            <View style={styles.filterInfo}>
-              <ThemedText style={styles.filterText}>Searching for: {partnerGender} partner</ThemedText>
-              <ThemedText style={styles.filterText}>Proficiency: {languageProficiency}</ThemedText>
+
+            <CircularProgress size={200} />
+            
+            <View style={styles.timerSection}>
+              <ThemedText style={styles.timerText}>{formatTime(searchTime)}</ThemedText>
+            </View>
+
+            <View style={styles.tipsSection}>
+              <ThemedText style={styles.tipsTitle}>While you wait:</ThemedText>
+              
+              <View style={styles.tipsList}>
+                <View style={styles.tipItem}>
+                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                  <ThemedText style={styles.tipText}>
+                    Prepare a brief introduction about yourself
+                  </ThemedText>
+                </View>
+                
+                <View style={styles.tipItem}>
+                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                  <ThemedText style={styles.tipText}>
+                    Think of 2-3 questions to ask your partner
+                  </ThemedText>
+                </View>
+                
+                <View style={styles.tipItem}>
+                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                  <ThemedText style={styles.tipText}>
+                    Remember to speak clearly and at a moderate pace
+                  </ThemedText>
+                </View>
+              </View>
             </View>
           </View>
         );
@@ -573,44 +632,51 @@ export default function MatchMakingScreen() {
       case MatchingStatus.FOUND:
         return (
           <View style={styles.centerContent}>
-            <View style={styles.matchFoundAnimation}>
-              <Ionicons name="checkmark-circle" size={60} color="green" />
-            </View>
-            <ThemedText style={styles.successText}>Match Found!</ThemedText>
-            <ThemedText style={styles.matchInfoText}>
-              Connecting with {matchInfo?.partnerName || 'partner'}...
-            </ThemedText>
-            {matchInfo?.connectingIn !== undefined && (
-              <ThemedText style={styles.autoConnectText}>
-                Call starting in {matchInfo.connectingIn} seconds
+            <View style={styles.matchFoundSection}>
+              <Ionicons name="checkmark-circle" size={80} color="#4CAF50" />
+              <ThemedText style={styles.successTitle}>Match Found!</ThemedText>
+              <ThemedText style={styles.successSubtitle}>
+                Connecting with {matchInfo?.partnerName || 'partner'}...
               </ThemedText>
-            )}
+              
+              {matchInfo?.connectingIn !== undefined && (
+                <View style={styles.countdownSection}>
+                  <ThemedText style={styles.countdownText}>
+                    Call starting in {matchInfo.connectingIn} seconds
+                  </ThemedText>
+                </View>
+              )}
+            </View>
           </View>
         );
         
       case MatchingStatus.TIMED_OUT:
         return (
           <View style={styles.centerContent}>
-            <Ionicons name="time-outline" size={60} color="#F57C00" />
-            <ThemedText style={styles.timeoutText}>Search Timed Out</ThemedText>
-            <ThemedText style={styles.timeoutInfoText}>
-              We couldn't find a matching partner. Please try again with different filters.
-            </ThemedText>
-            <TouchableOpacity style={styles.tryAgainButton} onPress={handleTryAgain}>
-              <ThemedText style={styles.tryAgainText}>Try Again</ThemedText>
-            </TouchableOpacity>
+            <View style={styles.errorSection}>
+              <Ionicons name="time-outline" size={80} color="#FF9800" />
+              <ThemedText style={styles.errorTitle}>Search Timed Out</ThemedText>
+              <ThemedText style={styles.errorSubtitle}>
+                We couldn't find a matching partner. Please try again with different filters.
+              </ThemedText>
+              <TouchableOpacity style={styles.retryButton} onPress={handleTryAgain}>
+                <ThemedText style={styles.retryButtonText}>Try Again</ThemedText>
+              </TouchableOpacity>
+            </View>
           </View>
         );
         
       case MatchingStatus.ERROR:
         return (
           <View style={styles.centerContent}>
-            <Ionicons name="alert-circle" size={60} color="red" />
-            <ThemedText style={styles.errorText}>Error</ThemedText>
-            <ThemedText style={styles.errorInfoText}>{errorMessage}</ThemedText>
-            <TouchableOpacity style={styles.tryAgainButton} onPress={handleTryAgain}>
-              <ThemedText style={styles.tryAgainText}>Try Again</ThemedText>
-            </TouchableOpacity>
+            <View style={styles.errorSection}>
+              <Ionicons name="alert-circle" size={80} color="#F44336" />
+              <ThemedText style={styles.errorTitle}>Connection Error</ThemedText>
+              <ThemedText style={styles.errorSubtitle}>{errorMessage}</ThemedText>
+              <TouchableOpacity style={styles.retryButton} onPress={handleTryAgain}>
+                <ThemedText style={styles.retryButtonText}>Try Again</ThemedText>
+              </TouchableOpacity>
+            </View>
           </View>
         );
     }
@@ -621,13 +687,13 @@ export default function MatchMakingScreen() {
       <Stack.Screen 
         options={{
           headerShown: true,
-          title: "Finding Partner",
+          title: "Peer Practice",
           headerLeft: () => (
             <TouchableOpacity 
               onPress={handleCancel} 
               style={styles.headerLeftButton}
             >
-              <Ionicons name="close" size={28} color="#000" />
+              <Ionicons name="arrow-back" size={28} color="#000" />
             </TouchableOpacity>
           ),
           headerTitleAlign: 'center',
@@ -637,9 +703,11 @@ export default function MatchMakingScreen() {
         {renderContent()}
         
         {status === MatchingStatus.SEARCHING && (
-          <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-            <ThemedText style={styles.cancelText}>Cancel Search</ThemedText>
-          </TouchableOpacity>
+          <View style={styles.bottomSection}>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+              <ThemedText style={styles.cancelButtonText}>Cancel Search</ThemedText>
+            </TouchableOpacity>
+          </View>
         )}
       </ThemedView>
     </>
@@ -649,142 +717,174 @@ export default function MatchMakingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'center',
+    backgroundColor: '#4A1D96', // Purple gradient background start
   },
   centerContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 20,
-    textAlign: 'center',
-  },
-  timerText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginTop: 20,
-    marginBottom: 20,
-    color: Colors.light.primary,
-    width: '100%',
-    textAlign: 'center',
+    flex: 1,
     paddingHorizontal: 20,
-    lineHeight: 40,
+    justifyContent: 'center',
   },
-  searchingAnimation: {
+  heroSection: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  heroSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  circularProgressContainer: {
+    alignSelf: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
     position: 'relative',
-    width: 200,
-    height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
+    marginVertical: 20,
   },
-  loaderContainer: {
+  circularProgressBorder: {
+    borderWidth: 3,
+    borderRadius: 999,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderTopColor: 'white',
     position: 'absolute',
-    width: 200,
-    height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-    top: 0,
-    left: 0,
   },
-  iconContainer: {
+  searchIcon: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 2,
   },
-  searchingIndicator: {
-    width: 200,
-    height: 200,
+  timerSection: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  timerText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  tipsSection: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 20,
+  },
+  tipsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'white',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  tipsList: {
+    gap: 12,
+  },
+  tipItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 20,
+  },
+  matchFoundSection: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    padding: 30,
+  },
+  successTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  successSubtitle: {
+    fontSize: 16,
+    color: 'white',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  countdownSection: {
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  countdownText: {
+    fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  errorSection: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    padding: 30,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF5722',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 16,
+    color: 'white',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  retryButton: {
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+    textAlign: 'center',
   },
   headerLeftButton: {
     paddingHorizontal: 16,
     marginLeft: 4,
   },
-  filterInfo: {
-    marginTop: 20,
-    backgroundColor: '#F0F4FF',
-    padding: 16,
-    borderRadius: 12,
-    width: '100%',
-  },
-  filterText: {
-    fontSize: 16,
-    marginBottom: 8,
+  bottomSection: {
+    alignItems: 'center',
+    padding: 20,
   },
   cancelButton: {
     backgroundColor: '#E0E0E0',
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 8,
-    marginTop: 40,
   },
-  cancelText: {
+  cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
   },
-  matchFoundAnimation: {
-    marginBottom: 20,
-  },
-  successText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'green',
-    marginBottom: 16,
-  },
-  matchInfoText: {
+  statusText: {
     fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  autoConnectText: {
-    fontSize: 14,
-    color: Colors.light.secondary,
-    textAlign: 'center',
-  },
-  timeoutText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#F57C00',
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  timeoutInfoText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 32,
-    color: Colors.light.secondary,
-  },
-  errorText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'red',
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  errorInfoText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 32,
-    color: Colors.light.secondary,
-  },
-  tryAgainButton: {
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-  },
-  tryAgainText: {
-    fontSize: 16,
     fontWeight: '600',
     color: 'white',
     textAlign: 'center',
+    marginTop: 20,
   },
 });
