@@ -691,12 +691,29 @@ export default function AIVideoCallScreen() {
       // Send to server
       sendRealtimeText(transcript);
       transcriptRef.current = "";
-    }, 1000); // Show loading for 1 second
+    }, 800); // Show loading for 0.8 seconds
   };
 
   // Render methods
   const renderMessage = (message: Message, index: number) => {
     const isUser = message.sender === "user";
+
+    // For user voice processing, show circular progress instead of message bubble
+    if (message.isLoading && message.loadingType === "voice_processing" && isUser) {
+      return (
+        <View
+          key={index}
+          style={[
+            styles.messageContainer,
+            styles.userMessage,
+          ]}
+        >
+          <View style={styles.userLoadingContainer}>
+            <CircularProgress size={40} color={Colors.light.primary} />
+          </View>
+        </View>
+      );
+    }
 
     return (
       <View
@@ -720,17 +737,25 @@ export default function AIVideoCallScreen() {
             message.isLoading && styles.loadingBubble,
           ]}
         >
-          {message.isLoading ? (
+          {message.isLoading && message.loadingType === "text_generating" ? (
+            // AI text generation - show dots animation
+            <View style={styles.messageLoadingContainer}>
+              <LoadingDots />
+            </View>
+          ) : message.isLoading && message.loadingType === "voice_processing" ? (
+            // Voice processing - show dots animation
+            <View style={styles.messageLoadingContainer}>
+              <LoadingDots />
+            </View>
+          ) : message.isLoading ? (
+            // Other loading states
             <View style={styles.messageLoadingContainer}>
               <CircularProgress size={24} color={isUser ? "white" : Colors.light.primary} />
               <Text style={[
                 styles.loadingMessageText,
                 { color: isUser ? "white" : Colors.light.text }
               ]}>
-                {message.loadingType === "voice_processing" 
-                  ? "Processing voice..." 
-                  : "Generating response..."
-                }
+                Generating response...
               </Text>
             </View>
           ) : (
@@ -851,9 +876,11 @@ export default function AIVideoCallScreen() {
           </View>
         )}
         
-        {/* Status text */}
+        {/* Status text with dots animation for voice processing */}
         {isProcessingVoice && (
-          <Text style={styles.recordingStatusText}>Processing voice...</Text>
+          <View style={styles.processingVoiceContainer}>
+            <LoadingDots />
+          </View>
         )}
         {isGeneratingText && (
           <Text style={styles.recordingStatusText}>Generating response...</Text>
@@ -1252,5 +1279,15 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     fontStyle: 'italic',
+  },
+  userLoadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 40,
+    paddingVertical: 8,
+  },
+  processingVoiceContainer: {
+    marginTop: 8,
+    alignItems: 'center',
   },
 });
