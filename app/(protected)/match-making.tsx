@@ -636,16 +636,16 @@ export default function MatchMakingScreen() {
               <Ionicons name="checkmark-circle" size={80} color="#4CAF50" />
               <ThemedText style={styles.successTitle}>Match Found!</ThemedText>
               <ThemedText style={styles.successSubtitle}>
-                Connecting with {matchInfo?.partnerName || 'partner'}...
+                Connecting with {matchInfo?.partnerName || 'partner'}.
               </ThemedText>
               
-              {matchInfo?.connectingIn !== undefined && (
+              {/* {matchInfo?.connectingIn !== undefined && (
                 <View style={styles.countdownSection}>
                   <ThemedText style={styles.countdownText}>
                     Call starting in {matchInfo.connectingIn} seconds
                   </ThemedText>
                 </View>
-              )}
+              )} */}
             </View>
           </View>
         );

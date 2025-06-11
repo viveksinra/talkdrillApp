@@ -365,8 +365,9 @@ export default function AIVideoCallScreen() {
 
   function triggerAIForConversation(){
     sendRealtimeText(`Hello, first please introduce yourself and behave like a human being. 
-      Please act like a teacher who will initiate the conversation and keep is going by asking questions and
-      keep the conversation going for 10 minutes at least. and if user is proactive enough then you can just help them talking and practicing.
+      This is a conversation triggered by a user. so As AI please act like AI is starting the conversation mention user name(${user?.name}) 
+      while greeting/initiate the conversation
+      keep the conversation going by asking questions and if user is proactive enough then you can just help them talking and practicing.
       `);
   }
 
