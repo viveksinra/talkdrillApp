@@ -1,4 +1,4 @@
-import { StyleSheet, TouchableOpacity, View, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 
@@ -108,29 +108,85 @@ export default function OTPVerificationScreen() {
   
   /**
    * Handles changes to the OTP (One-Time Password) input fields.
+   * Enhanced to handle full OTP string from SMS autofill and manual paste.
    * 
-   * @param {string} text - The input text for the current OTP digit.
+   * @param {string} text - The input text for the current OTP digit or full OTP string.
    * @param {number} index - The index of the current OTP input field.
    * 
-   * Updates the OTP state, limits input to a single character,
-   * and automatically focuses the next input field when a digit is entered.
+   * Updates the OTP state, handles both single digit input and full OTP string from paste,
+   * and automatically focuses the appropriate input field.
    */
   const handleOtpChange = (text: string, index: number) => {
+    // Handle paste operation - when full OTP is pasted into any field
+    if (text.length > 1) {
+      // Extract only digits from the pasted text
+      const digits = text.replace(/\D/g, '');
+      
+      if (digits.length >= 4) {
+        // Fill all 4 OTP fields with the digits
+        const newOtp = [
+          digits[0] || '',
+          digits[1] || '',
+          digits[2] || '',
+          digits[3] || ''
+        ];
+        setOtp(newOtp);
+        
+        // Focus the last input field after paste
+        setTimeout(() => {
+          (inputRefs[3].current as any)?.focus();
+        }, 100);
+        
+        // Auto-verify if we have a complete 4-digit OTP
+        setTimeout(() => {
+          if (digits.length === 4) {
+            handleVerifyOtp();
+          }
+        }, 500);
+        return;
+      } else if (digits.length > 0) {
+        // If less than 4 digits, just take the first digit
+        text = digits[0];
+      } else {
+        // No digits found, clear the field
+        text = '';
+      }
+    }
+    
+    // Ensure only single digit for manual typing
     if (text.length > 1) {
       text = text.charAt(0);
+    }
+    
+    // Only allow digits
+    if (text && !/^\d$/.test(text)) {
+      return; // Don't update if not a digit
     }
     
     const newOtp = [...otp];
     newOtp[index] = text;
     setOtp(newOtp);
     
-    // Auto focus next input
+    // Auto focus next input when typing manually
     if (text !== '' && index < 3) {
-      (inputRefs[index + 1].current as any).focus();
+      setTimeout(() => {
+        (inputRefs[index + 1].current as any)?.focus();
+      }, 50);
     }
   };
   
-
+  /**
+   * Handles backspace and deletion in OTP fields
+   */
+  const handleKeyPress = (key: string, index: number) => {
+    if (key === 'Backspace' && otp[index] === '' && index > 0) {
+      // Move focus to previous field when backspace is pressed on empty field
+      setTimeout(() => {
+        (inputRefs[index - 1].current as any)?.focus();
+      }, 50);
+    }
+  };
+  
   /**
    * Handles the resending of the One-Time Password (OTP).
    * 
@@ -214,12 +270,17 @@ export default function OTPVerificationScreen() {
             ref={inputRefs[index]}
             style={[
               styles.otpInput,
-              digit !== '' && otp[0] !== '' && styles.activeInput
+              digit !== '' && styles.activeInput
             ]}
             value={digit}
             onChangeText={(text) => handleOtpChange(text, index)}
+            onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
             keyboardType="number-pad"
-            maxLength={1}
+            autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+            textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
+            autoFocus={index === 0}
+            selectTextOnFocus
+            blurOnSubmit={false}
           />
         ))}
       </View>

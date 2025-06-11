@@ -333,14 +333,7 @@ export default function HomeScreen() {
 
               <TouchableOpacity
                 style={[styles.actionButton, styles.peerActionButton]}
-                onPress={() => {
-                  setIsFindAIAssistant(false);
-                  setFilterDialogVisible(true);
-                  setFilterDialogHeaderTitle("Find Peer");
-                  setFilterDialogHeaderSubtitle(
-                    "Customize your conversation peer"
-                  );
-                }}
+                onPress={() => router.push("/peer-practice")}
               >
                 <ThemedText style={styles.actionButtonText}>
                   Find Partner
