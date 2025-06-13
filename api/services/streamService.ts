@@ -247,19 +247,20 @@ class StreamService {
   /**
    * Call another user (handles entire flow)
    */
-  async callUser(receiverId: string, receiverName?: string) {
+  async callUser(receiverId: string, receiverName?: string, durationInMinutes: number = 30) {
     try {
       // Ensure we're initialized first
       if (!this.client || !this.currentUser) {
         throw new Error('Stream client not initialized');
       }
       
-      // Create call on backend
-      const response = await post('/api/v1/call/user', {
-        receiverId
+      // Always create call with duration (default 30 minutes if not specified)
+      const response = await post('/api/v1/call/user-with-duration', {
+        receiverId,
+        durationInMinutes
       });
       
-      const { streamCallId, callId } = response.data;
+      const { streamCallId, callId, durationInMinutes: responseDuration } = response.data.myData;
       
       // Join the call
       this.currentCall = this.client.call('default', streamCallId);
@@ -276,13 +277,15 @@ class StreamService {
         callerName: this.currentUser.name,
         callerImage: this.currentUser.image,
         receiverId,
-        receiverName
+        receiverName,
+        durationInMinutes: responseDuration
       });
       
       return {
         callId,
         streamCallId,
-        call: this.currentCall
+        call: this.currentCall,
+        durationInMinutes: responseDuration
       };
     } catch (error) {
       console.error('Error starting call:', error);
@@ -391,6 +394,25 @@ class StreamService {
     }
     
     this.currentUser = null;
+  }
+
+  /**
+   * Get a call duration manager for the current call
+   */
+  createDurationManager(callId: string, callbacks?: {
+    onTimerUpdate?: (remainingSeconds: number) => void;
+    onWarningReceived?: (event: any) => void;
+    onCallExtended?: (event: any) => void;
+    onCallEnded?: () => void;
+  }) {
+    if (!this.currentCall) {
+      throw new Error('No active call to manage duration for');
+    }
+    
+    // Import here to avoid circular dependencies
+    const { CallDurationManager } = require('../../utils/callDurationManager');
+    
+    return new CallDurationManager(this.currentCall, callId, callbacks);
   }
 }
 

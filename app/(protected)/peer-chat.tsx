@@ -157,24 +157,31 @@ export default function PeerChatScreen() {
 
   const handleCallRequest = async () => {
     try {
-      // Get Stream token
-      const { token, apiKey } = await streamService.getToken();
-
       // Initialize Stream client
-      //@ts-ignore
-      await streamService.initialize(user?.id || '', token, apiKey);
+      await streamService.ensureInitialized(
+        user?.id || '',
+        user?.name,
+        user?.profileImage
+      );
 
-      // Start call with peer
-      //@ts-ignore
-      const { callId, streamCallId } = await streamService.startCall(peerId as string);
+      // Start call with default 30 minutes duration
+      const DEFAULT_DURATION = 30; // minutes
+      const { callId, streamCallId, durationInMinutes } = await streamService.callUser(
+        peerId as string,
+        peerName as string,
+        DEFAULT_DURATION
+      );
 
-      // Navigate to call screen
+      // Navigate to call screen with duration parameter
       router.push({
         pathname: '/peer-call',
         params: {
           peerId: peerId,
+          peerName: peerName,
           callId: callId,
-          streamCallId: streamCallId
+          streamCallId: streamCallId,
+          durationInMinutes: durationInMinutes.toString(), // Add duration parameter
+          isIncoming: 'false'
         }
       });
     } catch (error) {

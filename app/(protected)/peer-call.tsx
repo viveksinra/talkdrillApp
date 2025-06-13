@@ -1,6 +1,6 @@
 import { StyleSheet, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Image } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import streamService from '@/api/services/streamService';
@@ -22,6 +22,9 @@ import {
   StreamVideoClient
 } from '@stream-io/video-react-native-sdk';
 
+// Import CallDurationManager
+import { CallDurationManager, CallTimerInfo } from '@/utils/callDurationManager';
+
 export default function PeerCallScreen() {
   const router = useRouter();
   const { 
@@ -30,7 +33,8 @@ export default function PeerCallScreen() {
     callId, 
     streamCallId,
     isIncoming = 'false',
-    autoJoin = 'false' // New parameter for auto-joining from matching
+    autoJoin = 'false',
+    durationInMinutes = 5 // New parameter for duration-limited calls
   } = useLocalSearchParams();
   const { user } = useAuth();
   
@@ -45,6 +49,12 @@ export default function PeerCallScreen() {
     client: null,
     call: null
   });
+  
+  // Duration management state
+  const [timerInfo, setTimerInfo] = useState<CallTimerInfo | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [isTimerWarningShown, setIsTimerWarningShown] = useState(false);
+  const durationManagerRef = useRef<CallDurationManager | null>(null);
   
   // Use Expo's KeepAwake hook to prevent the screen from sleeping
   useKeepAwake();
@@ -63,11 +73,101 @@ export default function PeerCallScreen() {
     };
   }, [callState.call]);
   
+  // Initialize Duration Manager when call is ready
+  useEffect(() => {
+    if (callState.call && callId && !durationManagerRef.current) {
+      console.log('Initializing CallDurationManager...');
+      
+      durationManagerRef.current = streamService.createDurationManager(callId as string, {
+        onTimerUpdate: (remainingSeconds: number) => {
+          console.log('Timer update:', remainingSeconds);
+          setRemainingSeconds(remainingSeconds);
+        },
+        onWarningReceived: (event: any) => {
+          console.log('Duration warning received:', event);
+          setIsTimerWarningShown(true);
+          
+          // Show custom warning alert
+          Alert.alert(
+            '⏰ Call Time Limit Warning',
+            `Your call will end in ${event.minutes_remaining} minute${event.minutes_remaining !== 1 ? 's' : ''}. Please wrap up your conversation.`,
+            [
+              {
+                text: 'I Understand',
+                onPress: () => {
+                  console.log('User acknowledged duration warning');
+                },
+              },
+            ],
+            { cancelable: false }
+          );
+        },
+        onCallExtended: (event: any) => {
+          console.log('Call extended:', event);
+          setIsTimerWarningShown(false);
+          
+          Alert.alert(
+            '✅ Call Extended',
+            event.message,
+            [{ text: 'OK' }]
+          );
+        },
+        onCallEnded: () => {
+          console.log('Call ended due to duration limit');
+          handleCallEndedByTimer();
+        }
+      });
+    }
+    
+    return () => {
+      if (durationManagerRef.current) {
+        durationManagerRef.current.cleanup();
+        durationManagerRef.current = null;
+      }
+    };
+  }, [callState.call, callId]);
+  
   // Format time as MM:SS
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  // Format remaining time with warning colors
+  const formatRemainingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  // Handle call ended by timer
+  const handleCallEndedByTimer = async () => {
+    try {
+      // Clean up the call
+      const call = streamService.getCall();
+      if (call) {
+        await call.camera.disable();
+        await call.microphone.disable();
+        await streamService.endCall();
+      }
+      
+      // Show final alert
+      Alert.alert(
+        '📞 Call Ended',
+        'Your call has ended due to the time limit.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back()
+          }
+        ]
+      );
+      
+    } catch (error) {
+      console.error('Error handling call end by timer:', error);
+      router.back();
+    }
   };
   
   // Initialize call
@@ -86,18 +186,14 @@ export default function PeerCallScreen() {
         
         // For automatic joining from match-making, add a small delay
         if (autoJoin === 'true') {
-  
           setConnectionStatus('Synchronizing with partner...');
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
-        
-        
         
         // Get token from backend
         setConnectionStatus('Getting authentication token...');
         const response = await streamService.getToken();
        
-        
         // Initialize Stream client
         setConnectionStatus('Initializing video service...');
         const client = await streamService.ensureInitialized(
@@ -106,7 +202,6 @@ export default function PeerCallScreen() {
           user?.profileImage
         );
        
-        
         // Try joining the call with retries
         let call = null;
         let joinError = null;
@@ -115,7 +210,6 @@ export default function PeerCallScreen() {
           try {
             setConnectionAttempt(attempt);
             setConnectionStatus(`Joining call (attempt ${attempt}/3)...`);
-            
             
             // Join the call
             call = await streamService.joinCall(streamCallId as string);
@@ -128,7 +222,6 @@ export default function PeerCallScreen() {
             
             // Check if it's the "Illegal State" error, which means we're actually already joined
             if (error.message && error.message.includes('Illegal State')) {
-             
               setConnectionStatus('Already connected to call');
               
               // Try to get the current call directly
@@ -143,7 +236,6 @@ export default function PeerCallScreen() {
             if (attempt < 3) {
               const delay = 1000 * attempt;
               setConnectionStatus(`Retrying in ${delay/1000} seconds...`);
-             
               await new Promise(resolve => setTimeout(resolve, delay));
             } else {
               setConnectionStatus('Failed to join call');
@@ -165,7 +257,6 @@ export default function PeerCallScreen() {
         try {
           await call.camera.disable();
           await call.microphone.enable();
-          
         } catch (mediaError) {
           console.warn('Error setting default media state:', mediaError);
         }
@@ -208,11 +299,16 @@ export default function PeerCallScreen() {
       // Remove socket listeners
       socketService.off('partner_preparing', handlePartnerPreparing);
       
+      // Clean up duration manager
+      if (durationManagerRef.current) {
+        durationManagerRef.current.cleanup();
+        durationManagerRef.current = null;
+      }
+      
       // End call if still active
       const call = streamService.getCall();
       if (call) {
         try {
-         
           call.leave();
         } catch (e) {
           console.error('Error leaving call during cleanup:', e);
@@ -269,8 +365,6 @@ export default function PeerCallScreen() {
           userId: user?.id,
           callId 
         });
-        
-    
       }
       router.back();
     } catch (error) {
@@ -279,10 +373,21 @@ export default function PeerCallScreen() {
     }
   };
   
-  // Custom header component
+  // Custom header component with timer display
   const CustomCallHeader = () => {
     const { useParticipantCount } = useCallStateHooks();
     const participantCount = useParticipantCount();
+    
+    const getTimerStyle = () => {
+      if (remainingSeconds !== null) {
+        if (remainingSeconds <= 60) {
+          return { color: '#FF4444', fontWeight: 'bold' as const }; // Red for last minute
+        } else if (remainingSeconds <= 300) {
+          return { color: '#FFA500', fontWeight: 'bold' as const }; // Orange for last 5 minutes
+        }
+      }
+      return { color: 'white' };
+    };
     
     return (
       <ThemedView style={styles.topBar}>
@@ -291,6 +396,21 @@ export default function PeerCallScreen() {
         </TouchableOpacity>
         <ThemedText style={styles.callStatusText}>On call</ThemedText>
         <ThemedText style={styles.callTime}>{formatTime(callTime)}</ThemedText>
+        
+        {/* Show remaining time if there's a duration limit */}
+        {remainingSeconds !== null && (
+          <ThemedText style={[styles.remainingTime, getTimerStyle()]}>
+            Time left: {formatRemainingTime(remainingSeconds)}
+          </ThemedText>
+        )}
+        
+        {/* Show duration info if available */}
+        {durationInMinutes && (
+          <ThemedText style={styles.durationInfo}>
+            Limit: {durationInMinutes}min
+          </ThemedText>
+        )}
+        
         <ThemedText style={styles.participantCount}>Participants: {participantCount}</ThemedText>
       </ThemedView>
     );
@@ -400,6 +520,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    flexWrap: 'wrap',
   },
   callStatusText: {
     color: 'white',
@@ -410,6 +531,18 @@ const styles = StyleSheet.create({
     color: 'white',
     marginLeft: 'auto',
     marginRight: 16,
+  },
+  remainingTime: {
+    color: 'white',
+    fontSize: 12,
+    marginRight: 8,
+    fontWeight: 'bold',
+  },
+  durationInfo: {
+    color: 'white',
+    fontSize: 10,
+    marginRight: 8,
+    opacity: 0.8,
   },
   participantCount: {
     color: 'white',

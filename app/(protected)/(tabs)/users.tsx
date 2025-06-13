@@ -28,7 +28,8 @@ export default function OnlineUsersScreen() {
   const [filterDialogVisible, setFilterDialogVisible] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({
     gender: 'any',
-    englishLevel: 'any'
+    englishLevel: 'any',
+    accent: 'indian'
   });
   
   const fetchUsers = async (signal?: AbortSignal) => {
@@ -58,7 +59,7 @@ export default function OnlineUsersScreen() {
     }
   };
 
-  const handleApplyFilters = (filters: FilterOptions) => {
+  const handleApplyFilters = async (filters: FilterOptions) => {
     setActiveFilters(filters);
     fetchUsersWithFilters(filters);
   };
@@ -135,10 +136,15 @@ export default function OnlineUsersScreen() {
         user?.profileImage
       );
       
-      // Call the user - this handles everything in one step
-      const { callId, streamCallId } = await streamService.callUser(recipientUser.id, recipientUser.name);
+      // Call the user with default 30 minutes duration
+      const DEFAULT_DURATION = 30; // minutes
+      const { callId, streamCallId, durationInMinutes } = await streamService.callUser(
+        recipientUser.id, 
+        recipientUser.name,
+        DEFAULT_DURATION
+      );
       
-      // Now navigate to call screen
+      // Now navigate to call screen with duration parameter
       router.push({
         pathname: '/peer-call',
         params: {
@@ -146,6 +152,7 @@ export default function OnlineUsersScreen() {
           peerName: recipientUser.name,
           callId: callId,
           streamCallId: streamCallId,
+          durationInMinutes: durationInMinutes.toString(), // Add duration parameter
           isIncoming: 'false'
         }
       });
@@ -262,6 +269,8 @@ export default function OnlineUsersScreen() {
         onClose={() => setFilterDialogVisible(false)}
         onApply={handleApplyFilters}
         initialFilters={activeFilters}
+        headerTitle="Filter Users"
+        headerSubtitle="Find users that match your preferences"
       />
     </ThemedView>
   );
