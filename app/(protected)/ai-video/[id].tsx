@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import { Audio, Video, ResizeMode } from "expo-av";
 import { Colors } from "../../../constants/Colors";
 import {
   getConversationHistory,
@@ -46,6 +46,8 @@ interface AICharacter {
   profession: string;
   nationality: string;
   profileImage: string;
+  idleVideoUrl?: string;
+  speechVideoUrl?: string;
 }
 
 interface Conversation {
@@ -96,9 +98,203 @@ const CircularProgress = ({ size = 32, color = Colors.light.primary }) => {
   );
 };
 
+// Simple Video Component with optimized looping
+const PreloadedVideo = ({ 
+  source, 
+  isVisible, 
+  onReady, 
+  onError,
+  videoType 
+}: {
+  source: any;
+  isVisible: boolean;
+  onReady: () => void;
+  onError: (error: any) => void;
+  videoType: 'idle' | 'speech';
+}) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const videoRef = useRef<Video>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleLoad = (status: any) => {
+    console.log(`[VIDEO-${videoType.toUpperCase()}] Loaded successfully:`, status);
+    
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    
+    setIsLoaded(true);
+    onReady();
+  };
+
+  const handleError = (error: any) => {
+    console.error(`[VIDEO-${videoType.toUpperCase()}] Error loading video:`, error);
+    
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    
+    setHasError(true);
+    onError(error);
+  };
+
+  useEffect(() => {
+    console.log(`[VIDEO-${videoType.toUpperCase()}] Starting to load video from:`, source.uri);
+    
+    timeoutRef.current = setTimeout(() => {
+      if (!isLoaded && !hasError) {
+        console.error(`[VIDEO-${videoType.toUpperCase()}] Timeout: Video failed to load within 30 seconds`);
+        handleError(new Error('Video loading timeout'));
+      }
+    }, 30000);
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, [source.uri, isLoaded, hasError, videoType]);
+
+  return (
+    <Video
+      ref={videoRef}
+      source={source}
+      style={[
+        styles.video,
+        {
+          opacity: isVisible && isLoaded && !hasError ? 1 : 0,
+          zIndex: isVisible && isLoaded && !hasError ? 1 : -1,
+        }
+      ]}
+      shouldPlay={isVisible && isLoaded && !hasError}
+      isLooping={true}
+      resizeMode={ResizeMode.COVER}
+      onLoad={handleLoad}
+      onError={handleError}
+      volume={0}
+      useNativeControls={false}
+      progressUpdateIntervalMillis={16} // 60fps updates for smoother playback
+    />
+  );
+};
+
+// Main AICharacterVideo component with dual preloaded videos
+const AICharacterVideo = ({ 
+  isAudioPlaying, 
+  character,
+  onLoadStart, 
+  onLoad, 
+  onError 
+}: {
+  isAudioPlaying: boolean;
+  character: AICharacter;
+  onLoadStart?: () => void;
+  onLoad?: () => void;
+  onError?: (error: any) => void;
+}) => {
+  const [idleVideoReady, setIdleVideoReady] = useState(false);
+  const [speechVideoReady, setSpeechVideoReady] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  // Check if video URLs are available
+  const hasVideoUrls = character.idleVideoUrl && character.speechVideoUrl;
+  
+  // Track when both videos are ready (or fallback to avatar if no URLs)
+  const bothVideosReady = hasVideoUrls ? (idleVideoReady && speechVideoReady) : false;
+
+  // Log state changes for debugging
+  useEffect(() => {
+    console.log('[VIDEO-STATE] State update:', {
+      idleVideoReady,
+      speechVideoReady,
+      bothVideosReady,
+      hasError
+    });
+  }, [idleVideoReady, speechVideoReady, bothVideosReady, hasError]);
+
+  useEffect(() => {
+    if (bothVideosReady) {
+      console.log('[VIDEO] Both videos preloaded and ready! Calling parent onLoad...');
+      onLoad?.();
+    }
+  }, [bothVideosReady, onLoad]);
+
+  useEffect(() => {
+    if (hasVideoUrls) {
+      console.log('[VIDEO] Starting video preload process...');
+      onLoadStart?.();
+    } else {
+      console.log('[VIDEO] No video URLs available, will use avatar mode');
+      // Immediately trigger error to fallback to avatar
+      setHasError(true);
+      onError?.(new Error('No video URLs available'));
+    }
+  }, [hasVideoUrls, onLoadStart, onError]);
+
+  const handleVideoError = (error: any) => {
+    setHasError(true);
+    onError?.(error);
+  };
+
+  // If no video URLs, don't render video components
+  if (!hasVideoUrls) {
+    return null;
+  }
+
+  return (
+    <View style={styles.videoContainer}>
+      {/* Show loading indicator until both videos are ready */}
+      {!bothVideosReady && !hasError && (
+        <View style={styles.videoLoadingContainer}>
+          <CircularProgress size={40} color={Colors.light.primary} />
+          <Text style={styles.videoLoadingText}>
+            Preparing videos... ({idleVideoReady ? '1' : '0'}/2 ready)
+          </Text>
+        </View>
+      )}
+      
+      {/* Show error state */}
+      {hasError && (
+        <View style={styles.videoErrorContainer}>
+          <Ionicons name="warning" size={40} color="#F44336" />
+          <Text style={styles.videoErrorText}>Video unavailable</Text>
+        </View>
+      )}
+      
+      {/* Idle Video - Dynamic URL */}
+      <PreloadedVideo
+        source={{ uri: character.idleVideoUrl! }}
+        isVisible={!isAudioPlaying && bothVideosReady}
+        onReady={() => {
+          console.log('[VIDEO-IDLE] Individual video ready');
+          setIdleVideoReady(true);
+        }}
+        onError={handleVideoError}
+        videoType="idle"
+      />
+      
+      {/* Speech Video - Dynamic URL */}
+      <PreloadedVideo
+        source={{ uri: character.speechVideoUrl! }}
+        isVisible={isAudioPlaying && bothVideosReady}
+        onReady={() => {
+          console.log('[VIDEO-SPEECH] Individual video ready');
+          setSpeechVideoReady(true);
+        }}
+        onError={handleVideoError}
+        videoType="speech"
+      />
+    </View>
+  );
+};
+
 export default function AIVideoCallScreen() {
   const { id: routeConversationId, gender, accent, languageProficiency } = 
-  useLocalSearchParams<{ id: string, gender: string, accent: string, languageProficiency: string, aiCharacterName: string }>();
+    useLocalSearchParams<{ id: string, gender: string, accent: string, languageProficiency: string, aiCharacterName: string }>();
  
   const {
     startRealtimeSession,
@@ -120,6 +316,13 @@ export default function AIVideoCallScreen() {
   const [isAIResponding, setIsAIResponding] = useState(false);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [isGeneratingText, setIsGeneratingText] = useState(false);
+  
+  // NEW: State to track actual audio playback
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  
+  // NEW: State to track video system readiness
+  const [videosReady, setVideosReady] = useState(false);
+  const [videosFailed, setVideosFailed] = useState(false);
 
   // Refs
   const scrollViewRef = useRef<ScrollView>(null);
@@ -134,6 +337,25 @@ export default function AIVideoCallScreen() {
 
   // Add loading message state
   const [userLoadingMessageId, setUserLoadingMessageId] = useState<string | null>(null);
+
+  // NEW: Stable callback functions to prevent infinite loops
+  const handleVideoLoadStart = useCallback(() => {
+    console.log('[VIDEO-PARENT] Loading started - resetting states');
+    setVideosReady(false);
+    setVideosFailed(false);
+  }, []);
+
+  const handleVideoLoad = useCallback(() => {
+    console.log('[VIDEO-PARENT] Both videos completed! Setting videosReady=true');
+    setVideosReady(true);
+    setVideosFailed(false);
+  }, []);
+
+  const handleVideoError = useCallback((error: any) => {
+    console.error('[VIDEO-PARENT] Error occurred:', error);
+    setVideosReady(false);
+    setVideosFailed(true);
+  }, []);
 
   // Speech recognition event handlers using hooks
   useSpeechRecognitionEvent("start", () => {
@@ -229,6 +451,104 @@ export default function AIVideoCallScreen() {
       scrollToBottom();
     }
   }, [conversation?.messages]);
+
+  // NEW: Enhanced AudioBufferManager with playback state tracking
+  useEffect(() => {
+    // Create a custom AudioBufferManager instance with playback tracking
+    const enhancedAudioManager = new AudioBufferManager();
+    
+    // Override the playMergedAudio method to track playback state
+    const originalPlayMergedAudio = enhancedAudioManager.playMergedAudio.bind(enhancedAudioManager);
+    enhancedAudioManager.playMergedAudio = async function(audioChunks: string[]) {
+      try {
+        setIsAudioPlaying(true);
+        console.log('[VIDEO] Audio playback started - switching to speech video');
+        
+        await originalPlayMergedAudio(audioChunks);
+        
+        console.log('[VIDEO] Audio playback finished - switching to idle video');
+        setIsAudioPlaying(false);
+      } catch (error) {
+        console.error('[VIDEO] Audio playback error:', error);
+        setIsAudioPlaying(false);
+        throw error;
+      }
+    };
+
+    // Override the stop method to ensure proper state cleanup
+    const originalStop = enhancedAudioManager.stop.bind(enhancedAudioManager);
+    enhancedAudioManager.stop = async function() {
+      setIsAudioPlaying(false);
+      console.log('[VIDEO] Audio stopped - switching to idle video');
+      await originalStop();
+    };
+
+    // Override the cleanup method to ensure proper state cleanup
+    const originalCleanup = enhancedAudioManager.cleanup.bind(enhancedAudioManager);
+    enhancedAudioManager.cleanup = async function() {
+      setIsAudioPlaying(false);
+      console.log('[VIDEO] Audio cleanup - switching to idle video');
+      await originalCleanup();
+    };
+
+    audioBufferManager.current = enhancedAudioManager;
+
+    return () => {
+      setIsAudioPlaying(false);
+    };
+  }, []);
+
+  // NEW: Check if both AI and videos are ready, then trigger conversation
+  const checkReadinessAndTrigger = useCallback(() => {
+    const aiReady = isConnected;
+    
+    // For video mode: either videos are ready OR videos failed (fallback to avatar)
+    // For chat mode: always ready
+    let videoSystemReady = false;
+    if (renderMode === "video") {
+      videoSystemReady = videosReady || videosFailed;
+    }
+    
+    const systemReady = aiReady && videoSystemReady;
+    
+    console.log('[READINESS CHECK]', {
+      aiReady,
+      videosReady,
+      videosFailed,
+      renderMode,
+      videoSystemReady,
+      systemReady,
+      timestamp: new Date().toISOString()
+    });
+
+    if (systemReady) {
+      console.log('[SYSTEM] Both AI and video system ready - triggering conversation');
+      triggerAIForConversation();
+    } else {
+      console.log('[SYSTEM] Waiting for readiness...', {
+        needAI: !aiReady,
+        needVideoSystem: !videoSystemReady,
+        videoMode: renderMode === "video",
+        videosReady,
+        videosFailed
+      });
+    }
+  }, [isConnected, renderMode, videosReady, videosFailed]);
+
+  // NEW: Effect to trigger readiness check when videos become ready OR fail
+  useEffect(() => {
+    console.log('[MAIN-STATE] Video state changed:', { 
+      videosReady, 
+      videosFailed, 
+      isConnected, 
+      renderMode 
+    });
+    
+    if (videosReady || videosFailed) {
+      console.log('[EFFECT] Triggering readiness check due to video state change');
+      checkReadinessAndTrigger();
+    }
+  }, [videosReady, videosFailed, isConnected, checkReadinessAndTrigger]);
 
   const initializeSession = async () => {
     try {
@@ -359,11 +679,19 @@ export default function AIVideoCallScreen() {
     setIsConnected(true);
     setIsAIResponding(false);
 
-      // calla function with basic filters automatically , so that ai canreply back and as end user thought that ai is initiating the conversation
-      triggerAIForConversation();
+    // NEW: Only trigger AI conversation when both AI and videos are ready
+    checkReadinessAndTrigger();
   };
 
   function triggerAIForConversation(){
+    console.log('[TRIGGER] AI conversation triggered!', {
+      user: user?.name,
+      videosReady,
+      videosFailed,
+      isConnected,
+      renderMode
+    });
+    
     sendRealtimeText(`Hello, first please introduce yourself and behave like a human being. 
       This is a conversation triggered by a user. so As AI please act like AI is starting the conversation mention user name(${user?.name}) 
       while greeting/initiate the conversation
@@ -463,7 +791,7 @@ export default function AIVideoCallScreen() {
   }) => {
     console.log("Audio complete:", data);
 
-    // Play merged audio
+    // Play merged audio with enhanced tracking
     if (audioChunksRef.current.length > 0) {
       await audioBufferManager.current.playMergedAudio(audioChunksRef.current);
       audioChunksRef.current = [];
@@ -505,11 +833,23 @@ export default function AIVideoCallScreen() {
     try {
       console.log("[SPEECH] Starting speech recognition...");
 
-      if (!isConnected) {
-        Alert.alert(
-          "Not Connected",
-          "Please wait for the connection to be established."
-        );
+      // NEW: Check both AI connection and video readiness (or fallback to avatar)
+      let videoSystemReady = false;
+      if (renderMode === "video") {
+        videoSystemReady = videosReady || videosFailed;
+      }
+      
+      const systemReady = isConnected && videoSystemReady;
+      
+      if (!systemReady) {
+        let statusMessage = "Please wait for the system to be ready.";
+        if (!isConnected) {
+          statusMessage = "Please wait for the AI connection to be established.";
+        } else if (renderMode === "video" && !videosReady && !videosFailed) {
+          statusMessage = "Please wait for videos to load.";
+        }
+        
+        Alert.alert("System Not Ready", statusMessage);
         return;
       }
 
@@ -815,45 +1155,75 @@ export default function AIVideoCallScreen() {
     );
   }
 
-  const HeaderTitleWithAvatar = () => (
-    <View style={styles.headerTitleContainer}>
-      <Image
-        source={{ uri: conversation?.characterId.profileImage }}
-        style={styles.headerAvatar}
-        onError={(error) =>
-          console.error("Header avatar loading error:", error.nativeEvent.error)
-        }
-        defaultSource={require("@/assets/images/default-avatar-1.jpg")}
-      />
-      <View>
-        <ThemedText style={styles.headerName}>
-          {(conversation?.characterId.name as string).length > 15 ? (conversation?.characterId.name as string).slice(0, 15) + "..." : (conversation?.characterId.name as string)}
-        </ThemedText>
-        <View
-          style={{ flexDirection: "row", alignItems: "center", width: 200 }}
-        >
+  const HeaderTitleWithAvatar = () => {
+    // Determine system readiness status
+    let videoSystemReady = false;
+    if (renderMode === "chat") {
+      videoSystemReady = true;
+    } else if (renderMode === "video") {
+      videoSystemReady = videosReady || videosFailed;
+    }
+    
+    const systemReady = isConnected && videoSystemReady;
+    const statusColor = systemReady ? "#4CAF50" : "#F44336";
+    
+    // Determine display status with priority order
+    let displayStatus = connectionStatus;
+    
+    if (!isConnected) {
+      displayStatus = connectionStatus; // Use original connection status
+    } else if (renderMode === "video") {
+      if (videosReady) {
+        displayStatus = "Ready To Talk";
+      } else if (videosFailed) {
+        displayStatus = "Ready (Avatar mode)";
+      } else {
+        displayStatus = "Loading videos...";
+      }
+    } else if (renderMode === "chat") {
+      displayStatus = "Ready To Talk";
+    }
+
+    return (
+      <View style={styles.headerTitleContainer}>
+        <Image
+          source={{ uri: conversation?.characterId.profileImage }}
+          style={styles.headerAvatar}
+          onError={(error) =>
+            console.error("Header avatar loading error:", error.nativeEvent.error)
+          }
+          defaultSource={require("@/assets/images/default-avatar-1.jpg")}
+        />
+        <View>
+          <ThemedText style={styles.headerName}>
+            {(conversation?.characterId.name as string).length > 15 ? (conversation?.characterId.name as string).slice(0, 15) + "..." : (conversation?.characterId.name as string)}
+          </ThemedText>
           <View
-            style={[
-              styles.statusIndicator,
-              { backgroundColor: isConnected ? "#4CAF50" : "#F44336" },
-            ]}
-          />
-          <Text style={styles.statusText}>
-            {connectionStatus.length > 20
-              ? connectionStatus.substring(0, 20) + "..."
-              : connectionStatus}
-          </Text>
-          {isAIResponding && (
-            <ActivityIndicator
-              size="small"
-              color={Colors.light.primary}
-              style={styles.processingIndicator}
+            style={{ flexDirection: "row", alignItems: "center", width: 200 }}
+          >
+            <View
+              style={[
+                styles.statusIndicator,
+                { backgroundColor: statusColor },
+              ]}
             />
-          )}
+            <Text style={styles.statusText}>
+              {displayStatus.length > 20
+                ? displayStatus.substring(0, 20) + "..."
+                : displayStatus}
+            </Text>
+            {(isAIResponding || (!systemReady && isConnected)) && (
+              <ActivityIndicator
+                size="small"
+                color={Colors.light.primary}
+                style={styles.processingIndicator}
+              />
+            )}
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderControls = () => (
     <View style={styles.controlsContainer}>
@@ -929,6 +1299,45 @@ export default function AIVideoCallScreen() {
       </View>
     );
 
+  // NEW: Video section component with fallback to avatar
+  const renderVideoSection = () => {
+    if (videosFailed) {
+      // Fallback to avatar UI when videos fail
+      return (
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarContainer}>
+            {conversation?.characterId.profileImage ? (
+              <Image
+                source={{ uri: conversation?.characterId.profileImage }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <View style={styles.characterAvatarPlaceholder}>
+                <Ionicons
+                  name="person"
+                  size={60}
+                  color={Colors.light.primary}
+                />
+              </View>
+            )}
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.videoSection}>
+        <AICharacterVideo
+          isAudioPlaying={isAudioPlaying}
+          character={conversation?.characterId!}
+          onLoadStart={handleVideoLoadStart}
+          onLoad={handleVideoLoad}
+          onError={handleVideoError}
+        />
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen
@@ -958,39 +1367,7 @@ export default function AIVideoCallScreen() {
 
       {renderMode === "video" ? (
         <View style={{ flex: 1 }}>
-          <View style={{ height: 150, backgroundColor: "#155269" }}>
-            <View
-              style={{
-                position: "relative",
-                width: 100,
-                height: 100,
-                marginBottom: 5,
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-                alignSelf: "center",
-              }}
-            >
-              {conversation?.characterId.profileImage ? (
-                <Image
-                  source={{ uri: conversation?.characterId.profileImage }}
-                  style={{
-                    width: 100,
-                    height: 100,
-                    borderRadius: 75,
-                  }}
-                />
-              ) : (
-                <View style={styles.characterAvatarPlaceholder}>
-                  <Ionicons
-                    name="person"
-                    size={60}
-                    color={Colors.light.primary}
-                  />
-                </View>
-              )}
-            </View>
-          </View>
+          {renderVideoSection()}
           {renderMessages()}
         </View>
       ) : (
@@ -1290,5 +1667,73 @@ const styles = StyleSheet.create({
   processingVoiceContainer: {
     marginTop: 8,
     alignItems: 'center',
+  },
+  videoSection: {
+    height: 500,
+    backgroundColor: "#000",
+    position: "relative",
+  },
+  avatarSection: {
+    height: 200,
+    backgroundColor: "#155269",
+    position: "relative",
+  },
+  avatarContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  videoContainer: {
+    flex: 1,
+    position: "relative",
+    backgroundColor: "#000",
+  },
+  videoBufferContainer: {
+    flex: 1,
+    position: "relative",
+    backgroundColor: "#000",
+  },
+  video: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: "100%",
+    height: "100%",
+  },
+  videoLoadingContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#000",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  videoLoadingText: {
+    color: "white",
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: "center",
+  },
+  videoErrorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000",
+  },
+  videoErrorText: {
+    color: "#F44336",
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: "center",
   },
 });
