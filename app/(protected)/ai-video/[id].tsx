@@ -338,6 +338,9 @@ export default function AIVideoCallScreen() {
   // Add loading message state
   const [userLoadingMessageId, setUserLoadingMessageId] = useState<string | null>(null);
 
+  // Add this ref after other refs (around line 360)
+  const hasTriggeredInitialConversationRef = useRef<boolean>(false);
+
   // NEW: Stable callback functions to prevent infinite loops
   const handleVideoLoadStart = useCallback(() => {
     console.log('[VIDEO-PARENT] Loading started - resetting states');
@@ -504,36 +507,17 @@ export default function AIVideoCallScreen() {
     
     // For video mode: either videos are ready OR videos failed (fallback to avatar)
     // For chat mode: always ready
-    let videoSystemReady = false;
-    if (renderMode === "video") {
-      videoSystemReady = videosReady || videosFailed;
-    }
+    let videoSystemReady = videosReady || videosFailed;
     
     const systemReady = aiReady && videoSystemReady;
-    
-    console.log('[READINESS CHECK]', {
-      aiReady,
-      videosReady,
-      videosFailed,
-      renderMode,
-      videoSystemReady,
-      systemReady,
-      timestamp: new Date().toISOString()
-    });
 
-    if (systemReady) {
+    // Only trigger AI conversation ONCE when system first becomes ready
+    if (systemReady && !hasTriggeredInitialConversationRef.current) {
       console.log('[SYSTEM] Both AI and video system ready - triggering conversation');
+      hasTriggeredInitialConversationRef.current = true;
       triggerAIForConversation();
-    } else {
-      console.log('[SYSTEM] Waiting for readiness...', {
-        needAI: !aiReady,
-        needVideoSystem: !videoSystemReady,
-        videoMode: renderMode === "video",
-        videosReady,
-        videosFailed
-      });
     }
-  }, [isConnected, renderMode, videosReady, videosFailed]);
+  }, [isConnected, videosReady, videosFailed]);
 
   // NEW: Effect to trigger readiness check when videos become ready OR fail
   useEffect(() => {
@@ -694,7 +678,7 @@ export default function AIVideoCallScreen() {
     
     sendRealtimeText(`Hello, first please introduce yourself and behave like a human being. 
       This is a conversation triggered by a user. so As AI please act like AI is starting the conversation mention user name(${user?.name}) 
-      while greeting/initiate the conversation
+      while greeting/initiate the conversation. please exclude any special characters and symbols.
       keep the conversation going by asking questions and if user is proactive enough then you can just help them talking and practicing.
       `);
   }
@@ -835,9 +819,8 @@ export default function AIVideoCallScreen() {
 
       // NEW: Check both AI connection and video readiness (or fallback to avatar)
       let videoSystemReady = false;
-      if (renderMode === "video") {
-        videoSystemReady = videosReady || videosFailed;
-      }
+      videoSystemReady = videosReady || videosFailed;
+      
       
       const systemReady = isConnected && videoSystemReady;
       
@@ -845,7 +828,7 @@ export default function AIVideoCallScreen() {
         let statusMessage = "Please wait for the system to be ready.";
         if (!isConnected) {
           statusMessage = "Please wait for the AI connection to be established.";
-        } else if (renderMode === "video" && !videosReady && !videosFailed) {
+        } else if (!videosReady && !videosFailed) {
           statusMessage = "Please wait for videos to load.";
         }
         
@@ -1158,11 +1141,8 @@ export default function AIVideoCallScreen() {
   const HeaderTitleWithAvatar = () => {
     // Determine system readiness status
     let videoSystemReady = false;
-    if (renderMode === "chat") {
-      videoSystemReady = true;
-    } else if (renderMode === "video") {
-      videoSystemReady = videosReady || videosFailed;
-    }
+    videoSystemReady = videosReady || videosFailed;
+
     
     const systemReady = isConnected && videoSystemReady;
     const statusColor = systemReady ? "#4CAF50" : "#F44336";
@@ -1172,17 +1152,15 @@ export default function AIVideoCallScreen() {
     
     if (!isConnected) {
       displayStatus = connectionStatus; // Use original connection status
-    } else if (renderMode === "video") {
-      if (videosReady) {
+    }
+      else if (videosReady) {
         displayStatus = "Ready To Talk";
       } else if (videosFailed) {
         displayStatus = "Ready (Avatar mode)";
       } else {
-        displayStatus = "Loading videos...";
+        displayStatus = "Loading AI...";
       }
-    } else if (renderMode === "chat") {
-      displayStatus = "Ready To Talk";
-    }
+    
 
     return (
       <View style={styles.headerTitleContainer}>
@@ -1365,14 +1343,13 @@ export default function AIVideoCallScreen() {
         }}
       />
 
-      {renderMode === "video" ? (
-        <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
+        {/* Always render video section but conditionally show it */}
+        <View style={renderMode === "video" ? {} : { display: 'none' }}>
           {renderVideoSection()}
-          {renderMessages()}
         </View>
-      ) : (
-        <View style={{ flex: 1 }}>{renderMessages()}</View>
-      )}
+        {renderMessages()}
+      </View>
 
       {renderControls()}
     </SafeAreaView>

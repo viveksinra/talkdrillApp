@@ -462,9 +462,9 @@ export default function PeerCallScreen() {
             <CallContent
               onHangupCallHandler={handleEndCall}
             />
-            <View style={styles.extendButtonContainer}>
+            {/* <View style={styles.extendButtonContainer}>
               <ExtendCallButton durationMinutesToExtend={10} />
-            </View>
+            </View> */}
           </ThemedView>
         </StreamCall>
       </StreamVideo>
