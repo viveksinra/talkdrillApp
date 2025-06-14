@@ -164,8 +164,11 @@ class StreamService {
           
           // Try joining the call
           try {
+            // Add null check before calling join
+            if (!this.currentCall) {
+              throw new Error('Call object is null, cannot join');
+            }
             await this.currentCall.join({ create: true });
-           
             joined = true;
           } catch (joinError: any) {
             // Check for the "Illegal State" error which indicates we're already joined
@@ -401,7 +404,7 @@ class StreamService {
   cleanup() {
     if (this.currentCall) {
       this.currentCall.leave().catch(error => {
-        console.error('Error leaving call during cleanup:', error);
+        // console.error('Error leaving call during cleanup:', error);
       });
       this.currentCall = null;
     }

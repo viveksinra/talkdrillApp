@@ -1,11 +1,11 @@
 import { StyleSheet, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import streamService from '@/api/services/streamService';
 import { useKeepAwake } from 'expo-keep-awake';
 import socketService from '@/api/services/socketService';
-import { DEFAULT_CALL_LIMIT } from '@/api/config/axiosConfig';
+import { DEFAULT_CALL_LIMIT, put } from '@/api/config/axiosConfig';
 import { post } from '@/api/config/axiosConfig';
 
 import { ThemedText } from '@/components/ThemedText';
@@ -67,8 +67,18 @@ export default function PeerCallScreen() {
   // Use Expo's KeepAwake hook to prevent the screen from sleeping
   useKeepAwake();
   
+  // Add this single line to prevent race conditions:
+  const isInitializing = useRef(false);
+  
   // Initialize call
   useEffect(() => {
+    // Add this check at the very beginning:
+    if (isInitializing.current) {
+      console.log('Already initializing, skipping...');
+      return;
+    }
+    isInitializing.current = true;
+    
     const handlePartnerPreparing = (data: any) => {
       console.log('Partner preparing:', data);
     };
@@ -153,6 +163,9 @@ export default function PeerCallScreen() {
         
         setConnectionStatus('Successfully joined call');
         
+        // Set up GetStream event listeners for call management
+        setupCallEventListeners(call);
+        
         // By default, start with camera off but microphone on
         try {
           await call.camera.disable();
@@ -185,7 +198,7 @@ export default function PeerCallScreen() {
           [
             {
               text: 'OK',
-              onPress: () => router.back()
+              onPress: () => router.replace('/(protected)/(tabs)')
             }
           ]
         );
@@ -196,6 +209,9 @@ export default function PeerCallScreen() {
     
     // Cleanup when component unmounts
     return () => {
+      // Add this line to reset the flag:
+      isInitializing.current = false;
+      
       // Remove socket listeners
       socketService.off('partner_preparing', handlePartnerPreparing);
       
@@ -205,7 +221,7 @@ export default function PeerCallScreen() {
         try {
           call.leave();
         } catch (e) {
-          console.error('Error leaving call during cleanup:', e);
+          // console.error('Error leaving call during cleanup:', e);
         }
       }
       
@@ -213,6 +229,51 @@ export default function PeerCallScreen() {
       streamService.cleanup();
     };
   }, [streamCallId, autoJoin, user?.id, user?.name, user?.profileImage]);
+  
+  // Set up GetStream event listeners
+  const setupCallEventListeners = (call: Call) => {
+    // Listen for call ended event (GetStream built-in)
+    call.on('call.ended', (event: any) => {
+      console.log('Call ended by GetStream:', event);
+      const endedByUser = event.user ? event.user.name || event.user.id : 'system';
+      const isItMe = event.user.id === user?.id;
+      if(isItMe){
+        router.replace('/(protected)/(tabs)');
+        return;
+      }
+      Alert.alert(
+        'Call Ended',
+        `The call has been ended by ${endedByUser}.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/(protected)/(tabs)')
+          }
+        ]
+      );
+    });
+    
+    // Listen for session ended event (GetStream built-in)
+    call.on('call.session_ended', (event: any) => {
+      console.log('Call session ended:', event);
+      // Alert.alert(
+      //   'Session Ended',
+      //   'The call session has ended.',
+      //   [
+      //     {
+      //       text: 'OK',
+      //       onPress: () => router.back()
+      //     }
+      //   ]
+      // );
+    });
+    
+    // Listen for participant left events
+    call.on('call.session_participant_left', (event: any) => {
+      console.log('Participant left:', event);
+      // You can add logic here if needed when other participants leave
+    });
+  };
   
   // Function to safely end call with confirmation
   const handleEndCall = () => {
@@ -251,19 +312,26 @@ export default function PeerCallScreen() {
           await call.microphone.disable();
         }
         
-        // End the call
-        await streamService.endCall();
+        // Use GetStream's built-in endCall() method
+        // This automatically sends call.ended events to all participants
+        await call.endCall();
         
-        // Notify about call ending via socket
-        socketService.emit('call_ended', { 
-          userId: user?.id,
-          callId 
-        });
+        // Update call status in backend
+        if (callId) {
+          try {
+            await put('/api/v1/call/status', {
+              callId,
+              status: 'completed'
+            });
+          } catch (error) {
+            console.error('Error updating call status in backend:', error);
+          }
+        }
       }
-      router.back();
+      router.replace('/(protected)/(tabs)');
     } catch (error) {
       console.error('Error ending call:', error);
-      router.back();
+      router.replace('/(protected)/(tabs)');
     }
   };
   
@@ -278,7 +346,7 @@ export default function PeerCallScreen() {
     
     useEffect(() => {
       const updateElapsed = () => {
-        if(!session?.started_at) return;
+        if (!session?.started_at) return;
         console.log('Session started at:', session.started_at);
         const startTime = new Date(session.started_at);
         const now = new Date();
@@ -301,13 +369,13 @@ export default function PeerCallScreen() {
           <IconSymbol size={24} name="chevron.down" color="#FFF" />
         </TouchableOpacity>
         <ThemedText style={styles.callStatusText}>On call</ThemedText>
-        <ThemedText style={styles.callTime}>{formatTime(elapsedTime)}</ThemedText>
+        <SessionTimer durationMinutes={parsedDurationInMinutes} />
         <ThemedText style={styles.durationInfo}>
           Limit: {parsedDurationInMinutes}min
         </ThemedText>
-        <ThemedText style={styles.participantCount}>
+        {/* <ThemedText style={styles.participantCount}>
           Participants: {participantCount}
-        </ThemedText>
+        </ThemedText> */}
       </ThemedView>
     );
   };
@@ -331,6 +399,9 @@ export default function PeerCallScreen() {
       setConnectionStatus('Joining call after manual retry...');
       const call = await streamService.joinCall(streamCallId as string);
       
+      // Set up event listeners for the new call
+      setupCallEventListeners(call);
+      
       setCallState({
         client,
         call
@@ -348,31 +419,10 @@ export default function PeerCallScreen() {
         [
           {
             text: 'OK',
-            onPress: () => router.back()
+            onPress: () => router.replace('/(protected)/(tabs)')
           }
         ]
       );
-    }
-  };
-  
-  // Add call end handling
-  const handleCallEnd = async () => {
-    try {
-      // End the call through streamService
-      await streamService.endCall();
-      
-      // Update call status in backend
-      if (callId) {
-        await post('/api/v1/call/update-status', {
-          callId,
-          status: 'completed'
-        });
-      }
-      
-      router.back();
-    } catch (error) {
-      console.error('Error ending call:', error);
-      router.back();
     }
   };
   
@@ -409,7 +459,6 @@ export default function PeerCallScreen() {
         <StreamCall call={callState.call}>
           <ThemedView style={styles.container}>
             <CustomCallHeader />
-            <SessionTimer durationMinutes={parsedDurationInMinutes} />
             <CallContent
               onHangupCallHandler={handleEndCall}
             />
@@ -454,6 +503,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
     marginRight: 8,
+    marginLeft: 8,
     opacity: 0.8,
   },
   participantCount: {
