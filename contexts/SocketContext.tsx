@@ -110,7 +110,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         peerId: offer.callerId,
                         peerName: offer.callerName,
                         peerImage: offer.callerImage,
-                        durationInMinutes: offer.durationInMinutes?.toString() || '30', // Add duration
+                        durationInMinutes: offer.durationInMinutes?.toString() || '5', // Add duration
                         isIncoming: 'true'
                       }
                     });

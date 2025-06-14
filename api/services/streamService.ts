@@ -8,6 +8,7 @@ import {
 import { Alert } from 'react-native';
 import { get, post, put } from '../config/axiosConfig';
 import socketService from './socketService';
+import { DEFAULT_CALL_LIMIT } from '../config/axiosConfig';
 
 class StreamService {
   private client: StreamVideoClient | null = null;
@@ -247,14 +248,16 @@ class StreamService {
   /**
    * Call another user (handles entire flow)
    */
-  async callUser(receiverId: string, receiverName?: string, durationInMinutes: number = 30) {
+  async callUser(receiverId: string, receiverName?: string, durationInMinutes: number = DEFAULT_CALL_LIMIT) {
     try {
       // Ensure we're initialized first
       if (!this.client || !this.currentUser) {
         throw new Error('Stream client not initialized');
       }
       
-      // Always create call with duration (default 30 minutes if not specified)
+      console.log(`Starting call with ${durationInMinutes} minutes duration`);
+      
+      // Always create call with duration
       const response = await post('/api/v1/call/user-with-duration', {
         receiverId,
         durationInMinutes
@@ -278,14 +281,14 @@ class StreamService {
         callerImage: this.currentUser.image,
         receiverId,
         receiverName,
-        durationInMinutes: responseDuration
+        durationInMinutes: responseDuration || durationInMinutes
       });
       
       return {
         callId,
         streamCallId,
         call: this.currentCall,
-        durationInMinutes: responseDuration
+        durationInMinutes: responseDuration || durationInMinutes
       };
     } catch (error) {
       console.error('Error starting call:', error);
@@ -294,21 +297,38 @@ class StreamService {
   }
   
   /**
-   * End the current call
+   * End the current call with improved error handling
    */
   async endCall() {
     try {
-      if (!this.currentCall) {
-        console.warn('No active call to end');
+      if (this.currentCall) {
+        // Disable media before ending
+        if (this.currentCall.camera) {
+          await this.currentCall.camera.disable();
+        }
+        if (this.currentCall.microphone) {
+          await this.currentCall.microphone.disable();
+        }
+        
+        // Leave the call
+        await this.currentCall.leave();
+        
+        // End the call on the server
+        await this.currentCall.endCall();
+        
+        this.currentCall = null;
+        console.log('Call ended successfully');
+      }
+    } catch (error: any) {
+      console.error('Error ending call:', error);
+      this.currentCall = null;
+      
+      // **FIX**: Don't throw error if call was already left
+      if (error.message?.includes('Cannot leave call that has already been left')) {
+        console.log('Call was already ended by another participant');
         return;
       }
       
-      await this.currentCall.leave();
-      this.currentCall = null;
-      
-      return true;
-    } catch (error) {
-      console.error('Error ending call:', error);
       throw error;
     }
   }

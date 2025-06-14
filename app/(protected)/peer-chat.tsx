@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getChatHistory, sendMessage, markMessagesAsRead } from '@/api/services/chatService';
 import streamService  from '@/api/services/streamService';
 import { Colors } from '@/constants/Colors';
+import { DEFAULT_CALL_LIMIT } from '@/api/config/axiosConfig';
 
 export default function PeerChatScreen() {
   const router = useRouter();
@@ -164,12 +165,11 @@ export default function PeerChatScreen() {
         user?.profileImage
       );
 
-      // Start call with default 30 minutes duration
-      const DEFAULT_DURATION = 30; // minutes
+      // Start call with default duration from config
       const { callId, streamCallId, durationInMinutes } = await streamService.callUser(
         peerId as string,
         peerName as string,
-        DEFAULT_DURATION
+        DEFAULT_CALL_LIMIT
       );
 
       // Navigate to call screen with duration parameter

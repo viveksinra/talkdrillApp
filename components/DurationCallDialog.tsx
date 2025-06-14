@@ -13,6 +13,7 @@ import { ThemedView } from './ThemedView';
 import { Colors } from '@/constants/Colors';
 import callService from '@/api/services/callService';
 import streamService from '@/api/services/streamService';
+import { DEFAULT_CALL_LIMIT, MAX_CALL_LIMIT } from '@/api/config/axiosConfig';
 
 interface DurationCallDialogProps {
   visible: boolean;
@@ -29,14 +30,14 @@ export default function DurationCallDialog({
   receiverName,
   onCallStarted
 }: DurationCallDialogProps) {
-  const [duration, setDuration] = useState('30');
+  const [duration, setDuration] = useState(DEFAULT_CALL_LIMIT.toString());
   const [isLoading, setIsLoading] = useState(false);
 
   const handleStartCall = async () => {
     const durationNum = parseInt(duration);
     
-    if (!durationNum || durationNum < 1 || durationNum > 120) {
-      Alert.alert('Invalid Duration', 'Please enter a duration between 1 and 120 minutes.');
+    if (!durationNum || durationNum < 1 || durationNum > MAX_CALL_LIMIT) {
+      Alert.alert('Invalid Duration', `Please enter a duration between 1 and ${MAX_CALL_LIMIT} minutes.`);
       return;
     }
 

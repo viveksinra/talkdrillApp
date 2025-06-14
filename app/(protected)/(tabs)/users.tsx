@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getUsersList } from '@/api/services/userService';
 import streamService from '@/api/services/streamService';
 import { FilterDialog, FilterOptions } from '@/components/FilterDialog';
+import { DEFAULT_CALL_LIMIT } from '@/api/config/axiosConfig';
 
 interface User {
   id: string;
@@ -136,12 +137,11 @@ export default function OnlineUsersScreen() {
         user?.profileImage
       );
       
-      // Call the user with default 30 minutes duration
-      const DEFAULT_DURATION = 30; // minutes
+      // Call the user with default duration from config
       const { callId, streamCallId, durationInMinutes } = await streamService.callUser(
         recipientUser.id, 
         recipientUser.name,
-        DEFAULT_DURATION
+        DEFAULT_CALL_LIMIT
       );
       
       // Now navigate to call screen with duration parameter

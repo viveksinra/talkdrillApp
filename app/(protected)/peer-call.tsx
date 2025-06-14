@@ -1,11 +1,12 @@
 import { StyleSheet, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState, useEffect, useRef } from 'react';
-import { Image } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import streamService from '@/api/services/streamService';
-import { activateKeepAwakeAsync, deactivateKeepAwake, useKeepAwake } from 'expo-keep-awake';
+import { useKeepAwake } from 'expo-keep-awake';
 import socketService from '@/api/services/socketService';
+import { DEFAULT_CALL_LIMIT } from '@/api/config/axiosConfig';
+import { post } from '@/api/config/axiosConfig';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -22,8 +23,16 @@ import {
   StreamVideoClient
 } from '@stream-io/video-react-native-sdk';
 
-// Import CallDurationManager
-import { CallDurationManager, CallTimerInfo } from '@/utils/callDurationManager';
+// Import SessionTimer and ExtendCallButton components
+import { SessionTimer } from '@/components/SessionTimer';
+import { ExtendCallButton } from '@/components/ExtendCallButton';
+
+// Helper function to format time display
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
 
 export default function PeerCallScreen() {
   const router = useRouter();
@@ -34,7 +43,7 @@ export default function PeerCallScreen() {
     streamCallId,
     isIncoming = 'false',
     autoJoin = 'false',
-    durationInMinutes = 5 // New parameter for duration-limited calls
+    durationInMinutes = DEFAULT_CALL_LIMIT.toString()
   } = useLocalSearchParams();
   const { user } = useAuth();
   
@@ -50,16 +59,16 @@ export default function PeerCallScreen() {
     call: null
   });
   
-  // Duration management state
-  const [timerInfo, setTimerInfo] = useState<CallTimerInfo | null>(null);
-  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
-  const [isTimerWarningShown, setIsTimerWarningShown] = useState(false);
-  const durationManagerRef = useRef<CallDurationManager | null>(null);
+  // Parse durationInMinutes to ensure it's a number and apply default if needed
+  const parsedDurationInMinutes = useMemo(() => {
+    const parsed = parseInt(durationInMinutes as string, 10);
+    return isNaN(parsed) ? DEFAULT_CALL_LIMIT : parsed;
+  }, [durationInMinutes]);
   
   // Use Expo's KeepAwake hook to prevent the screen from sleeping
   useKeepAwake();
   
-  // Timer for call duration
+  // Timer for call duration display
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (callState.call) {
@@ -73,107 +82,10 @@ export default function PeerCallScreen() {
     };
   }, [callState.call]);
   
-  // Initialize Duration Manager when call is ready
-  useEffect(() => {
-    if (callState.call && callId && !durationManagerRef.current) {
-      console.log('Initializing CallDurationManager...');
-      
-      durationManagerRef.current = streamService.createDurationManager(callId as string, {
-        onTimerUpdate: (remainingSeconds: number) => {
-          console.log('Timer update:', remainingSeconds);
-          setRemainingSeconds(remainingSeconds);
-        },
-        onWarningReceived: (event: any) => {
-          console.log('Duration warning received:', event);
-          setIsTimerWarningShown(true);
-          
-          // Show custom warning alert
-          Alert.alert(
-            '⏰ Call Time Limit Warning',
-            `Your call will end in ${event.minutes_remaining} minute${event.minutes_remaining !== 1 ? 's' : ''}. Please wrap up your conversation.`,
-            [
-              {
-                text: 'I Understand',
-                onPress: () => {
-                  console.log('User acknowledged duration warning');
-                },
-              },
-            ],
-            { cancelable: false }
-          );
-        },
-        onCallExtended: (event: any) => {
-          console.log('Call extended:', event);
-          setIsTimerWarningShown(false);
-          
-          Alert.alert(
-            '✅ Call Extended',
-            event.message,
-            [{ text: 'OK' }]
-          );
-        },
-        onCallEnded: () => {
-          console.log('Call ended due to duration limit');
-          handleCallEndedByTimer();
-        }
-      });
-    }
-    
-    return () => {
-      if (durationManagerRef.current) {
-        durationManagerRef.current.cleanup();
-        durationManagerRef.current = null;
-      }
-    };
-  }, [callState.call, callId]);
-  
-  // Format time as MM:SS
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  // Format remaining time with warning colors
-  const formatRemainingTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  // Handle call ended by timer
-  const handleCallEndedByTimer = async () => {
-    try {
-      // Clean up the call
-      const call = streamService.getCall();
-      if (call) {
-        await call.camera.disable();
-        await call.microphone.disable();
-        await streamService.endCall();
-      }
-      
-      // Show final alert
-      Alert.alert(
-        '📞 Call Ended',
-        'Your call has ended due to the time limit.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back()
-          }
-        ]
-      );
-      
-    } catch (error) {
-      console.error('Error handling call end by timer:', error);
-      router.back();
-    }
-  };
-  
   // Initialize call
   useEffect(() => {
-    // Socket event handlers
     const handlePartnerPreparing = (data: any) => {
+      console.log('Partner preparing:', data);
     };
     
     // Set up socket listeners
@@ -211,8 +123,11 @@ export default function PeerCallScreen() {
             setConnectionAttempt(attempt);
             setConnectionStatus(`Joining call (attempt ${attempt}/3)...`);
             
-            // Join the call
+            // Join the call with proper duration setting
             call = await streamService.joinCall(streamCallId as string);
+            
+            // Check if call was created with proper duration limit
+            console.log('Call settings:', call.state.settings);
             
             joinError = null;
             break;
@@ -299,12 +214,6 @@ export default function PeerCallScreen() {
       // Remove socket listeners
       socketService.off('partner_preparing', handlePartnerPreparing);
       
-      // Clean up duration manager
-      if (durationManagerRef.current) {
-        durationManagerRef.current.cleanup();
-        durationManagerRef.current = null;
-      }
-      
       // End call if still active
       const call = streamService.getCall();
       if (call) {
@@ -318,7 +227,7 @@ export default function PeerCallScreen() {
       // Clean up stream service
       streamService.cleanup();
     };
-  }, []);
+  }, [streamCallId, autoJoin, user?.id, user?.name, user?.profileImage]);
   
   // Function to safely end call with confirmation
   const handleEndCall = () => {
@@ -378,17 +287,6 @@ export default function PeerCallScreen() {
     const { useParticipantCount } = useCallStateHooks();
     const participantCount = useParticipantCount();
     
-    const getTimerStyle = () => {
-      if (remainingSeconds !== null) {
-        if (remainingSeconds <= 60) {
-          return { color: '#FF4444', fontWeight: 'bold' as const }; // Red for last minute
-        } else if (remainingSeconds <= 300) {
-          return { color: '#FFA500', fontWeight: 'bold' as const }; // Orange for last 5 minutes
-        }
-      }
-      return { color: 'white' };
-    };
-    
     return (
       <ThemedView style={styles.topBar}>
         <TouchableOpacity onPress={handleEndCall}>
@@ -396,24 +294,78 @@ export default function PeerCallScreen() {
         </TouchableOpacity>
         <ThemedText style={styles.callStatusText}>On call</ThemedText>
         <ThemedText style={styles.callTime}>{formatTime(callTime)}</ThemedText>
-        
-        {/* Show remaining time if there's a duration limit */}
-        {remainingSeconds !== null && (
-          <ThemedText style={[styles.remainingTime, getTimerStyle()]}>
-            Time left: {formatRemainingTime(remainingSeconds)}
-          </ThemedText>
-        )}
-        
-        {/* Show duration info if available */}
-        {durationInMinutes && (
-          <ThemedText style={styles.durationInfo}>
-            Limit: {durationInMinutes}min
-          </ThemedText>
-        )}
-        
-        <ThemedText style={styles.participantCount}>Participants: {participantCount}</ThemedText>
+        <ThemedText style={styles.durationInfo}>
+          Limit: {parsedDurationInMinutes}min
+        </ThemedText>
+        <ThemedText style={styles.participantCount}>
+          Participants: {participantCount}
+        </ThemedText>
       </ThemedView>
     );
+  };
+  
+  const handleRetryConnection = async () => {
+    setConnectionStatus('Retrying connection...');
+    setConnectionAttempt(0);
+    
+    try {
+      setIsLoading(true);
+      
+      // Get a clean client
+      const response = await streamService.getToken();
+      const client = await streamService.ensureInitialized(
+        user?.id || '',
+        user?.name,
+        user?.profileImage
+      );
+      
+      // Try joining again
+      setConnectionStatus('Joining call after manual retry...');
+      const call = await streamService.joinCall(streamCallId as string);
+      
+      setCallState({
+        client,
+        call
+      });
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error in manual retry:', error);
+      setConnectionStatus('Connection failed after manual retry');
+      
+      // Show error alert
+      Alert.alert(
+        'Connection Failed',
+        'Could not connect to the call after manual retry. Please try again later.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back()
+          }
+        ]
+      );
+    }
+  };
+  
+  // Add call end handling
+  const handleCallEnd = async () => {
+    try {
+      // End the call through streamService
+      await streamService.endCall();
+      
+      // Update call status in backend
+      if (callId) {
+        await post('/api/v1/call/update-status', {
+          callId,
+          status: 'completed'
+        });
+      }
+      
+      router.back();
+    } catch (error) {
+      console.error('Error ending call:', error);
+      router.back();
+    }
   };
   
   if (isLoading || !callState.call || !callState.client) {
@@ -429,53 +381,7 @@ export default function PeerCallScreen() {
         {connectionAttempt >= 2 && (
           <TouchableOpacity 
             style={styles.retryButton}
-            onPress={() => {
-              setConnectionStatus('Retrying connection...');
-              setConnectionAttempt(0);
-              
-              // Reset connection status and restart call joining logic
-              const initCall = async () => {
-                try {
-                  setIsLoading(true);
-                  
-                  // Get a clean client
-                  const response = await streamService.getToken();
-                  const client = await streamService.ensureInitialized(
-                    user?.id || '',
-                    user?.name,
-                    user?.profileImage
-                  );
-                  
-                  // Try joining again
-                  setConnectionStatus('Joining call after manual retry...');
-                  const call = await streamService.joinCall(streamCallId as string);
-                  
-                  setCallState({
-                    client,
-                    call
-                  });
-                  
-                  setIsLoading(false);
-                } catch (error) {
-                  console.error('Error in manual retry:', error);
-                  setConnectionStatus('Connection failed after manual retry');
-                  
-                  // Show error alert
-                  Alert.alert(
-                    'Connection Failed',
-                    'Could not connect to the call after manual retry. Please try again later.',
-                    [
-                      {
-                        text: 'OK',
-                        onPress: () => router.back()
-                      }
-                    ]
-                  );
-                }
-              };
-              
-              initCall();
-            }}
+            onPress={handleRetryConnection}
           >
             <ThemedText style={styles.retryButtonText}>Try Manual Connection</ThemedText>
           </TouchableOpacity>
@@ -494,11 +400,14 @@ export default function PeerCallScreen() {
       <StreamVideo client={callState.client}>
         <StreamCall call={callState.call}>
           <ThemedView style={styles.container}>
+            <CustomCallHeader />
+            <SessionTimer durationMinutes={parsedDurationInMinutes} />
             <CallContent
               onHangupCallHandler={handleEndCall}
-              // @ts-ignore
-              CallTopView={CustomCallHeader}
             />
+            <View style={styles.extendButtonContainer}>
+              <ExtendCallButton durationMinutesToExtend={10} />
+            </View>
           </ThemedView>
         </StreamCall>
       </StreamVideo>
@@ -514,6 +423,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000',
   },
   topBar: {
     flexDirection: 'row',
@@ -532,12 +442,6 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     marginRight: 16,
   },
-  remainingTime: {
-    color: 'white',
-    fontSize: 12,
-    marginRight: 8,
-    fontWeight: 'bold',
-  },
   durationInfo: {
     color: 'white',
     fontSize: 10,
@@ -554,20 +458,27 @@ const styles = StyleSheet.create({
   loadingText: {
     color: 'white',
     fontWeight: 'bold',
+    marginBottom: 8,
   },
   attemptText: {
     color: 'white',
     fontSize: 12,
+    marginBottom: 16,
   },
   retryButton: {
     backgroundColor: Colors.light.primary,
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 8,
-    marginTop: 16,
   },
   retryButtonText: {
     color: 'white',
     fontWeight: 'bold',
-    textAlign: 'center',
+  },
+  extendButtonContainer: {
+    position: 'absolute',
+    bottom: 120,
+    right: 16,
+    zIndex: 1000,
   },
 }); 
