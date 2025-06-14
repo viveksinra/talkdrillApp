@@ -485,6 +485,7 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 16,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     flexWrap: 'wrap',

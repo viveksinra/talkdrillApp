@@ -170,11 +170,11 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({ durationMinutes }) =
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    top: 60,
-    left: 16,
-    right: 16,
-    zIndex: 1000,
+    // position: 'absolute',
+    // top: 60,
+    // left: 16,
+    // right: 16,
+    // zIndex: 1000,
   },
   timerBadge: {
     flexDirection: 'row',
