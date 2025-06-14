@@ -47,7 +47,6 @@ export default function PeerCallScreen() {
   } = useLocalSearchParams();
   const { user } = useAuth();
   
-  const [callTime, setCallTime] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState('Initializing...');
   const [connectionAttempt, setConnectionAttempt] = useState(0);
@@ -67,20 +66,6 @@ export default function PeerCallScreen() {
   
   // Use Expo's KeepAwake hook to prevent the screen from sleeping
   useKeepAwake();
-  
-  // Timer for call duration display
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (callState.call) {
-      timer = setInterval(() => {
-        setCallTime(prev => prev + 1);
-      }, 1000);
-    }
-    
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [callState.call]);
   
   // Initialize call
   useEffect(() => {
@@ -282,10 +267,33 @@ export default function PeerCallScreen() {
     }
   };
   
-  // Custom header component with timer display
+  // Custom header component with synchronized timer display
   const CustomCallHeader = () => {
-    const { useParticipantCount } = useCallStateHooks();
+    const { useParticipantCount, useCallSession } = useCallStateHooks();
     const participantCount = useParticipantCount();
+    const session = useCallSession();
+    
+    // Calculate synchronized elapsed time from session start
+    const [elapsedTime, setElapsedTime] = useState(0);
+    
+    useEffect(() => {
+      const updateElapsed = () => {
+        if(!session?.started_at) return;
+        console.log('Session started at:', session.started_at);
+        const startTime = new Date(session.started_at);
+        const now = new Date();
+        const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+        setElapsedTime(elapsed);
+      };
+      
+      // Update immediately
+      updateElapsed();
+      
+      // Then update every second
+      const timer = setInterval(updateElapsed, 1000);
+      
+      return () => clearInterval(timer);
+    }, [session?.started_at]);
     
     return (
       <ThemedView style={styles.topBar}>
@@ -293,7 +301,7 @@ export default function PeerCallScreen() {
           <IconSymbol size={24} name="chevron.down" color="#FFF" />
         </TouchableOpacity>
         <ThemedText style={styles.callStatusText}>On call</ThemedText>
-        <ThemedText style={styles.callTime}>{formatTime(callTime)}</ThemedText>
+        <ThemedText style={styles.callTime}>{formatTime(elapsedTime)}</ThemedText>
         <ThemedText style={styles.durationInfo}>
           Limit: {parsedDurationInMinutes}min
         </ThemedText>

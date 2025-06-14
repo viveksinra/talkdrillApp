@@ -14,19 +14,36 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({ durationMinutes }) =
   const router = useRouter();
   const [remainingSeconds, setRemainingSeconds] = useState<number>(durationMinutes * 60);
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+  const [isSessionActive, setIsSessionActive] = useState(false);
   const didAlert = useRef(false);
   const callEndedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // **KEY FIX**: Use session.started_at for synchronized timing across all participants
   useEffect(() => {
+    console.log('SessionTimer: Session state changed', {
+      hasSession: !!session,
+      startedAt: session?.started_at,
+      currentSessionStartTime: sessionStartTime
+    });
+
     if (session?.started_at && !sessionStartTime) {
       const startTime = new Date(session.started_at);
       setSessionStartTime(startTime);
+      setIsSessionActive(true);
       console.log('Session started at (synchronized):', startTime.toISOString());
       startSynchronizedCountdown(startTime);
     }
-  }, [session?.started_at]);
+  }, [session?.started_at, sessionStartTime]);
+
+  // **NEW**: Handle case where session exists but no started_at yet (session initializing)
+  useEffect(() => {
+    if (session && !session.started_at && !isSessionActive) {
+      console.log('SessionTimer: Session exists but not started yet, showing initial timer');
+      setIsSessionActive(true);
+      // Show initial countdown until session actually starts
+    }
+  }, [session, isSessionActive]);
 
   const startSynchronizedCountdown = (sessionStart: Date) => {
     const totalDurationMs = durationMinutes * 60 * 1000;
@@ -115,7 +132,8 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({ durationMinutes }) =
     };
   }, []);
 
-  if (!sessionStartTime || remainingSeconds <= 0) {
+  // **FIXED**: Always show timer UI if session is active, even if sessionStartTime is not set yet
+  if (!isSessionActive) {
     return null;
   }
 
@@ -126,13 +144,24 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({ durationMinutes }) =
   };
 
   const isWarning = remainingSeconds <= 60;
+  
+  // **NEW**: Show different states based on timer status
+  const getTimerDisplay = () => {
+    if (!sessionStartTime) {
+      return 'Starting...';
+    }
+    if (remainingSeconds <= 0) {
+      return 'Time expired';
+    }
+    return `${formatTime(remainingSeconds)} left`;
+  };
 
   return (
     <View style={styles.container}>
-      <View style={[styles.timerBadge, isWarning && styles.warningBadge]}>
+      <View style={[styles.timerBadge, isWarning && styles.warningBadge, remainingSeconds <= 0 && styles.expiredBadge]}>
         <Text style={styles.timerIcon}>⏰</Text>
-        <Text style={[styles.timerText, isWarning && styles.warningText]}>
-          {formatTime(remainingSeconds)} left
+        <Text style={[styles.timerText, isWarning && styles.warningText, remainingSeconds <= 0 && styles.expiredText]}>
+          {getTimerDisplay()}
         </Text>
       </View>
     </View>
@@ -169,6 +198,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   warningText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  expiredBadge: {
+    backgroundColor: 'rgba(139, 69, 19, 0.9)', // Brown for expired
+  },
+  expiredText: {
     color: 'white',
     fontWeight: 'bold',
   },
