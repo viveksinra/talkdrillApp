@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 // TODO: Change to api.talkdrill.com when ready
-const baseUrl ="https://api.talkdrill.com";
+const baseUrl = "https://4ac2-103-215-226-95.ngrok-free.app"; //"https://api.talkdrill.com";
 
 // Use ngrok URL for development, but be sure to update when URL changes
 export const API_BASE_URL = baseUrl;
@@ -301,5 +301,9 @@ export const fetchWithAuth = async (
     throw error;
   }
 };
+
+export const DEFAULT_CALL_LIMIT = 15;
+export const MAX_CALL_LIMIT = 30;
+
 
 export default api;
