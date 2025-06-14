@@ -8,6 +8,7 @@ import {
 import { Alert } from 'react-native';
 import { get, post, put } from '../config/axiosConfig';
 import socketService from './socketService';
+import { DEFAULT_CALL_LIMIT } from '../config/axiosConfig';
 
 class StreamService {
   private client: StreamVideoClient | null = null;
@@ -163,8 +164,11 @@ class StreamService {
           
           // Try joining the call
           try {
+            // Add null check before calling join
+            if (!this.currentCall) {
+              throw new Error('Call object is null, cannot join');
+            }
             await this.currentCall.join({ create: true });
-           
             joined = true;
           } catch (joinError: any) {
             // Check for the "Illegal State" error which indicates we're already joined
@@ -247,19 +251,22 @@ class StreamService {
   /**
    * Call another user (handles entire flow)
    */
-  async callUser(receiverId: string, receiverName?: string) {
+  async callUser(receiverId: string, receiverName?: string, durationInMinutes: number = DEFAULT_CALL_LIMIT) {
     try {
       // Ensure we're initialized first
       if (!this.client || !this.currentUser) {
         throw new Error('Stream client not initialized');
       }
       
-      // Create call on backend
-      const response = await post('/api/v1/call/user', {
-        receiverId
+      console.log(`Starting call with ${durationInMinutes} minutes duration`);
+      
+      // Always create call with duration
+      const response = await post('/api/v1/call/user-with-duration', {
+        receiverId,
+        durationInMinutes
       });
       
-      const { streamCallId, callId } = response.data;
+      const { streamCallId, callId, durationInMinutes: responseDuration } = response.data.myData;
       
       // Join the call
       this.currentCall = this.client.call('default', streamCallId);
@@ -276,13 +283,15 @@ class StreamService {
         callerName: this.currentUser.name,
         callerImage: this.currentUser.image,
         receiverId,
-        receiverName
+        receiverName,
+        durationInMinutes: responseDuration || durationInMinutes
       });
       
       return {
         callId,
         streamCallId,
-        call: this.currentCall
+        call: this.currentCall,
+        durationInMinutes: responseDuration || durationInMinutes
       };
     } catch (error) {
       console.error('Error starting call:', error);
@@ -291,21 +300,38 @@ class StreamService {
   }
   
   /**
-   * End the current call
+   * End the current call with improved error handling
    */
   async endCall() {
     try {
-      if (!this.currentCall) {
-        console.warn('No active call to end');
+      if (this.currentCall) {
+        // Disable media before ending
+        if (this.currentCall.camera) {
+          await this.currentCall.camera.disable();
+        }
+        if (this.currentCall.microphone) {
+          await this.currentCall.microphone.disable();
+        }
+        
+        // Leave the call
+        await this.currentCall.leave();
+        
+        // End the call on the server
+        await this.currentCall.endCall();
+        
+        this.currentCall = null;
+        console.log('Call ended successfully');
+      }
+    } catch (error: any) {
+      console.error('Error ending call:', error);
+      this.currentCall = null;
+      
+      // **FIX**: Don't throw error if call was already left
+      if (error.message?.includes('Cannot leave call that has already been left')) {
+        console.log('Call was already ended by another participant');
         return;
       }
       
-      await this.currentCall.leave();
-      this.currentCall = null;
-      
-      return true;
-    } catch (error) {
-      console.error('Error ending call:', error);
       throw error;
     }
   }
@@ -378,7 +404,7 @@ class StreamService {
   cleanup() {
     if (this.currentCall) {
       this.currentCall.leave().catch(error => {
-        console.error('Error leaving call during cleanup:', error);
+        // console.error('Error leaving call during cleanup:', error);
       });
       this.currentCall = null;
     }
@@ -391,6 +417,25 @@ class StreamService {
     }
     
     this.currentUser = null;
+  }
+
+  /**
+   * Get a call duration manager for the current call
+   */
+  createDurationManager(callId: string, callbacks?: {
+    onTimerUpdate?: (remainingSeconds: number) => void;
+    onWarningReceived?: (event: any) => void;
+    onCallExtended?: (event: any) => void;
+    onCallEnded?: () => void;
+  }) {
+    if (!this.currentCall) {
+      throw new Error('No active call to manage duration for');
+    }
+    
+    // Import here to avoid circular dependencies
+    const { CallDurationManager } = require('../../utils/callDurationManager');
+    
+    return new CallDurationManager(this.currentCall, callId, callbacks);
   }
 }
 

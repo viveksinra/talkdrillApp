@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getChatHistory, sendMessage, markMessagesAsRead } from '@/api/services/chatService';
 import streamService  from '@/api/services/streamService';
 import { Colors } from '@/constants/Colors';
+import { DEFAULT_CALL_LIMIT } from '@/api/config/axiosConfig';
 
 export default function PeerChatScreen() {
   const router = useRouter();
@@ -157,24 +158,30 @@ export default function PeerChatScreen() {
 
   const handleCallRequest = async () => {
     try {
-      // Get Stream token
-      const { token, apiKey } = await streamService.getToken();
-
       // Initialize Stream client
-      //@ts-ignore
-      await streamService.initialize(user?.id || '', token, apiKey);
+      await streamService.ensureInitialized(
+        user?.id || '',
+        user?.name,
+        user?.profileImage
+      );
 
-      // Start call with peer
-      //@ts-ignore
-      const { callId, streamCallId } = await streamService.startCall(peerId as string);
+      // Start call with default duration from config
+      const { callId, streamCallId, durationInMinutes } = await streamService.callUser(
+        peerId as string,
+        peerName as string,
+        DEFAULT_CALL_LIMIT
+      );
 
-      // Navigate to call screen
+      // Navigate to call screen with duration parameter
       router.push({
         pathname: '/peer-call',
         params: {
           peerId: peerId,
+          peerName: peerName,
           callId: callId,
-          streamCallId: streamCallId
+          streamCallId: streamCallId,
+          durationInMinutes: durationInMinutes.toString(), // Add duration parameter
+          isIncoming: 'false'
         }
       });
     } catch (error) {

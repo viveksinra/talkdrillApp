@@ -82,19 +82,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
           console.log('Received incoming call offer:', offer);
           
-          // Show incoming call UI
           Alert.alert(
             'Incoming Call',
-            `Incoming call from ${offer.callerName || 'User'}`,
+            `${offer.callerName} is calling you${offer.durationInMinutes ? ` (${offer.durationInMinutes} min limit)` : ''}`,
             [
               {
                 text: 'Decline',
-                onPress: () => {
-                  socketService.sendAnswer(offer.roomId, {
-                    status: 'rejected',
-                    callId: offer.callId
-                  });
-                },
                 style: 'cancel'
               },
               {
@@ -108,7 +101,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                       user.profileImage
                     );
                     
-                    // Navigate to call screen - peer-call will handle joining
+                    // Navigate to call screen with duration parameter
                     router.push({
                       pathname: '/peer-call',
                       params: { 
@@ -117,6 +110,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         peerId: offer.callerId,
                         peerName: offer.callerName,
                         peerImage: offer.callerImage,
+                        durationInMinutes: offer.durationInMinutes?.toString() || '5', // Add duration
                         isIncoming: 'true'
                       }
                     });
