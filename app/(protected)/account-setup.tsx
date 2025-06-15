@@ -44,8 +44,8 @@ export default function AccountSetupScreen() {
   // Use effect to handle navigation outside the render cycle
   useEffect(() => {
     if (isCompleted) {
-      // Perform navigation in an effect, not during render
-      router.replace("/(protected)/(tabs)");
+      // Navigate to onboarding instead of tabs
+      router.replace("/(protected)/onboarding" as any);
     }
   }, [isCompleted, router]);
 

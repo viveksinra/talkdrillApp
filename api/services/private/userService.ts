@@ -3,6 +3,7 @@ import { get, post, put } from '@/api/config/axiosConfig';
 // API endpoints
 const CURRENT_USER_ENDPOINT = '/api/v1/auth/current';
 const UPDATE_PROFILE_ENDPOINT = '/api/v1/user/profile';
+const UPDATE_ONBOARDING_ENDPOINT = '/api/v1/user/onboarding';
 const UPLOAD_IMAGE_ENDPOINT = '/api/v1/other/fileupload/image';
 
 /**
@@ -53,6 +54,26 @@ export const updateUserProfile = async (userData: any) => {
     return response.data;
   } catch (error) {
     console.error('Error updating user profile:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update the user's onboarding information
+ * @param onboardingData - Object containing onboarding data
+ * @returns Promise with the updated user data
+ */
+export const updateUserOnboarding = async (onboardingData: {
+  motherTongue: string;
+  learningMotivation: string;
+  interests: string[];
+  focusAreas: string[];
+}) => {
+  try {
+    const response = await put(UPDATE_ONBOARDING_ENDPOINT, onboardingData);
+    return response.data;
+  } catch (error) {
+    console.error('Error updating user onboarding:', error);
     throw error;
   }
 }; 
