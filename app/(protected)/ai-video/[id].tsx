@@ -324,6 +324,11 @@ export default function AIVideoCallScreen() {
   const [videosReady, setVideosReady] = useState(false);
   const [videosFailed, setVideosFailed] = useState(false);
 
+  // NEW: State and ref for delayed text display
+  const [shouldShowAIText, setShouldShowAIText] = useState(false);
+  const pendingTextContentRef = useRef<string>("");
+  const currentAIMessageIndexRef = useRef<number>(-1);
+
   // Refs
   const scrollViewRef = useRef<ScrollView>(null);
   const audioBufferManager = useRef(new AudioBufferManager());
@@ -467,6 +472,9 @@ export default function AIVideoCallScreen() {
         setIsAudioPlaying(true);
         console.log('[VIDEO] Audio playback started - switching to speech video');
         
+        // NEW: Trigger text display when audio starts
+        setShouldShowAIText(true);
+        
         await originalPlayMergedAudio(audioChunks);
         
         console.log('[VIDEO] Audio playback finished - switching to idle video');
@@ -500,6 +508,54 @@ export default function AIVideoCallScreen() {
       setIsAudioPlaying(false);
     };
   }, []);
+
+  // NEW: Effect to animate text display when shouldShowAIText becomes true
+  useEffect(() => {
+    if (shouldShowAIText && pendingTextContentRef.current && currentAIMessageIndexRef.current >= 0) {
+      console.log('[TEXT-SYNC] Starting synchronized text display');
+      
+      // Animate text display character by character
+      const fullText = pendingTextContentRef.current;
+      let currentIndex = 0;
+      
+      const animateText = () => {
+        if (currentIndex <= fullText.length) {
+          const partialText = fullText.substring(0, currentIndex);
+          
+          setConversation((prev) => {
+            if (!prev) return null;
+
+            const messages = [...prev.messages];
+            const messageIndex = currentAIMessageIndexRef.current;
+            
+            if (messageIndex >= 0 && messageIndex < messages.length && messages[messageIndex].sender === "ai") {
+              messages[messageIndex] = {
+                ...messages[messageIndex],
+                content: partialText,
+                isLoading: false,
+              };
+            }
+
+            return {
+              ...prev,
+              messages,
+            };
+          });
+          
+          currentIndex += 2; // Display 2 characters at a time for smoother animation
+          setTimeout(animateText, 50); // 50ms delay between updates
+        } else {
+          // Animation complete - reset states
+          console.log('[TEXT-SYNC] Text animation complete');
+          pendingTextContentRef.current = "";
+          currentAIMessageIndexRef.current = -1;
+          setShouldShowAIText(false);
+        }
+      };
+      
+      animateText();
+    }
+  }, [shouldShowAIText]);
 
   // NEW: Check if both AI and videos are ready, then trigger conversation
   const checkReadinessAndTrigger = useCallback(() => {
@@ -687,34 +743,45 @@ export default function AIVideoCallScreen() {
     console.log("Text delta:", data.delta);
     setIsAIResponding(true);
 
+    // NEW: Store text content instead of immediately displaying it
+    pendingTextContentRef.current += data.delta;
+
     setConversation((prev) => {
       if (!prev) return null;
 
       const messages = [...prev.messages];
       const lastMessageIndex = messages.length - 1;
       
-      // If the last message is AI loading, replace it with the delta
+      // If the last message is AI loading, replace it with a hidden message
       if (lastMessageIndex >= 0 && 
           messages[lastMessageIndex].sender === "ai" && 
           messages[lastMessageIndex].isLoading) {
         messages[lastMessageIndex] = {
           sender: "ai",
-          content: data.delta,
+          content: "", // Keep content empty until audio starts
           timestamp: new Date().toISOString(),
           isChunk: true,
+          isLoading: true, // Keep loading state until audio starts
+          loadingType: "text_generating",
         };
+        currentAIMessageIndexRef.current = lastMessageIndex;
       } else {
-        // Find the last AI message and append delta
+        // Find the last AI message
         const lastAIMessage = messages[lastMessageIndex];
         if (lastAIMessage && lastAIMessage.sender === "ai") {
-          lastAIMessage.content += data.delta;
+          // Don't update content yet, just track the message index
+          currentAIMessageIndexRef.current = lastMessageIndex;
         } else {
+          // Create new AI message with loading state
           messages.push({
             sender: "ai",
-            content: data.delta,
+            content: "",
             timestamp: new Date().toISOString(),
             isChunk: true,
+            isLoading: true,
+            loadingType: "text_generating",
           });
+          currentAIMessageIndexRef.current = messages.length - 1;
         }
       }
 
@@ -735,28 +802,30 @@ export default function AIVideoCallScreen() {
     // Stop text generation loading
     setIsGeneratingText(false);
     
-    // Text complete doesn't need to do anything since we're showing chunks
-    // Add each chunk as a separate message
+    // NEW: Store the complete text for synchronized display
+    pendingTextContentRef.current = data.text;
+    
+    // Update the message to show it's ready but still loading until audio starts
     setConversation((prev) => {
       if (!prev) return null;
 
-      const lastMessage = prev.messages[prev.messages.length - 1];
-      if (lastMessage.sender === "ai") {
-        lastMessage.content = data.text;
-      } else {
-        prev.messages.push({
-          sender: "ai",
-          content: data.text,
-          timestamp: new Date().toISOString(),
-          isChunk: true,
-        });
+      const messages = [...prev.messages];
+      const messageIndex = currentAIMessageIndexRef.current;
+      
+      if (messageIndex >= 0 && messageIndex < messages.length && messages[messageIndex].sender === "ai") {
+        messages[messageIndex] = {
+          ...messages[messageIndex],
+          content: "",
+          isLoading: true,
+          loadingType: "text_generating",
+        };
       }
 
       return {
         ...prev,
+        messages,
       };
     });
-    scrollToBottom();
   };
 
   const handleAudioDelta = async (data: {
@@ -810,6 +879,11 @@ export default function AIVideoCallScreen() {
     // Clear any existing audio chunks
     audioChunksRef.current = [];
     audioBufferManager.current.cleanup();
+    
+    // NEW: Reset text synchronization states
+    setShouldShowAIText(false);
+    pendingTextContentRef.current = "";
+    currentAIMessageIndexRef.current = -1;
   };
 
   // Recording functions
