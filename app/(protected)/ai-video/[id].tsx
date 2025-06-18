@@ -9,6 +9,11 @@ import {
   ScrollView,
   Image,
   Animated,
+  Dimensions,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Easing,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
@@ -28,6 +33,7 @@ import { useSocket } from "../../../contexts/SocketContext";
 import { useAuth } from "../../../contexts/AuthContext";
 import { AudioBufferManager } from "../../../utils/AudioBufferManager";
 import { ThemedText } from "@/components/ThemedText";
+import { useHeaderHeight } from '@react-navigation/elements';
 
 interface Message {
   sender: "user" | "ai";
@@ -56,6 +62,11 @@ interface Conversation {
   messages: Message[];
   callType: "video";
 }
+
+// Get screen dimensions
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const VIDEO_HEIGHT = SCREEN_HEIGHT / 3;
+const CHAT_HEIGHT = (SCREEN_HEIGHT * 2) / 3;
 
 // Add CircularProgress component
 const CircularProgress = ({ size = 32, color = Colors.light.primary }) => {
@@ -104,13 +115,15 @@ const PreloadedVideo = ({
   isVisible, 
   onReady, 
   onError,
-  videoType 
+  videoType,
+  isFullScreen = false
 }: {
   source: any;
   isVisible: boolean;
   onReady: () => void;
   onError: (error: any) => void;
   videoType: 'idle' | 'speech';
+  isFullScreen?: boolean;
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -172,7 +185,7 @@ const PreloadedVideo = ({
       ]}
       shouldPlay={isVisible && isLoaded && !hasError}
       isLooping={true}
-      resizeMode={ResizeMode.COVER}
+      resizeMode={isFullScreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
       onLoad={handleLoad}
       onError={handleError}
       volume={0}
@@ -188,13 +201,15 @@ const AICharacterVideo = ({
   character,
   onLoadStart, 
   onLoad, 
-  onError 
+  onError,
+  isFullScreen = false
 }: {
   isAudioPlaying: boolean;
   character: AICharacter;
   onLoadStart?: () => void;
   onLoad?: () => void;
   onError?: (error: any) => void;
+  isFullScreen?: boolean;
 }) => {
   const [idleVideoReady, setIdleVideoReady] = useState(false);
   const [speechVideoReady, setSpeechVideoReady] = useState(false);
@@ -275,6 +290,7 @@ const AICharacterVideo = ({
         }}
         onError={handleVideoError}
         videoType="idle"
+        isFullScreen={isFullScreen}
       />
       
       {/* Speech Video - Dynamic URL */}
@@ -287,6 +303,7 @@ const AICharacterVideo = ({
         }}
         onError={handleVideoError}
         videoType="speech"
+        isFullScreen={isFullScreen}
       />
     </View>
   );
@@ -304,6 +321,9 @@ export default function AIVideoCallScreen() {
     off,
   } = useSocket();
   const { user } = useAuth();
+
+  // ✅ FIX 1: Move useHeaderHeight() HERE - right after other hooks
+  const headerHeight = useHeaderHeight();
 
   // State management - Simplified
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -328,6 +348,13 @@ export default function AIVideoCallScreen() {
   const [shouldShowAIText, setShouldShowAIText] = useState(false);
   const pendingTextContentRef = useRef<string>("");
   const currentAIMessageIndexRef = useRef<number>(-1);
+
+  // NEW: Full screen state and animation
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const fullScreenAnimation = useRef(new Animated.Value(0)).current;
+  
+  // NEW: Message input state
+  const [textMessage, setTextMessage] = useState("");
 
   // Refs
   const scrollViewRef = useRef<ScrollView>(null);
@@ -364,6 +391,20 @@ export default function AIVideoCallScreen() {
     setVideosReady(false);
     setVideosFailed(true);
   }, []);
+
+  // NEW: Full screen handlers
+  const toggleFullScreen = useCallback(() => {
+    const toValue = isFullScreen ? 0 : 1;
+    setIsFullScreen(!isFullScreen);
+    
+    Animated.timing(fullScreenAnimation, {
+      toValue,
+      duration: 400, // Increased duration for smoother animation
+      useNativeDriver: false,
+      // Add easing for smoother transition
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1), // Material design easing
+    }).start();
+  }, [isFullScreen, fullScreenAnimation]);
 
   // Speech recognition event handlers using hooks
   useSpeechRecognitionEvent("start", () => {
@@ -1092,6 +1133,57 @@ export default function AIVideoCallScreen() {
     }, 800); // Show loading for 0.8 seconds
   };
 
+  // NEW: Send text message function
+  const sendTextMessage = () => {
+    if (!textMessage.trim()) return;
+
+    const transcript = textMessage.trim();
+    setTextMessage("");
+
+    // Add user message to conversation
+    setConversation((prev) => {
+      if (!prev) return null;
+
+      return {
+        ...prev,
+        messages: [
+          ...prev.messages,
+          {
+            sender: "user",
+            content: transcript,
+            timestamp: new Date().toISOString(),
+            isLoading: false,
+          },
+        ],
+      };
+    });
+
+    // Start text generation loading for AI
+    setIsGeneratingText(true);
+    
+    // Add AI loading message
+    setConversation((prev) => {
+      if (!prev) return null;
+
+      return {
+        ...prev,
+        messages: [
+          ...prev.messages,
+          {
+            sender: "ai",
+            content: "",
+            timestamp: new Date().toISOString(),
+            isLoading: true,
+            loadingType: "text_generating",
+          },
+        ],
+      };
+    });
+
+    // Send to server
+    sendRealtimeText(transcript);
+  };
+
   // Render methods
   const renderMessage = (message: Message, index: number) => {
     const isUser = message.sender === "user";
@@ -1278,7 +1370,39 @@ export default function AIVideoCallScreen() {
   };
 
   const renderControls = () => (
-    <View style={styles.controlsContainer}>
+    <View style={[
+      styles.controlsContainer,
+      isFullScreen && styles.fullScreenControls
+    ]}>
+      {/* Show text input only in chat mode and not in full screen */}
+      {renderMode === "chat" && !isFullScreen && (
+        <View style={styles.textInputContainer}>
+          <TextInput
+            style={styles.textInput}
+            value={textMessage}
+            onChangeText={setTextMessage}
+            placeholder="Type a message..."
+            multiline
+            maxLength={500}
+            placeholderTextColor="#999"
+          />
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              !textMessage.trim() && styles.disabledSendButton
+            ]}
+            onPress={sendTextMessage}
+            disabled={!textMessage.trim()}
+          >
+            <Ionicons 
+              name="send" 
+              size={20} 
+              color={"white"} 
+            />
+          </TouchableOpacity>
+        </View>
+      )}
+      
       <View style={styles.recordButtonContainer}>
         <TouchableOpacity
           style={[
@@ -1310,9 +1434,11 @@ export default function AIVideoCallScreen() {
         )}
       </View>
 
-      <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
-        <Ionicons name="call" size={24} color="white" />
-      </TouchableOpacity>
+      {!isFullScreen && (
+        <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
+          <Ionicons name="call" size={24} color="white" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -1353,10 +1479,18 @@ export default function AIVideoCallScreen() {
 
   // NEW: Video section component with fallback to avatar
   const renderVideoSection = () => {
+    const videoHeight = fullScreenAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [VIDEO_HEIGHT, SCREEN_HEIGHT],
+    });
+
     if (videosFailed) {
       // Fallback to avatar UI when videos fail
       return (
-        <View style={styles.avatarSection}>
+        <Animated.View style={[
+          styles.avatarSection,
+          { height: isFullScreen ? SCREEN_HEIGHT : VIDEO_HEIGHT }
+        ]}>
           <View style={styles.avatarContainer}>
             {conversation?.characterId.profileImage ? (
               <Image
@@ -1373,20 +1507,44 @@ export default function AIVideoCallScreen() {
               </View>
             )}
           </View>
-        </View>
+        </Animated.View>
       );
     }
 
     return (
-      <View style={styles.videoSection}>
+      <Animated.View style={[
+        styles.videoSection,
+        { height: videoHeight }
+      ]}>
         <AICharacterVideo
           isAudioPlaying={isAudioPlaying}
           character={conversation?.characterId!}
           onLoadStart={handleVideoLoadStart}
           onLoad={handleVideoLoad}
           onError={handleVideoError}
+          isFullScreen={isFullScreen}
         />
-      </View>
+        
+        {/* Full screen toggle button */}
+        {!isFullScreen && (
+          <TouchableOpacity
+            style={styles.fullScreenButton}
+            onPress={toggleFullScreen}
+          >
+            <Ionicons name="expand" size={24} color="white" />
+          </TouchableOpacity>
+        )}
+        
+        {/* Exit full screen button */}
+        {isFullScreen && (
+          <TouchableOpacity
+            style={styles.exitFullScreenButton}
+            onPress={toggleFullScreen}
+          >
+            <Ionicons name="contract" size={24} color="white" />
+          </TouchableOpacity>
+        )}
+      </Animated.View>
     );
   };
 
@@ -1414,18 +1572,33 @@ export default function AIVideoCallScreen() {
               />
             </TouchableOpacity>
           ),
+          headerShown: !isFullScreen,
         }}
       />
 
-      <View style={{ flex: 1 }}>
-        {/* Always render video section but conditionally show it */}
-        <View style={renderMode === "video" ? {} : { display: 'none' }}>
-          {renderVideoSection()}
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={headerHeight}
+        enabled={renderMode === "chat" && !isFullScreen}
+      >
+        <View style={{ flex: 1 }}>
+          {/* Always render video section but conditionally show it */}
+          <View style={renderMode === "video" ? {} : { display: 'none' }}>
+            {renderVideoSection()}
+          </View>
+          
+          {/* Chat section - hide when in full screen */}
+          {!isFullScreen && (
+            <View style={{ height: renderMode === "video" ? CHAT_HEIGHT : undefined, flex: renderMode === "chat" ? 1 : undefined }}>
+              {renderMessages()}
+            </View>
+          )}
         </View>
-        {renderMessages()}
-      </View>
 
-      {renderControls()}
+        {/* ✅ FIX 2: Always render controls - this makes them visible in both modes */}
+        {renderControls()}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -1519,10 +1692,10 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flex: 1,
-    margin: 16,
+    margin: 8,
   },
   messagesContent: {
-    paddingBottom: 20,
+    paddingBottom: 150,
   },
   messageContainer: {
     flexDirection: "row",
@@ -1544,11 +1717,11 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
     backgroundColor: Colors.light.secondaryDark,
-    borderRadius: 16,
-    margin: 16,
+    borderRadius: 8,
+    margin: 8,
   },
   sectionTitle: {
     color: "white",
@@ -1596,13 +1769,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     backgroundColor: Colors.light.surface,
+    minHeight: 60, // Add minimum height
   },
   recordButtonContainer: {
     alignItems: "center",
     position: "relative",
+    flex: 0,
   },
   recordButton: {
     width: 50,
@@ -1642,6 +1817,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F44336",
     justifyContent: "center",
     alignItems: "center",
+    flex: 0,
   },
   loadingBubble: {
     backgroundColor: Colors.light.surface,
@@ -1720,12 +1896,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   videoSection: {
-    height: 500,
+    height: VIDEO_HEIGHT,
     backgroundColor: "#000",
     position: "relative",
   },
   avatarSection: {
-    height: 200,
+    height: VIDEO_HEIGHT,
     backgroundColor: "#155269",
     position: "relative",
   },
@@ -1786,5 +1962,75 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
     textAlign: "center",
+  },
+  fullScreenButton: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    borderRadius: 20,
+    padding: 8,
+    zIndex: 20,
+  },
+  exitFullScreenButton: {
+    position: "absolute",
+    top: 60,
+    right: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    borderRadius: 20,
+    padding: 8,
+    zIndex: 20,
+  },
+  fullScreenControls: {
+    position: "absolute",
+    bottom: 100, // Increased bottom margin for better positioning
+    left: "50%", // Center horizontally
+    transform: [{ translateX: -25 }], // Offset by half button width (50/2)
+    backgroundColor: "transparent",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 30,
+    width: 50, // Fixed width to prevent flickering
+    height: 50, // Fixed height to prevent flickering
+  },
+  textInputContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.light.surface,
+    borderRadius: 25,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    marginRight: 10,
+    maxHeight: 120,
+    minHeight: Platform.OS === 'ios' ? 60 : 50,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  textInput: {
+    flex: 1,
+    backgroundColor: "transparent",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    maxHeight: 100,
+    minHeight: 40,
+    color: Colors.light.text,
+    textAlignVertical: 'top',
+  },
+  sendButton: {
+    backgroundColor: Colors.light.primary,
+    borderRadius: 20,
+    padding: 8,
+    marginLeft: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    width: 36,
+    height: 36,
+    alignSelf: 'flex-end',
+    marginBottom: 2,
+  },
+  disabledSendButton: {
+    backgroundColor: "#CCCCCC",
   },
 });
