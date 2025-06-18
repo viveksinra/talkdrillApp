@@ -1,4 +1,3 @@
-// ... existing code ...
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, TouchableOpacity, View, Image, Platform, ActivityIndicator, TextInput, Text as RNText, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -6,6 +5,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedView } from '@/components/ThemedView';
+import { ThemedText } from '@/components/ThemedText';
+import { Collapsible } from '@/components/Collapsible';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/Colors';
 import { uploadImage, updateUserProfile } from '@/api/services/private/userService';
@@ -14,14 +15,87 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
 
+  // Basic profile fields
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [profileImage, setProfileImage] = useState(user?.profileImage || '');
   const [gender, setGender] = useState(user?.gender || '');
   const [languageProficiency, setLanguageProficiency] = useState(user?.languageProficiency || '');
+  
+  // Additional onboarding fields
+  const [motherTongue, setMotherTongue] = useState(user?.motherTongue || '');
+  const [learningMotivation, setLearningMotivation] = useState(user?.learningMotivation || '');
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(user?.interests || []);
+  const [selectedFocusAreas, setSelectedFocusAreas] = useState<string[]>(user?.focusAreas || []);
+  
   const [imageFile, setImageFile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
+
+  // Options data from onboarding screen
+  const motherTongueOptions = [
+    { id: "arabic", label: "Arabic" },
+    { id: "bengali", label: "Bengali" },
+    { id: "chinese-mandarin", label: "Chinese (Mandarin)" },
+    { id: "chinese-cantonese", label: "Chinese (Cantonese)" },
+    { id: "english", label: "English" },
+    { id: "french", label: "French" },
+    { id: "german", label: "German" },
+    { id: "hindi", label: "Hindi" },
+    { id: "italian", label: "Italian" },
+    { id: "japanese", label: "Japanese" },
+    { id: "korean", label: "Korean" },
+    { id: "portuguese", label: "Portuguese" },
+    { id: "russian", label: "Russian" },
+    { id: "spanish", label: "Spanish" },
+    { id: "urdu", label: "Urdu" },
+    { id: "other", label: "Other" },
+  ];
+
+  const motivationOptions = [
+    { id: "career", label: "For Career Growth", icon: "💼" },
+    { id: "academic", label: "For Academic Studies", icon: "🎓" },
+    { id: "travel", label: "For Travel & Culture", icon: "✈️" },
+  ];
+
+  const interestOptions = [
+    { id: "reading", label: "Reading", icon: "📚" },
+    { id: "travel", label: "Travel", icon: "✈️" },
+    { id: "music", label: "Music", icon: "🎵" },
+    { id: "movies", label: "Movies", icon: "🎬" },
+    { id: "sports", label: "Sports", icon: "⚽" },
+    { id: "cooking", label: "Cooking", icon: "🍳" },
+    { id: "technology", label: "Technology", icon: "💻" },
+    { id: "art", label: "Art", icon: "🎨" },
+  ];
+
+  const focusAreaOptions = [
+    { id: "grammar", label: "Grammar", icon: "📝" },
+    { id: "vocabulary", label: "Vocabulary", icon: "📖" },
+    { id: "listening", label: "Listening", icon: "🎧" },
+    { id: "speaking", label: "Speaking", icon: "🎤" },
+  ];
+
+  // Handler functions for onboarding fields
+  const handleInterestToggle = (interestId: string) => {
+    setSelectedInterests(prev => {
+      if (prev.includes(interestId)) {
+        return prev.filter(id => id !== interestId);
+      } else {
+        return [...prev, interestId];
+      }
+    });
+  };
+
+  const handleFocusAreaToggle = (areaId: string) => {
+    setSelectedFocusAreas(prev => {
+      if (prev.includes(areaId)) {
+        return prev.filter(id => id !== areaId);
+      } else {
+        return [...prev, areaId];
+      }
+    });
+  };
 
   // Email validation
   const validateEmail = (emailString: string) => {
@@ -112,7 +186,11 @@ export default function EditProfileScreen() {
         email,
         profileImage: imageUrl,
         gender,
-        languageProficiency
+        languageProficiency,
+        motherTongue,
+        learningMotivation,
+        interests: selectedInterests,
+        focusAreas: selectedFocusAreas
       };
 
       await updateUserProfile(userData);
@@ -123,7 +201,11 @@ export default function EditProfileScreen() {
         email,
         profileImage: imageUrl,
         gender,
-        languageProficiency
+        languageProficiency,
+        motherTongue,
+        learningMotivation,
+        interests: selectedInterests,
+        focusAreas: selectedFocusAreas
       });
 
       alert('Profile updated successfully!');
@@ -177,6 +259,7 @@ export default function EditProfileScreen() {
                   style={styles.phoneTextInput}
                 />
               </View>
+              
               <View style={styles.inputGroup}>
                 <RNText style={styles.label}>Name</RNText>
                 <TextInput
@@ -286,6 +369,122 @@ export default function EditProfileScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Additional Details Section */}
+              <View style={styles.additionalDetailsSection}>
+                <ThemedText style={styles.sectionTitle}>Additional Details</ThemedText>
+                
+                {/* Mother Tongue Collapsible */}
+                <View style={styles.collapsibleContainer}>
+                  <Collapsible title="Mother Tongue">
+                    <View style={styles.collapsibleContent}>
+                      <RNText style={styles.collapsibleSubheading}>
+                        Select your native language to help us understand your language background.
+                      </RNText>
+                      {motherTongueOptions.map((option) => (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={[
+                            styles.onboardingRadioItem,
+                            motherTongue === option.id && styles.onboardingRadioItemSelected,
+                          ]}
+                          onPress={() => setMotherTongue(option.id)}
+                        >
+                          <View
+                            style={[
+                              styles.onboardingRadioButton,
+                              motherTongue === option.id && styles.onboardingRadioButtonSelected,
+                            ]}
+                          >
+                            {motherTongue === option.id && <View style={styles.onboardingRadioButtonInner} />}
+                          </View>
+                          <RNText style={styles.onboardingRadioText}>{option.label}</RNText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </Collapsible>
+                </View>
+
+                {/* Learning Motivation Collapsible */}
+                <View style={styles.collapsibleContainer}>
+                  <Collapsible title="Learning Motivation">
+                    <View style={styles.collapsibleContent}>
+                      <RNText style={styles.collapsibleSubheading}>
+                        Select your main motivation for learning English.
+                      </RNText>
+                      {motivationOptions.map((option) => (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={[
+                            styles.motivationItem,
+                            learningMotivation === option.id && styles.motivationItemSelected,
+                          ]}
+                          onPress={() => setLearningMotivation(option.id)}
+                        >
+                          <RNText style={styles.motivationIcon}>{option.icon}</RNText>
+                          <RNText style={styles.motivationText}>{option.label}</RNText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </Collapsible>
+                </View>
+
+                {/* Interests Collapsible */}
+                <View style={styles.collapsibleContainer}>
+                  <Collapsible title="Your Interests">
+                    <View style={styles.collapsibleContent}>
+                      <RNText style={styles.collapsibleSubheading}>
+                        Select topics you're interested in learning about.
+                      </RNText>
+                      <View style={styles.interestGrid}>
+                        {interestOptions.map((option) => (
+                          <TouchableOpacity
+                            key={option.id}
+                            style={[
+                              styles.interestCard,
+                              selectedInterests.includes(option.id) && styles.interestCardSelected,
+                            ]}
+                            onPress={() => handleInterestToggle(option.id)}
+                          >
+                            <View style={styles.interestIconContainer}>
+                              <RNText style={styles.interestIcon}>{option.icon}</RNText>
+                            </View>
+                            <RNText style={styles.interestText}>{option.label}</RNText>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </Collapsible>
+                </View>
+
+                {/* Focus Areas Collapsible */}
+                <View style={styles.collapsibleContainer}>
+                  <Collapsible title="Focus Areas">
+                    <View style={styles.collapsibleContent}>
+                      <RNText style={styles.collapsibleSubheading}>
+                        Select skills you want to improve.
+                      </RNText>
+                      <View style={styles.focusGrid}>
+                        {focusAreaOptions.map((option) => (
+                          <TouchableOpacity
+                            key={option.id}
+                            style={[
+                              styles.focusCard,
+                              selectedFocusAreas.includes(option.id) && styles.focusCardSelected,
+                            ]}
+                            onPress={() => handleFocusAreaToggle(option.id)}
+                          >
+                            <View style={styles.focusIconContainer}>
+                              <RNText style={styles.focusIcon}>{option.icon}</RNText>
+                            </View>
+                            <RNText style={styles.focusText}>{option.label}</RNText>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </Collapsible>
+                </View>
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -319,29 +518,11 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     flexGrow: 1,
-    paddingBottom: 20, // Add padding at the bottom for better spacing
+    paddingBottom: 20,
   },
   content: {
     padding: 24,
     alignItems: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.secondaryLight,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.light.text,
   },
   avatarContainer: {
     marginBottom: 32,
@@ -429,7 +610,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.text
   },
-  // Radio button styles
+  // Radio button styles (existing profile fields)
   radioItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -464,5 +645,174 @@ const styles = StyleSheet.create({
   radioText: {
     fontSize: 16,
     color: Colors.light.text,
+  },
+
+  // Additional Details Section
+  additionalDetailsSection: {
+    marginTop: 32,
+    width: '100%',
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: Colors.light.text,
+  },
+  collapsibleContainer: {
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.secondaryLight,
+    borderRadius: 8,
+    padding: 16,
+  },
+  collapsibleContent: {
+    marginTop: 16,
+  },
+  collapsibleSubheading: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+  },
+
+  // Onboarding style radio buttons (for mother tongue)
+  onboardingRadioItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  onboardingRadioItemSelected: {
+    borderColor: '#4b4ac0',
+    backgroundColor: '#f8f8ff',
+  },
+  onboardingRadioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#ccc',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  onboardingRadioButtonSelected: {
+    borderColor: '#4b4ac0',
+  },
+  onboardingRadioButtonInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4b4ac0',
+  },
+  onboardingRadioText: {
+    fontSize: 16,
+    color: '#333',
+  },
+
+  // Motivation Styles
+  motivationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  motivationItemSelected: {
+    borderColor: '#4b4ac0',
+    backgroundColor: '#f8f8ff',
+  },
+  motivationIcon: {
+    fontSize: 24,
+    marginRight: 16,
+  },
+  motivationText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+
+  // Interest Grid Styles
+  interestGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  interestCard: {
+    width: '48%',
+    aspectRatio: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    padding: 16,
+  },
+  interestCardSelected: {
+    borderColor: '#4b4ac0',
+    backgroundColor: '#f8f8ff',
+  },
+  interestIconContainer: {
+    width: 60,
+    height: 60,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  interestIcon: {
+    fontSize: 24,
+  },
+  interestText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+    color: '#333',
+  },
+
+  // Focus Area Grid Styles
+  focusGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  focusCard: {
+    width: '48%',
+    aspectRatio: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    padding: 16,
+  },
+  focusCardSelected: {
+    borderColor: '#4b4ac0',
+    backgroundColor: '#f8f8ff',
+  },
+  focusIconContainer: {
+    width: 60,
+    height: 60,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  focusIcon: {
+    fontSize: 24,
+  },
+  focusText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+    color: '#333',
   },
 });

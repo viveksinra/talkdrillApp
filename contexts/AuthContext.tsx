@@ -12,6 +12,10 @@ interface User {
   gender?: string;
   languageProficiency?: string;
   isAccountSetupCompleted?: boolean;
+  motherTongue?: string;
+  learningMotivation?: string;
+  interests?: string[];
+  focusAreas?: string[];
 }
 
 interface AuthContextType {
