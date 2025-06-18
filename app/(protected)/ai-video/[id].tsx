@@ -2,23 +2,21 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
-  Text,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  ScrollView,
-  Image,
   Animated,
   Dimensions,
-  TextInput,
   KeyboardAvoidingView,
-  Platform,
+  Platform,Text,
   Easing,
+  ScrollView,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio, Video, ResizeMode } from "expo-av";
+import { Audio } from "expo-av";
 import { Colors } from "../../../constants/Colors";
 import {
   getConversationHistory,
@@ -32,9 +30,13 @@ import {
 import { useSocket } from "../../../contexts/SocketContext";
 import { useAuth } from "../../../contexts/AuthContext";
 import { AudioBufferManager } from "../../../utils/AudioBufferManager";
-import { ThemedText } from "@/components/ThemedText";
-import { LoadingDots } from "@/components/shared/LoadingDot";
 import { useHeaderHeight } from '@react-navigation/elements';
+
+// Import new components
+import { CallHeader } from "@/components/ui/calling/CallHeader";
+import { VideoSection } from "@/components/ui/calling/VideoSection";
+import { MessagesSection } from "@/components/ui/calling/MessagesSection";
+import { CallControls } from "@/components/ui/calling/CallControls";
 
 interface Message {
   sender: "user" | "ai";
@@ -69,247 +71,6 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const VIDEO_HEIGHT = SCREEN_HEIGHT / 3;
 const CHAT_HEIGHT = (SCREEN_HEIGHT * 2) / 3;
 
-// Add CircularProgress component
-const CircularProgress = ({ size = 32, color = Colors.light.primary }) => {
-  const spinValue = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(spinValue, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, [spinValue]);
-
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  return (
-    <View style={[styles.circularProgressContainer, { width: size, height: size }]}>
-      <Animated.View
-        style={[
-          styles.circularProgressBorder,
-          { 
-            width: size, 
-            height: size, 
-            borderColor: color,
-            transform: [{ rotate: spin }] 
-          }
-        ]}
-      />
-      <View style={[styles.circularProgressCenter, { 
-        width: size - 4, 
-        height: size - 4,
-        backgroundColor: 'white'
-      }]} />
-    </View>
-  );
-};
-
-// Simple Video Component with optimized looping
-const PreloadedVideo = ({ 
-  source, 
-  isVisible, 
-  onReady, 
-  onError,
-  videoType,
-  isFullScreen = false
-}: {
-  source: any;
-  isVisible: boolean;
-  onReady: () => void;
-  onError: (error: any) => void;
-  videoType: 'idle' | 'speech';
-  isFullScreen?: boolean;
-}) => {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const videoRef = useRef<Video>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const handleLoad = (status: any) => {
-    console.log(`[VIDEO-${videoType.toUpperCase()}] Loaded successfully:`, status);
-    
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    
-    setIsLoaded(true);
-    onReady();
-  };
-
-  const handleError = (error: any) => {
-    console.error(`[VIDEO-${videoType.toUpperCase()}] Error loading video:`, error);
-    
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    
-    setHasError(true);
-    onError(error);
-  };
-
-  useEffect(() => {
-    console.log(`[VIDEO-${videoType.toUpperCase()}] Starting to load video from:`, source.uri);
-    
-    timeoutRef.current = setTimeout(() => {
-      if (!isLoaded && !hasError) {
-        console.error(`[VIDEO-${videoType.toUpperCase()}] Timeout: Video failed to load within 30 seconds`);
-        handleError(new Error('Video loading timeout'));
-      }
-    }, 30000);
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-    };
-  }, [source.uri, isLoaded, hasError, videoType]);
-
-  return (
-    <Video
-      ref={videoRef}
-      source={source}
-      style={[
-        styles.video,
-        {
-          opacity: isVisible && isLoaded && !hasError ? 1 : 0,
-          zIndex: isVisible && isLoaded && !hasError ? 1 : -1,
-        }
-      ]}
-      shouldPlay={isVisible && isLoaded && !hasError}
-      isLooping={true}
-      resizeMode={isFullScreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
-      onLoad={handleLoad}
-      onError={handleError}
-      volume={0}
-      useNativeControls={false}
-      progressUpdateIntervalMillis={16} // 60fps updates for smoother playback
-    />
-  );
-};
-
-// Main AICharacterVideo component with dual preloaded videos
-const AICharacterVideo = ({ 
-  isAudioPlaying, 
-  character,
-  onLoadStart, 
-  onLoad, 
-  onError,
-  isFullScreen = false
-}: {
-  isAudioPlaying: boolean;
-  character: AICharacter;
-  onLoadStart?: () => void;
-  onLoad?: () => void;
-  onError?: (error: any) => void;
-  isFullScreen?: boolean;
-}) => {
-  const [idleVideoReady, setIdleVideoReady] = useState(false);
-  const [speechVideoReady, setSpeechVideoReady] = useState(false);
-  const [hasError, setHasError] = useState(false);
-
-  // Check if video URLs are available
-  const hasVideoUrls = character.idleVideoUrl && character.speechVideoUrl;
-  
-  // Track when both videos are ready (or fallback to avatar if no URLs)
-  const bothVideosReady = hasVideoUrls ? (idleVideoReady && speechVideoReady) : false;
-
-  // Log state changes for debugging
-  useEffect(() => {
-    console.log('[VIDEO-STATE] State update:', {
-      idleVideoReady,
-      speechVideoReady,
-      bothVideosReady,
-      hasError
-    });
-  }, [idleVideoReady, speechVideoReady, bothVideosReady, hasError]);
-
-  useEffect(() => {
-    if (bothVideosReady) {
-      console.log('[VIDEO] Both videos preloaded and ready! Calling parent onLoad...');
-      onLoad?.();
-    }
-  }, [bothVideosReady, onLoad]);
-
-  useEffect(() => {
-    if (hasVideoUrls) {
-      console.log('[VIDEO] Starting video preload process...');
-      onLoadStart?.();
-    } else {
-      console.log('[VIDEO] No video URLs available, will use avatar mode');
-      // Immediately trigger error to fallback to avatar
-      setHasError(true);
-      onError?.(new Error('No video URLs available'));
-    }
-  }, [hasVideoUrls, onLoadStart, onError]);
-
-  const handleVideoError = (error: any) => {
-    setHasError(true);
-    onError?.(error);
-  };
-
-  // If no video URLs, don't render video components
-  if (!hasVideoUrls) {
-    return null;
-  }
-
-  return (
-    <View style={styles.videoContainer}>
-      {/* Show loading indicator until both videos are ready */}
-      {!bothVideosReady && !hasError && (
-        <View style={styles.videoLoadingContainer}>
-          <CircularProgress size={40} color={Colors.light.primary} />
-          <Text style={styles.videoLoadingText}>
-            Preparing videos... ({idleVideoReady ? '1' : '0'}/2 ready)
-          </Text>
-        </View>
-      )}
-      
-      {/* Show error state */}
-      {hasError && (
-        <View style={styles.videoErrorContainer}>
-          <Ionicons name="warning" size={40} color="#F44336" />
-          <Text style={styles.videoErrorText}>Video unavailable</Text>
-        </View>
-      )}
-      
-      {/* Idle Video - Dynamic URL */}
-      <PreloadedVideo
-        source={{ uri: character.idleVideoUrl! }}
-        isVisible={!isAudioPlaying && bothVideosReady}
-        onReady={() => {
-          console.log('[VIDEO-IDLE] Individual video ready');
-          setIdleVideoReady(true);
-        }}
-        onError={handleVideoError}
-        videoType="idle"
-        isFullScreen={isFullScreen}
-      />
-      
-      {/* Speech Video - Dynamic URL */}
-      <PreloadedVideo
-        source={{ uri: character.speechVideoUrl! }}
-        isVisible={isAudioPlaying && bothVideosReady}
-        onReady={() => {
-          console.log('[VIDEO-SPEECH] Individual video ready');
-          setSpeechVideoReady(true);
-        }}
-        onError={handleVideoError}
-        videoType="speech"
-        isFullScreen={isFullScreen}
-      />
-    </View>
-  );
-};
-
 export default function AIVideoCallScreen() {
   const { id: routeConversationId, gender, accent, languageProficiency } = 
     useLocalSearchParams<{ id: string, gender: string, accent: string, languageProficiency: string, aiCharacterName: string }>();
@@ -322,8 +83,6 @@ export default function AIVideoCallScreen() {
     off,
   } = useSocket();
   const { user } = useAuth();
-
-  // ✅ FIX 1: Move useHeaderHeight() HERE - right after other hooks
   const headerHeight = useHeaderHeight();
 
   // State management - Simplified
@@ -332,29 +91,28 @@ export default function AIVideoCallScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] =
-    useState<string>("Initializing...");
+  const [connectionStatus, setConnectionStatus] = useState<string>("Initializing...");
   const [isAIResponding, setIsAIResponding] = useState(false);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [isGeneratingText, setIsGeneratingText] = useState(false);
   
-  // NEW: State to track actual audio playback
+  // State to track actual audio playback
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   
-  // NEW: State to track video system readiness
+  // State to track video system readiness
   const [videosReady, setVideosReady] = useState(false);
   const [videosFailed, setVideosFailed] = useState(false);
 
-  // NEW: State and ref for delayed text display
+  // State and ref for delayed text display
   const [shouldShowAIText, setShouldShowAIText] = useState(false);
   const pendingTextContentRef = useRef<string>("");
   const currentAIMessageIndexRef = useRef<number>(-1);
 
-  // NEW: Full screen state and animation
+  // Full screen state and animation
   const [isFullScreen, setIsFullScreen] = useState(false);
   const fullScreenAnimation = useRef(new Animated.Value(0)).current;
   
-  // NEW: Message input state
+  // Message input state
   const [textMessage, setTextMessage] = useState("");
 
   // Refs
@@ -371,10 +129,10 @@ export default function AIVideoCallScreen() {
   // Add loading message state
   const [userLoadingMessageId, setUserLoadingMessageId] = useState<string | null>(null);
 
-  // Add this ref after other refs (around line 360)
+  // Add this ref after other refs
   const hasTriggeredInitialConversationRef = useRef<boolean>(false);
 
-  // NEW: Stable callback functions to prevent infinite loops
+  // Stable callback functions to prevent infinite loops
   const handleVideoLoadStart = useCallback(() => {
     console.log('[VIDEO-PARENT] Loading started - resetting states');
     setVideosReady(false);
@@ -393,24 +151,23 @@ export default function AIVideoCallScreen() {
     setVideosFailed(true);
   }, []);
 
-  // NEW: Full screen handlers
+  // Full screen handlers
   const toggleFullScreen = useCallback(() => {
     const toValue = isFullScreen ? 0 : 1;
     setIsFullScreen(!isFullScreen);
     
     Animated.timing(fullScreenAnimation, {
       toValue,
-      duration: 400, // Increased duration for smoother animation
+      duration: 400,
       useNativeDriver: false,
-      // Add easing for smoother transition
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1), // Material design easing
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
     }).start();
   }, [isFullScreen, fullScreenAnimation]);
 
   // Speech recognition event handlers using hooks
   useSpeechRecognitionEvent("start", () => {
     console.log("[SPEECH] Speech recognition started");
-    hasSentFinalTranscriptRef.current = false; // Reset flag
+    hasSentFinalTranscriptRef.current = false;
     setIsProcessingVoice(true);
   });
 
@@ -419,18 +176,13 @@ export default function AIVideoCallScreen() {
     setIsRecording(false);
     setIsProcessingVoice(false);
 
-    // Clear silence timer
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
     }
 
-    // Send final transcript if we haven't already
     if (transcriptRef.current && !hasSentFinalTranscriptRef.current) {
-      console.log(
-        "[SPEECH] Sending final transcript on end:",
-        transcriptRef.current
-      );
+      console.log("[SPEECH] Sending final transcript on end:", transcriptRef.current);
       sendTranscriptToServer(transcriptRef.current);
       hasSentFinalTranscriptRef.current = true;
     }
@@ -439,57 +191,24 @@ export default function AIVideoCallScreen() {
   useSpeechRecognitionEvent("result", (event) => {
     console.log("[SPEECH] Result event:", event);
 
-    if (event.isFinal && event.results && event.results.length > 0) {
-      // Final transcript - send to server
-      const finalTranscript = event.results[0]?.transcript;
-      if (finalTranscript && !hasSentFinalTranscriptRef.current) {
-        console.log("[SPEECH] Final transcript:", finalTranscript);
-        sendTranscriptToServer(finalTranscript);
-        hasSentFinalTranscriptRef.current = true;
-
-        // Stop recording after final result
-        setTimeout(() => {
-          stopRecording();
-        }, 100);
-      }
-    } else if (event.results && event.results.length > 0) {
-      // Interim transcript - update current transcript
-      const interimTranscript = event.results[0]?.transcript || "";
-      transcriptRef.current = interimTranscript;
-      console.log("[SPEECH] Interim transcript:", interimTranscript);
-
-      // Reset silence timer
-      if (silenceTimeoutRef.current) {
-        clearTimeout(silenceTimeoutRef.current);
-      }
-
-      // Set new silence timer
-      silenceTimeoutRef.current = setTimeout(() => {
-        // Silence detected - stop recording
-        console.log("[SPEECH] Silence detected, stopping recording");
-        if (!hasSentFinalTranscriptRef.current && transcriptRef.current) {
-          sendTranscriptToServer(transcriptRef.current);
-          hasSentFinalTranscriptRef.current = true;
-        }
-        stopRecording();
-      }, 2000); // Increased to 2 seconds of silence
+    if (event.results && event.results.length > 0) {
+      const transcript = event.results[0]?.transcript || "";
+      transcriptRef.current = transcript;
+      console.log("[SPEECH] Transcript:", transcript);
     }
   });
 
   useSpeechRecognitionEvent("error", (event) => {
     console.error("[SPEECH] Speech recognition error:", event);
     setIsRecording(false);
-    Alert.alert(
-      "Speech Recognition Error",
-      event.message || "Failed to recognize speech. Please try again."
-    );
+    // Alert.alert(
+    //   "Speech Recognition Error",
+    //   event.message || "Failed to recognize speech. Please try again."
+    // );
   });
 
   useEffect(() => {
-    console.log(
-      "Starting AI Video Call with conversation ID:",
-      routeConversationId
-    );
+    console.log("Starting AI Video Call with conversation ID:", routeConversationId);
     initializeSession();
     return () => {
       cleanup();
@@ -502,19 +221,16 @@ export default function AIVideoCallScreen() {
     }
   }, [conversation?.messages]);
 
-  // NEW: Enhanced AudioBufferManager with playback state tracking
+  // Enhanced AudioBufferManager with playback state tracking
   useEffect(() => {
-    // Create a custom AudioBufferManager instance with playback tracking
     const enhancedAudioManager = new AudioBufferManager();
     
-    // Override the playMergedAudio method to track playback state
     const originalPlayMergedAudio = enhancedAudioManager.playMergedAudio.bind(enhancedAudioManager);
     enhancedAudioManager.playMergedAudio = async function(audioChunks: string[]) {
       try {
         setIsAudioPlaying(true);
         console.log('[VIDEO] Audio playback started - switching to speech video');
         
-        // NEW: Trigger text display when audio starts
         setShouldShowAIText(true);
         
         await originalPlayMergedAudio(audioChunks);
@@ -528,7 +244,6 @@ export default function AIVideoCallScreen() {
       }
     };
 
-    // Override the stop method to ensure proper state cleanup
     const originalStop = enhancedAudioManager.stop.bind(enhancedAudioManager);
     enhancedAudioManager.stop = async function() {
       setIsAudioPlaying(false);
@@ -536,7 +251,6 @@ export default function AIVideoCallScreen() {
       await originalStop();
     };
 
-    // Override the cleanup method to ensure proper state cleanup
     const originalCleanup = enhancedAudioManager.cleanup.bind(enhancedAudioManager);
     enhancedAudioManager.cleanup = async function() {
       setIsAudioPlaying(false);
@@ -551,11 +265,11 @@ export default function AIVideoCallScreen() {
     };
   }, []);
 
-  // NEW: Effect to animate text display when shouldShowAIText becomes true
+  // Effect to animate text display when shouldShowAIText becomes true
   useEffect(() => {
     if (shouldShowAIText && pendingTextContentRef.current && currentAIMessageIndexRef.current >= 0) {
       console.log('[TEXT-SYNC] Starting synchronized text display');
-      
+            
       // Animate text display character by character
       const fullText = pendingTextContentRef.current;
       let currentIndex = 0;
@@ -584,10 +298,9 @@ export default function AIVideoCallScreen() {
             };
           });
           
-          currentIndex += 2; // Display 2 characters at a time for smoother animation
-          setTimeout(animateText, 50); // 50ms delay between updates
+          currentIndex += 2;
+          setTimeout(animateText, 50);
         } else {
-          // Animation complete - reset states
           console.log('[TEXT-SYNC] Text animation complete');
           pendingTextContentRef.current = "";
           currentAIMessageIndexRef.current = -1;
@@ -599,17 +312,12 @@ export default function AIVideoCallScreen() {
     }
   }, [shouldShowAIText]);
 
-  // NEW: Check if both AI and videos are ready, then trigger conversation
+  // Check if both AI and videos are ready, then trigger conversation
   const checkReadinessAndTrigger = useCallback(() => {
     const aiReady = isConnected;
-    
-    // For video mode: either videos are ready OR videos failed (fallback to avatar)
-    // For chat mode: always ready
     let videoSystemReady = videosReady || videosFailed;
-    
     const systemReady = aiReady && videoSystemReady;
 
-    // Only trigger AI conversation ONCE when system first becomes ready
     if (systemReady && !hasTriggeredInitialConversationRef.current) {
       console.log('[SYSTEM] Both AI and video system ready - triggering conversation');
       hasTriggeredInitialConversationRef.current = true;
@@ -617,7 +325,7 @@ export default function AIVideoCallScreen() {
     }
   }, [isConnected, videosReady, videosFailed]);
 
-  // NEW: Effect to trigger readiness check when videos become ready OR fail
+  // Effect to trigger readiness check when videos become ready OR fail
   useEffect(() => {
     console.log('[MAIN-STATE] Video state changed:', { 
       videosReady, 
@@ -648,7 +356,6 @@ export default function AIVideoCallScreen() {
   };
 
   const requestPermissions = async () => {
-    // Request both audio and speech recognition permissions
     const audioPermission = await Audio.requestPermissionsAsync();
     if (!audioPermission.granted) {
       Alert.alert(
@@ -658,8 +365,7 @@ export default function AIVideoCallScreen() {
       return;
     }
 
-    const speechPermission =
-      await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    const speechPermission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!speechPermission.granted) {
       Alert.alert(
         "Speech Recognition Permission Required",
@@ -698,25 +404,16 @@ export default function AIVideoCallScreen() {
   const setupSocketListeners = () => {
     console.log("Setting up socket listeners for realtime");
 
-    // Session events
     on("realtime_session_started", handleSessionStarted);
     on("realtime_connection_opened", handleConnectionOpened);
     on("realtime_connection_closed", handleConnectionClosed);
     on("realtime_session_created", handleSessionCreated);
-
-    // Text events
     on("realtime_text_delta", handleTextDelta);
     on("realtime_text_complete", handleTextComplete);
-
-    // Audio events
     on("realtime_audio_delta", handleAudioDelta);
     on("realtime_audio_complete", handleAudioComplete);
-
-    // Response events
     on("realtime_response_complete", handleResponseComplete);
     on("realtime_error", handleRealtimeError);
-
-    // Add new listener for AI responding start
     on("realtime_ai_responding_start", handleAIRespondingStart);
   };
 
@@ -760,8 +457,6 @@ export default function AIVideoCallScreen() {
     setConnectionStatus("Ready To Talk");
     setIsConnected(true);
     setIsAIResponding(false);
-
-    // NEW: Only trigger AI conversation when both AI and videos are ready
     checkReadinessAndTrigger();
   };
 
@@ -785,7 +480,6 @@ export default function AIVideoCallScreen() {
     console.log("Text delta:", data.delta);
     setIsAIResponding(true);
 
-    // NEW: Store text content instead of immediately displaying it
     pendingTextContentRef.current += data.delta;
 
     setConversation((prev) => {
@@ -794,27 +488,23 @@ export default function AIVideoCallScreen() {
       const messages = [...prev.messages];
       const lastMessageIndex = messages.length - 1;
       
-      // If the last message is AI loading, replace it with a hidden message
       if (lastMessageIndex >= 0 && 
           messages[lastMessageIndex].sender === "ai" && 
           messages[lastMessageIndex].isLoading) {
         messages[lastMessageIndex] = {
           sender: "ai",
-          content: "", // Keep content empty until audio starts
+          content: "",
           timestamp: new Date().toISOString(),
           isChunk: true,
-          isLoading: true, // Keep loading state until audio starts
+          isLoading: true,
           loadingType: "text_generating",
         };
         currentAIMessageIndexRef.current = lastMessageIndex;
       } else {
-        // Find the last AI message
         const lastAIMessage = messages[lastMessageIndex];
         if (lastAIMessage && lastAIMessage.sender === "ai") {
-          // Don't update content yet, just track the message index
           currentAIMessageIndexRef.current = lastMessageIndex;
         } else {
-          // Create new AI message with loading state
           messages.push({
             sender: "ai",
             content: "",
@@ -841,13 +531,9 @@ export default function AIVideoCallScreen() {
   }) => {
     console.log("Text complete:", data.text);
     
-    // Stop text generation loading
     setIsGeneratingText(false);
-    
-    // NEW: Store the complete text for synchronized display
     pendingTextContentRef.current = data.text;
     
-    // Update the message to show it's ready but still loading until audio starts
     setConversation((prev) => {
       if (!prev) return null;
 
@@ -874,7 +560,6 @@ export default function AIVideoCallScreen() {
     audioData: string;
     itemId: string;
   }) => {
-    // Collect audio chunks
     audioChunksRef.current.push(data.audioData);
   };
 
@@ -886,7 +571,6 @@ export default function AIVideoCallScreen() {
   }) => {
     console.log("Audio complete:", data);
 
-    // Play merged audio with enhanced tracking
     if (audioChunksRef.current.length > 0) {
       await audioBufferManager.current.playMergedAudio(audioChunksRef.current);
       audioChunksRef.current = [];
@@ -910,7 +594,6 @@ export default function AIVideoCallScreen() {
     setIsAIResponding(false);
   };
 
-  // New handler for AI response start
   const handleAIRespondingStart = (data: {
     responseId: string;
     timestamp: Date;
@@ -918,11 +601,9 @@ export default function AIVideoCallScreen() {
     console.log("AI starting to respond:", data);
     setIsAIResponding(true);
 
-    // Clear any existing audio chunks
     audioChunksRef.current = [];
     audioBufferManager.current.cleanup();
     
-    // NEW: Reset text synchronization states
     setShouldShowAIText(false);
     pendingTextContentRef.current = "";
     currentAIMessageIndexRef.current = -1;
@@ -933,11 +614,7 @@ export default function AIVideoCallScreen() {
     try {
       console.log("[SPEECH] Starting speech recognition...");
 
-      // NEW: Check both AI connection and video readiness (or fallback to avatar)
-      let videoSystemReady = false;
-      videoSystemReady = videosReady || videosFailed;
-      
-      
+      let videoSystemReady = videosReady || videosFailed;
       const systemReady = isConnected && videoSystemReady;
       
       if (!systemReady) {
@@ -953,7 +630,6 @@ export default function AIVideoCallScreen() {
       }
 
       if (isAIResponding) {
-        // Interrupt AI response
         console.log("[SPEECH] Interrupting AI response");
         await audioBufferManager.current.stop();
         await audioBufferManager.current.cleanup();
@@ -962,8 +638,8 @@ export default function AIVideoCallScreen() {
 
       setIsRecording(true);
       transcriptRef.current = "";
+      hasSentFinalTranscriptRef.current = false;
 
-      // Configure speech recognition options
       const options: ExpoSpeechRecognitionOptions = {
         lang: "en-US",
         interimResults: true,
@@ -974,15 +650,11 @@ export default function AIVideoCallScreen() {
 
       console.log("[SPEECH] Starting with options:", options);
 
-      // Start speech recognition
       ExpoSpeechRecognitionModule.start(options);
     } catch (error) {
       console.error("[SPEECH] Error starting speech recognition:", error);
       setIsRecording(false);
-      Alert.alert(
-        "Error",
-        "Failed to start speech recognition. Please try again."
-      );
+      // Alert.alert("Error", "Failed to start speech recognition. Please try again.");
     }
   };
 
@@ -990,15 +662,12 @@ export default function AIVideoCallScreen() {
     try {
       console.log("[SPEECH] Stopping speech recognition...");
 
-      // Clear silence timer
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
         silenceTimeoutRef.current = null;
       }
 
       setIsRecording(false);
-
-      // Stop speech recognition
       ExpoSpeechRecognitionModule.stop();
     } catch (error) {
       console.error("[SPEECH] Error stopping speech recognition:", error);
@@ -1034,7 +703,6 @@ export default function AIVideoCallScreen() {
   const cleanup = async () => {
     console.log("Cleanup function called");
 
-    // Clear timers
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
@@ -1044,7 +712,6 @@ export default function AIVideoCallScreen() {
     endRealtimeSession();
     await audioBufferManager.current.cleanup();
 
-    // Stop speech recognition if active
     if (isRecording) {
       try {
         ExpoSpeechRecognitionModule.stop();
@@ -1054,14 +721,11 @@ export default function AIVideoCallScreen() {
     }
   };
 
-  // Update sendTranscriptToServer function
   const sendTranscriptToServer = (transcript: string) => {
     if (!transcript.trim()) return;
 
-    // Generate unique ID for this message
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    // First, add a loading message for voice processing
     setConversation((prev) => {
       if (!prev) return null;
 
@@ -1082,7 +746,6 @@ export default function AIVideoCallScreen() {
 
     setUserLoadingMessageId(messageId);
 
-    // After a short delay, replace with actual transcript
     setTimeout(() => {
       setConversation((prev) => {
         if (!prev) return null;
@@ -1106,10 +769,8 @@ export default function AIVideoCallScreen() {
       });
 
       setUserLoadingMessageId(null);
-      // Start text generation loading for AI
       setIsGeneratingText(true);
       
-      // Add AI loading message
       setConversation((prev) => {
         if (!prev) return null;
 
@@ -1128,20 +789,17 @@ export default function AIVideoCallScreen() {
         };
       });
 
-      // Send to server
       sendRealtimeText(transcript);
       transcriptRef.current = "";
-    }, 800); // Show loading for 0.8 seconds
+    }, 800);
   };
 
-  // NEW: Send text message function
   const sendTextMessage = () => {
     if (!textMessage.trim()) return;
 
     const transcript = textMessage.trim();
     setTextMessage("");
 
-    // Add user message to conversation
     setConversation((prev) => {
       if (!prev) return null;
 
@@ -1159,10 +817,8 @@ export default function AIVideoCallScreen() {
       };
     });
 
-    // Start text generation loading for AI
     setIsGeneratingText(true);
     
-    // Add AI loading message
     setConversation((prev) => {
       if (!prev) return null;
 
@@ -1181,98 +837,7 @@ export default function AIVideoCallScreen() {
       };
     });
 
-    // Send to server
     sendRealtimeText(transcript);
-  };
-
-  // Render methods
-  const renderMessage = (message: Message, index: number) => {
-    const isUser = message.sender === "user";
-
-    // For user voice processing, show circular progress instead of message bubble
-    if (message.isLoading && message.loadingType === "voice_processing" && isUser) {
-      return (
-        <View
-          key={index}
-          style={[
-            styles.messageContainer,
-            styles.userMessage,
-          ]}
-        >
-          <View style={styles.userLoadingContainer}>
-            <CircularProgress size={40} color={Colors.light.primary} />
-          </View>
-        </View>
-      );
-    }
-
-    return (
-      <View
-        key={index}
-        style={[
-          styles.messageContainer,
-          isUser ? styles.userMessage : styles.aiMessage,
-        ]}
-      >
-        {!isUser && (
-          <Image
-            source={{ uri: conversation?.characterId.profileImage }}
-            style={styles.characterAvatar}
-          />
-        )}
-        <View
-          style={[
-            styles.messageBubble,
-            isUser ? styles.userBubble : styles.aiBubble,
-            message.isChunk && styles.chunkBubble,
-            message.isLoading && styles.loadingBubble,
-          ]}
-        >
-          {message.isLoading && message.loadingType === "text_generating" ? (
-            // AI text generation - show dots animation
-            <View style={styles.messageLoadingContainer}>
-              <LoadingDots />
-            </View>
-          ) : message.isLoading && message.loadingType === "voice_processing" ? (
-            // Voice processing - show dots animation
-            <View style={styles.messageLoadingContainer}>
-              <LoadingDots />
-            </View>
-          ) : message.isLoading ? (
-            // Other loading states
-            <View style={styles.messageLoadingContainer}>
-              <CircularProgress size={24} color={isUser ? "white" : Colors.light.primary} />
-              <Text style={[
-                styles.loadingMessageText,
-                { color: isUser ? "white" : Colors.light.text }
-              ]}>
-                Generating response...
-              </Text>
-            </View>
-          ) : (
-            <>
-              <Text
-                style={[
-                  styles.messageText,
-                  isUser ? styles.userText : styles.aiText,
-                ]}
-              >
-                {message.content}
-              </Text>
-              {message.audioData && (
-                <View style={styles.audioIndicator}>
-                  <Ionicons
-                    name="volume-medium"
-                    size={16}
-                    color={Colors.light.text}
-                  />
-                </View>
-              )}
-            </>
-          )}
-        </View>
-      </View>
-    );
   };
 
   if (loading) {
@@ -1305,255 +870,21 @@ export default function AIVideoCallScreen() {
     );
   }
 
-  const HeaderTitleWithAvatar = () => {
-    // Determine system readiness status
-    let videoSystemReady = false;
-    videoSystemReady = videosReady || videosFailed;
-
-    
-    const systemReady = isConnected && videoSystemReady;
-    const statusColor = systemReady ? "#4CAF50" : "#F44336";
-    
-    // Determine display status with priority order
-    let displayStatus = connectionStatus;
-    
-    if (!isConnected) {
-      displayStatus = connectionStatus; // Use original connection status
-    }
-      else if (videosReady) {
-        displayStatus = "Ready To Talk";
-      } else if (videosFailed) {
-        displayStatus = "Ready (Avatar mode)";
-      } else {
-        displayStatus = "Loading AI...";
-      }
-    
-
-    return (
-      <View style={styles.headerTitleContainer}>
-        <Image
-          source={{ uri: conversation?.characterId.profileImage }}
-          style={styles.headerAvatar}
-          onError={(error) =>
-            console.error("Header avatar loading error:", error.nativeEvent.error)
-          }
-          defaultSource={require("@/assets/images/default-avatar-1.jpg")}
-        />
-        <View>
-          <ThemedText style={styles.headerName}>
-            {(conversation?.characterId.name as string).length > 15 ? (conversation?.characterId.name as string).slice(0, 15) + "..." : (conversation?.characterId.name as string)}
-          </ThemedText>
-          <View
-            style={{ flexDirection: "row", alignItems: "center", width: 200 }}
-          >
-            <View
-              style={[
-                styles.statusIndicator,
-                { backgroundColor: statusColor },
-              ]}
-            />
-            <Text style={styles.statusText}>
-              {displayStatus.length > 20
-                ? displayStatus.substring(0, 20) + "..."
-                : displayStatus}
-            </Text>
-            {(isAIResponding || (!systemReady && isConnected)) && (
-              <ActivityIndicator
-                size="small"
-                color={Colors.light.primary}
-                style={styles.processingIndicator}
-              />
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderControls = () => (
-    <View style={[
-      styles.controlsContainer,
-      isFullScreen && styles.fullScreenControls
-    ]}>
-      {/* Show text input only in chat mode and not in full screen */}
-      {renderMode === "chat" && !isFullScreen && (
-        <View style={styles.textInputContainer}>
-          <TextInput
-            style={styles.textInput}
-            value={textMessage}
-            onChangeText={setTextMessage}
-            placeholder="Type a message..."
-            multiline
-            maxLength={500}
-            placeholderTextColor="#999"
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              !textMessage.trim() && styles.disabledSendButton
-            ]}
-            onPress={sendTextMessage}
-            disabled={!textMessage.trim()}
-          >
-            <Ionicons 
-              name="send" 
-              size={20} 
-              color={"white"} 
-            />
-          </TouchableOpacity>
-        </View>
-      )}
-      
-      <View style={styles.recordButtonContainer}>
-        <TouchableOpacity
-          style={[
-            styles.recordButton,
-            isRecording && styles.recordingButton,
-            !isConnected && styles.disabledButton,
-          ]}
-          onPress={isRecording ? stopRecording : startRecording}
-          disabled={!isConnected}
-        >
-          <Ionicons name={isRecording ? "stop" : "mic"} size={24} color="white" />
-        </TouchableOpacity>
-        
-        {/* Circular loading indicator for voice recording */}
-        {isProcessingVoice && (
-          <View style={styles.circularLoader}>
-            <ActivityIndicator size="large" color={Colors.light.primary} />
-          </View>
-        )}
-        
-        {/* Status text with dots animation for voice processing */}
-        {isProcessingVoice && (
-          <View style={styles.processingVoiceContainer}>
-            <LoadingDots />
-          </View>
-        )}
-        {isGeneratingText && (
-          <Text style={styles.recordingStatusText}>Generating response...</Text>
-        )}
-      </View>
-
-      {!isFullScreen && (
-        <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
-          <Ionicons name="call" size={24} color="white" />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  const renderMessages = () =>
-    conversation?.messages &&
-    conversation?.messages.length &&
-    conversation?.messages.length > 0 ? (
-      <View style={{ flex: 1 }}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="book-outline" size={24} color="white" />
-          <Text style={styles.sectionTitle}>Lecture Section</Text>
-        </View>
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.messagesContainer}
-          contentContainerStyle={styles.messagesContent}
-        >
-          {conversation?.messages.map((message, index) =>
-            renderMessage(message, index)
-          )}
-        </ScrollView>
-      </View>
-    ) : (
-      <View style={{ flex: 1 }}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="book-outline" size={24} color="white" />
-          <Text style={styles.sectionTitle}>Lecture Section</Text>
-        </View>
-        <View
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-        >
-          <Text style={{ fontSize: 16, color: Colors.light.text }}>
-            No messages yet
-          </Text>
-        </View>
-      </View>
-    );
-
-  // NEW: Video section component with fallback to avatar
-  const renderVideoSection = () => {
-    const videoHeight = fullScreenAnimation.interpolate({
-      inputRange: [0, 1],
-      outputRange: [VIDEO_HEIGHT, SCREEN_HEIGHT],
-    });
-
-    if (videosFailed) {
-      // Fallback to avatar UI when videos fail
-      return (
-        <Animated.View style={[
-          styles.avatarSection,
-          { height: isFullScreen ? SCREEN_HEIGHT : VIDEO_HEIGHT }
-        ]}>
-          <View style={styles.avatarContainer}>
-            {conversation?.characterId.profileImage ? (
-              <Image
-                source={{ uri: conversation?.characterId.profileImage }}
-                style={styles.avatarImage}
-              />
-            ) : (
-              <View style={styles.characterAvatarPlaceholder}>
-                <Ionicons
-                  name="person"
-                  size={60}
-                  color={Colors.light.primary}
-                />
-              </View>
-            )}
-          </View>
-        </Animated.View>
-      );
-    }
-
-    return (
-      <Animated.View style={[
-        styles.videoSection,
-        { height: videoHeight }
-      ]}>
-        <AICharacterVideo
-          isAudioPlaying={isAudioPlaying}
-          character={conversation?.characterId!}
-          onLoadStart={handleVideoLoadStart}
-          onLoad={handleVideoLoad}
-          onError={handleVideoError}
-          isFullScreen={isFullScreen}
-        />
-        
-        {/* Full screen toggle button */}
-        {!isFullScreen && (
-          <TouchableOpacity
-            style={styles.fullScreenButton}
-            onPress={toggleFullScreen}
-          >
-            <Ionicons name="expand" size={24} color="white" />
-          </TouchableOpacity>
-        )}
-        
-        {/* Exit full screen button */}
-        {isFullScreen && (
-          <TouchableOpacity
-            style={styles.exitFullScreenButton}
-            onPress={toggleFullScreen}
-          >
-            <Ionicons name="contract" size={24} color="white" />
-          </TouchableOpacity>
-        )}
-      </Animated.View>
-    );
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen
         options={{
-          headerTitle: () => <HeaderTitleWithAvatar />,
+          headerTitle: () => (
+            <CallHeader
+              characterName={conversation?.characterId.name || ""}
+              characterAvatar={conversation?.characterId.profileImage || ""}
+              connectionStatus={connectionStatus}
+              isConnected={isConnected}
+              videosReady={videosReady}
+              videosFailed={videosFailed}
+              isAIResponding={isAIResponding}
+            />
+          ),
           headerLeft: () => (
             <TouchableOpacity onPress={handleEndCall} style={styles.backButton}>
               <Ionicons name="close" size={24} color={Colors.light.text} />
@@ -1586,25 +917,55 @@ export default function AIVideoCallScreen() {
         <View style={{ flex: 1 }}>
           {/* Always render video section but conditionally show it */}
           <View style={renderMode === "video" ? {} : { display: 'none' }}>
-            {renderVideoSection()}
+            {conversation?.characterId && (
+              <VideoSection
+                character={conversation.characterId}
+                isAudioPlaying={isAudioPlaying}
+                videosReady={videosReady}
+                videosFailed={videosFailed}
+                isFullScreen={isFullScreen}
+                fullScreenAnimation={fullScreenAnimation}
+                toggleFullScreen={toggleFullScreen}
+                handleVideoLoadStart={handleVideoLoadStart}
+                handleVideoLoad={handleVideoLoad}
+                handleVideoError={handleVideoError}
+              />
+            )}
           </View>
           
           {/* Chat section - hide when in full screen */}
           {!isFullScreen && (
-            <View style={{ height: renderMode === "video" ? CHAT_HEIGHT : undefined, flex: renderMode === "chat" ? 1 : undefined }}>
-              {renderMessages()}
+            <View style={{ 
+              height: renderMode === "video" ? CHAT_HEIGHT : undefined, 
+              flex: renderMode === "chat" ? 1 : undefined 
+            }}>
+              <MessagesSection
+                messages={conversation?.messages || []}
+                characterAvatar={conversation?.characterId.profileImage}
+                scrollViewRef={scrollViewRef}
+              />
             </View>
           )}
         </View>
 
-        {/* ✅ FIX 2: Always render controls - this makes them visible in both modes */}
-        {renderControls()}
+        <CallControls
+          isFullScreen={isFullScreen}
+          renderMode={renderMode}
+          textMessage={textMessage}
+          setTextMessage={setTextMessage}
+          sendTextMessage={sendTextMessage}
+          isRecording={isRecording}
+          startRecording={startRecording}
+          stopRecording={stopRecording}
+          isConnected={isConnected}
+          isProcessingVoice={isProcessingVoice}
+          isGeneratingText={isGeneratingText}
+          handleEndCall={handleEndCall}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   container: {
@@ -1648,368 +1009,8 @@ const styles = StyleSheet.create({
     padding: 8,
     marginRight: 16,
   },
-  statusBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: Colors.light.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
-  },
-  statusIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  statusText: {
-    fontSize: 14,
-    color: Colors.light.text,
-    flex: 1,
-  },
   renderModeButton: {
     padding: 8,
     marginRight: 16,
-  },
-  processingIndicator: {
-    marginLeft: 8,
-  },
-  messagesContainer: {
-    flex: 1,
-    margin: 8,
-  },
-  messagesContent: {
-    paddingBottom: 150,
-  },
-  messageContainer: {
-    flexDirection: "row",
-    marginVertical: 4,
-  },
-  userMessage: {
-    justifyContent: "flex-end",
-  },
-  aiMessage: {
-    justifyContent: "flex-start",
-  },
-  characterAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 8,
-    marginTop: 4,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    backgroundColor: Colors.light.secondaryDark,
-    borderRadius: 8,
-    margin: 8,
-  },
-  sectionTitle: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginLeft: 10,
-  },
-  characterAvatarPlaceholder: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  messageBubble: {
-    maxWidth: "80%",
-    padding: 12,
-    borderRadius: 16,
-  },
-  userBubble: {
-    backgroundColor: Colors.light.primary,
-    marginLeft: 40,
-  },
-  aiBubble: {
-    backgroundColor: Colors.light.surface,
-    marginRight: 40,
-  },
-  chunkBubble: {
-    marginVertical: 2,
-    padding: 8,
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 20,
-  },
-  userText: {
-    color: "white",
-  },
-  aiText: {
-    color: Colors.light.text,
-  },
-  controlsContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 10,
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    backgroundColor: Colors.light.surface,
-    minHeight: 60, // Add minimum height
-  },
-  recordButtonContainer: {
-    alignItems: "center",
-    position: "relative",
-    flex: 0,
-  },
-  recordButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: Colors.light.primary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  circularLoader: {
-    position: "absolute",
-    top: -10,
-    left: -10,
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-  },
-  recordingStatusText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: Colors.light.primary,
-    textAlign: "center",
-  },
-  recordingButton: {
-    backgroundColor: "#F44336",
-  },
-  disabledButton: {
-    backgroundColor: "#CCCCCC",
-  },
-  endCallButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "#F44336",
-    justifyContent: "center",
-    alignItems: "center",
-    flex: 0,
-  },
-  loadingBubble: {
-    backgroundColor: Colors.light.surface,
-    opacity: 0.9,
-  },
-  messageLoadingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 4,
-  },
-  audioIndicator: {
-    marginTop: 4,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  headerTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: 16,
-    paddingBottom: 16,
-  },
-  headerAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 10,
-  },
-  headerName: {
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  onlineStatus: {
-    fontSize: 12,
-    color: "#4CD964", // Or your preferred online color
-  },
-  offlineStatus: {
-    fontSize: 12,
-    color: "#8E8E93", // Or your preferred offline color
-  },
-  circularProgressContainer: {
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  circularProgressBorder: {
-    position: 'absolute',
-    borderWidth: 2,
-    borderRadius: 999,
-    borderRightColor: 'transparent',
-    borderBottomColor: 'transparent',
-    borderTopColor: Colors.light.primary,
-    borderLeftColor: Colors.light.primary,
-  },
-  circularProgressCenter: {
-    borderRadius: 999,
-  },
-  loadingMessageText: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  userLoadingContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 40,
-    paddingVertical: 8,
-  },
-  processingVoiceContainer: {
-    marginTop: 8,
-    alignItems: 'center',
-  },
-  videoSection: {
-    height: VIDEO_HEIGHT,
-    backgroundColor: "#000",
-    position: "relative",
-  },
-  avatarSection: {
-    height: VIDEO_HEIGHT,
-    backgroundColor: "#155269",
-    position: "relative",
-  },
-  avatarContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  videoContainer: {
-    flex: 1,
-    position: "relative",
-    backgroundColor: "#000",
-  },
-  videoBufferContainer: {
-    flex: 1,
-    position: "relative",
-    backgroundColor: "#000",
-  },
-  video: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: "100%",
-    height: "100%",
-  },
-  videoLoadingContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#000",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10,
-  },
-  videoLoadingText: {
-    color: "white",
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: "center",
-  },
-  videoErrorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#000",
-  },
-  videoErrorText: {
-    color: "#F44336",
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: "center",
-  },
-  fullScreenButton: {
-    position: "absolute",
-    top: 20,
-    right: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    borderRadius: 20,
-    padding: 8,
-    zIndex: 20,
-  },
-  exitFullScreenButton: {
-    position: "absolute",
-    top: 60,
-    right: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    borderRadius: 20,
-    padding: 8,
-    zIndex: 20,
-  },
-  fullScreenControls: {
-    position: "absolute",
-    bottom: 100, // Increased bottom margin for better positioning
-    left: "50%", // Center horizontally
-    transform: [{ translateX: -25 }], // Offset by half button width (50/2)
-    backgroundColor: "transparent",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 30,
-    width: 50, // Fixed width to prevent flickering
-    height: 50, // Fixed height to prevent flickering
-  },
-  textInputContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.light.surface,
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    marginRight: 10,
-    maxHeight: 120,
-    minHeight: Platform.OS === 'ios' ? 60 : 50,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-  },
-  textInput: {
-    flex: 1,
-    backgroundColor: "transparent",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    fontSize: 16,
-    maxHeight: 100,
-    minHeight: 40,
-    color: Colors.light.text,
-    textAlignVertical: 'top',
-  },
-  sendButton: {
-    backgroundColor: Colors.light.primary,
-    borderRadius: 20,
-    padding: 8,
-    marginLeft: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    width: 36,
-    height: 36,
-    alignSelf: 'flex-end',
-    marginBottom: 2,
-  },
-  disabledSendButton: {
-    backgroundColor: "#CCCCCC",
   },
 });

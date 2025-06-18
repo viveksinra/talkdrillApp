@@ -57,11 +57,27 @@ export default function LoginViaMobileScreen() {
       )
     : countryCodes;
   
+  // Phone number validation
+  const isValidPhoneNumber = () => {
+    const cleanedNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+    return cleanedNumber.length === 10;
+  };
+  
+  const handlePhoneNumberChange = (text: string) => {
+    // Only allow digits and limit to 10 characters
+    const cleanedText = text.replace(/\D/g, '');
+    if (cleanedText.length <= 10) {
+      setPhoneNumber(cleanedText);
+    }
+  };
+  
   const handleContinue = () => {
-    router.push({
-      pathname: '/otp-verification',
-      params: { phoneNumber: countryCode + phoneNumber }
-    });
+    if (isValidPhoneNumber()) {
+      router.push({
+        pathname: '/otp-verification',
+        params: { phoneNumber: countryCode + phoneNumber }
+      });
+    }
   };
 
   const handleBack = () => {
@@ -94,20 +110,31 @@ export default function LoginViaMobileScreen() {
           </TouchableOpacity>
           
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              phoneNumber.length > 0 && !isValidPhoneNumber() && styles.inputError
+            ]}
             placeholder="Mobile number"
             keyboardType="phone-pad"
             value={phoneNumber}
-            onChangeText={setPhoneNumber}
+            onChangeText={handlePhoneNumberChange}
+            maxLength={10}
           />
         </View>
+        
+        {/* Validation message */}
+        {phoneNumber.length > 0 && !isValidPhoneNumber() && (
+          <ThemedText style={styles.errorText}>
+            Please enter a valid 10-digit mobile number
+          </ThemedText>
+        )}
         
         <TouchableOpacity 
           style={[
             styles.continueButton,
-            phoneNumber.length < 8 && styles.disabledButton
+            !isValidPhoneNumber() && styles.disabledButton
           ]}
-          disabled={phoneNumber.length < 8}
+          disabled={!isValidPhoneNumber()}
           onPress={handleContinue}>
           <ThemedText style={styles.continueButtonText}>Continue</ThemedText>
         </TouchableOpacity>
@@ -216,7 +243,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginRight: 12,
-    width: 120,
+    width: 90,
     justifyContent: 'space-between',
   },
   codeWithFlag: {
@@ -323,5 +350,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 4,
-  }
+  },
+  inputError: {
+    borderColor: '#FF4444',
+    borderWidth: 2,
+  },
+  errorText: {
+    color: '#FF4444',
+    fontSize: 14,
+    marginTop: -16,
+    marginBottom: 16,
+    marginLeft: 104, // Align with input field (90px + 12px margin + 2px adjustment)
+  },
 }); 
