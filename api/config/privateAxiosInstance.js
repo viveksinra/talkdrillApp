@@ -78,3 +78,22 @@ export const privateDelete = async (url, params = {}) => {
     throw error;
   }
 };
+
+export const privatePut = async (url, data) => {
+  try {
+    const token = await getAuthToken();
+    if (!token) {
+      return { message: "Logout and login again", variant: "error" };
+    }
+    const response = await api.put(url, data, {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": token,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error in privatePut:", error);
+    throw error;
+  }
+};
