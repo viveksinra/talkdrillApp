@@ -65,6 +65,15 @@ let errorInterceptor = (error: AxiosError): Promise<never> => {
   return Promise.reject(error);
 };
 
+// Helper function to check if response has standard API format
+const hasStandardApiFormat = (data: any): boolean => {
+  return data && 
+         typeof data === 'object' && 
+         'message' in data && 
+         'variant' in data &&
+         ['success', 'error', 'info'].includes(data.variant);
+};
+
 // Custom fetch implementation to mimic axios
 const makeFetchRequest = async <T>(
   url: string, 
@@ -161,7 +170,28 @@ const makeFetchRequest = async <T>(
     // Apply response interceptor
     responseData = responseInterceptor(response, responseData);
     
+    // MODIFIED ERROR HANDLING: Don't throw errors for 4xx responses with standard API format
     if (!response.ok) {
+      console.log(`Non-2xx response for ${method} ${url}:`, {
+        status: response.status,
+        statusText: response.statusText,
+        data: responseData
+      });
+      
+      // Check if this is a 4xx response with our standard API format
+      if (response.status >= 400 && response.status < 500 && hasStandardApiFormat(responseData)) {
+        console.log(`Treating 4xx response as valid API response for ${method} ${url}`);
+        // Return as successful response - let the service layer handle the variant
+        return {
+          data: responseData,
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          config,
+        };
+      }
+      
+      // For 5xx errors or non-standard responses, still throw errors
       console.error(`Error response for ${method} ${url}:`, {
         status: response.status,
         statusText: response.statusText,
@@ -304,6 +334,5 @@ export const fetchWithAuth = async (
 
 export const DEFAULT_CALL_LIMIT = 15;
 export const MAX_CALL_LIMIT = 30;
-
 
 export default api;

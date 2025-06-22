@@ -22,7 +22,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].primary,
+        tabBarActiveTintColor: Colors.light.primary,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
@@ -53,6 +53,13 @@ export default function TabLayout() {
         options={{
           title: 'Peers',
           tabBarIcon: ({ color }) => <TabBarIcon name="users" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="coins"
+        options={{
+          title: 'Coins',
+          tabBarIcon: ({ color }) => <TabBarIcon name="dollar" color={color} />,
         }}
       />
       <Tabs.Screen

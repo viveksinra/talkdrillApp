@@ -39,6 +39,14 @@ const MAPPING = {
   'calendar.circle.fill': 'event',
   'arrow.2.circlepath': 'refresh',
   'link': 'link',
+  // Added for coins feature
+  'bitcoinsign.circle.fill': 'monetization-on',
+  'calendar.badge.plus': 'event-available',
+  // Added for coin transaction icons
+  'creditcard.fill': 'credit-card',
+  'gift.fill': 'card-giftcard',
+  'minus.circle.fill': 'remove-circle',
+  'arrow.clockwise': 'refresh',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],
