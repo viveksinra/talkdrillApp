@@ -11,7 +11,7 @@ interface Props {
 }
 
 export const StrengthsImprovements: React.FC<Props> = ({ strengths, improvements }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   return (
     <ThemedView style={styles.container}>
@@ -21,46 +21,60 @@ export const StrengthsImprovements: React.FC<Props> = ({ strengths, improvements
         activeOpacity={0.7}
       >
         <ThemedText type="subtitle" style={styles.title}>Strengths & Improvements</ThemedText>
-        <IconSymbol 
-          size={20} 
-          name={isExpanded ? "chevron.up" : "chevron.down"} 
-          color="#666" 
-        />
+        <View style={styles.iconContainer}>
+          <IconSymbol 
+            size={20} 
+            name={isExpanded ? "chevron.up" : "chevron.down"} 
+            color="#000" 
+          />
+        </View>
       </TouchableOpacity>
 
       {isExpanded && (
         <View style={styles.content}>
           {/* Top 3 Strengths */}
           <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Top 3 Strengths</ThemedText>
-            {strengths.map((strength, index) => (
-              <View key={index} style={styles.strengthItem}>
-                <View style={styles.strengthHeader}>
-                  <IconSymbol size={20} name="checkmark.circle.fill" color="#4CAF50" />
-                  <ThemedText style={styles.strengthTitle}>{strength.title}</ThemedText>
+            <ThemedText style={styles.strengthsSectionTitle}>Top 3 Strengths</ThemedText>
+            <View style={styles.itemsContainer}>
+              {strengths.map((strength, index) => (
+                <View key={index} style={styles.strengthItem}>
+                  <View style={styles.itemHeader}>
+                    <View style={styles.iconWrapper}>
+                      <IconSymbol size={16} name="checkmark.circle.fill" color="#4CAF50" />
+                    </View>
+                    <View style={styles.textContainer}>
+                      <ThemedText style={styles.strengthTitle}>{strength.title}</ThemedText>
+                      <ThemedText style={styles.strengthDescription}>{strength.description}</ThemedText>
+                    </View>
+                  </View>
                 </View>
-                <ThemedText style={styles.strengthDescription}>{strength.description}</ThemedText>
-              </View>
-            ))}
+              ))}
+            </View>
           </View>
 
           {/* Top 3 Weaknesses → Action */}
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Top 3 Weaknesses → Action</ThemedText>
-            {improvements.map((improvement, index) => (
-              <View key={index} style={styles.improvementItem}>
-                <View style={styles.improvementHeader}>
-                  <IconSymbol size={20} name="exclamationmark.triangle.fill" color="#FF9800" />
-                  <ThemedText style={styles.improvementTitle}>{improvement.title}</ThemedText>
+          {improvements.length > 0 && <View style={styles.section}>
+            <ThemedText style={styles.weaknessesSectionTitle}>Top 3 Weaknesses → Action</ThemedText>
+            <View style={styles.itemsContainer}>
+              {improvements.map((improvement, index) => (
+                <View key={index} style={styles.improvementItem}>
+                  <View style={styles.itemHeader}>
+                    <View style={styles.iconWrapper}>
+                      <IconSymbol size={16} name="exclamationmark.triangle.fill" color="#FF9500" />
+                    </View>
+                    <View style={styles.textContainer}>
+                      <ThemedText style={styles.improvementTitle}>{'improvement.title'}</ThemedText>
+                      <ThemedText style={styles.improvementDescription}>{'improvement.description'}</ThemedText>
+                      <View style={styles.actionRow}>
+                        <ThemedText style={styles.actionLabel}>Action: </ThemedText>
+                        <ThemedText style={styles.actionText}>{'improvement.action'}</ThemedText>
+                      </View>
+                    </View>
+                  </View>
                 </View>
-                <ThemedText style={styles.improvementDescription}>{improvement.description}</ThemedText>
-                <View style={styles.actionContainer}>
-                  <ThemedText style={styles.actionLabel}>Action:</ThemedText>
-                  <ThemedText style={styles.actionText}>{improvement.action}</ThemedText>
-                </View>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          </View>}
         </View>
       )}
     </ThemedView>
@@ -79,91 +93,99 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
+    color: '#333',
+  },
+  iconContainer: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     padding: 16,
+    paddingTop: 0,
   },
   section: {
     marginBottom: 24,
   },
-  sectionTitle: {
+  strengthsSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 16,
+    color: '#4CAF50',
+    marginBottom: 12,
+  },
+  weaknessesSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF9500',
+    marginBottom: 12,
+  },
+  itemsContainer: {
+    gap: 12,
   },
   strengthItem: {
-    backgroundColor: '#F1F8E9',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+    backgroundColor: '#FFFFFF',
+    padding: 0,
   },
-  strengthHeader: {
+  improvementItem: {
+    backgroundColor: '#FFFFFF',
+    padding: 0,
+  },
+  itemHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
   strengthTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#2E7D32',
-    marginLeft: 12,
-    flex: 1,
+    color: '#333',
+    marginBottom: 4,
+  },
+  improvementTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
   },
   strengthDescription: {
     fontSize: 14,
-    color: '#388E3C',
+    color: '#666',
     lineHeight: 20,
-    marginLeft: 32,
-  },
-  improvementItem: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
-  },
-  improvementHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 8,
-  },
-  improvementTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#E65100',
-    marginLeft: 12,
-    flex: 1,
   },
   improvementDescription: {
     fontSize: 14,
-    color: '#F57C00',
+    color: '#666',
     lineHeight: 20,
-    marginLeft: 32,
     marginBottom: 8,
   },
-  actionContainer: {
-    marginLeft: 32,
-    marginTop: 8,
+  actionRow: {
+    flexDirection: 'row',
   },
   actionLabel: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#BF360C',
-    marginBottom: 4,
+    color: '#FF9500',
   },
   actionText: {
     fontSize: 14,
-    color: '#D84315',
+    color: '#666',
+    flex: 1,
     lineHeight: 20,
-    fontStyle: 'italic',
+  },
+  iconWrapper: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  textContainer: {
+    flex: 1,
   },
 }); 

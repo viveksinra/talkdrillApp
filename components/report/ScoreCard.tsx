@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -10,24 +10,28 @@ interface Props {
   metrics: DetailedMetrics;
 }
 
+const { width: screenWidth } = Dimensions.get('window');
+
 export const Scorecard: React.FC<Props> = ({ overallScore, metrics }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true); // Default to expanded to match screenshot
 
   const getScoreColor = (score: number) => {
-    if (score >= 8) return '#4CAF50'; // Green
-    if (score >= 6) return '#FF9800'; // Orange
-    return '#F44336'; // Red
+    if (score >= 8) return '#4A86E8'; // Blue for high scores
+    if (score >= 6) return '#4A86E8'; // Blue for medium scores  
+    return '#4A86E8'; // Blue for all scores to match screenshot
   };
 
-  const getScoreBarWidth = (score: number) => {
+  const getScoreBarWidth = (score: number): string => {
     return `${(score / 10) * 100}%`;
   };
 
-  const renderScoreBar = (label: string, score: number) => (
-    <View style={styles.scoreBarContainer}>
-      <View style={styles.scoreBarHeader}>
-        <ThemedText style={styles.scoreBarLabel}>{label}</ThemedText>
-        <ThemedText style={[styles.scoreBarValue, { color: getScoreColor(score) }]}>
+  const renderScoreCard = (label: string, score: number, isFullWidth: boolean = false) => (
+    <View style={[styles.scoreCard, isFullWidth && styles.scoreCardFullWidth]}>
+      <View style={styles.scoreCardHeader}>
+        <ThemedText style={styles.scoreCardLabel} numberOfLines={2}>
+          {label}
+        </ThemedText>
+        <ThemedText style={[styles.scoreCardValue, { color: getScoreColor(score) }]}>
           {score}
         </ThemedText>
       </View>
@@ -36,7 +40,7 @@ export const Scorecard: React.FC<Props> = ({ overallScore, metrics }) => {
           style={[
             styles.scoreBarFill, 
             { 
-              width: getScoreBarWidth(score),
+              width: getScoreBarWidth(score) as any,
               backgroundColor: getScoreColor(score)
             }
           ]} 
@@ -53,32 +57,35 @@ export const Scorecard: React.FC<Props> = ({ overallScore, metrics }) => {
         activeOpacity={0.7}
       >
         <ThemedText type="subtitle" style={styles.title}>Scorecard (0-10)</ThemedText>
-        <IconSymbol 
-          size={20} 
-          name={isExpanded ? "chevron.up" : "chevron.down"} 
-          color="#666" 
-        />
+        <View style={styles.iconContainer}>
+          <IconSymbol 
+            size={24} 
+            name={isExpanded ? "chevron.up" : "chevron.down"} 
+            color="#000" 
+          />
+        </View>
       </TouchableOpacity>
 
       {isExpanded && (
         <View style={styles.content}>
-          {/* Overall Score Circle */}
-          <View style={styles.overallScoreContainer}>
-            <View style={[styles.scoreCircle, { borderColor: getScoreColor(overallScore) }]}>
-              <ThemedText style={[styles.overallScoreText, { color: getScoreColor(overallScore) }]}>
-                {overallScore}
-              </ThemedText>
-              <ThemedText style={styles.overallScoreLabel}>Overall</ThemedText>
+          {/* Grid Layout for Scores */}
+          <View style={styles.gridContainer}>
+            {/* First Row - 2 cards */}
+            <View style={styles.gridRow}>
+              {renderScoreCard("Fluency & Coherence", metrics.fluencyCoherence.score)}
+              {renderScoreCard("Grammar Accuracy", metrics.grammarAccuracy.score)}
             </View>
-          </View>
-
-          {/* Individual Scores */}
-          <View style={styles.scoresContainer}>
-            {renderScoreBar("Fluency & Coherence", metrics.fluencyCoherence.score)}
-            {renderScoreBar("Grammar Accuracy", metrics.grammarAccuracy.score)}
-            {renderScoreBar("Vocabulary Range", metrics.vocabularyRange.score)}
-            {renderScoreBar("Pronunciation & Intelligibility", metrics.pronunciationIntelligibility.score)}
-            {renderScoreBar("Pragmatic Appropriateness", Math.round(metrics.pragmaticsRegister.formalityMatch / 10))}
+            
+            {/* Second Row - 2 cards */}
+            <View style={styles.gridRow}>
+              {renderScoreCard("Vocabulary Range", metrics.vocabularyRange.score)}
+              {renderScoreCard("Pronunciation & Intelligibility", metrics.pronunciationIntelligibility.score)}
+            </View>
+            
+            {/* Third Row - 1 full width card */}
+            <View style={styles.gridRow}>
+              {renderScoreCard("Pragmatic Appropriateness", Math.round(metrics.pragmaticsRegister.formalityMatch / 10), true)}
+            </View>
           </View>
 
           {/* Note */}
@@ -106,70 +113,72 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
+    color: '#333',
+  },
+  iconContainer: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     padding: 16,
+    paddingTop: 0,
   },
-  overallScoreContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  scoreCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  overallScoreText: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  overallScoreLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  scoresContainer: {
+  gridContainer: {
     gap: 16,
   },
-  scoreBarContainer: {
-    marginBottom: 8,
+  gridRow: {
+    flexDirection: 'row',
+    gap: 16,
   },
-  scoreBarHeader: {
+  scoreCard: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    minHeight: 100,
+  },
+  scoreCardFullWidth: {
+    flex: 1,
+  },
+  scoreCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    minHeight: 40,
   },
-  scoreBarLabel: {
+  scoreCardLabel: {
     fontSize: 14,
     fontWeight: '500',
     color: '#333',
     flex: 1,
+    marginRight: 8,
+    lineHeight: 18,
   },
-  scoreBarValue: {
-    fontSize: 16,
+  scoreCardValue: {
+    fontSize: 24,
     fontWeight: '700',
-    minWidth: 20,
+    minWidth: 30,
     textAlign: 'right',
   },
   scoreBarTrack: {
-    height: 8,
+    height: 6,
     backgroundColor: '#E5E5E5',
-    borderRadius: 4,
+    borderRadius: 3,
     overflow: 'hidden',
+    marginTop: 'auto',
   },
   scoreBarFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 3,
   },
   noteContainer: {
     flexDirection: 'row',

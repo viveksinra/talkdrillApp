@@ -1,13 +1,14 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Dimensions } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
 import { ConversationOverview as ConversationOverviewType } from '@/types';
 
 interface Props {
   overview: ConversationOverviewType;
 }
+
+const { width: screenWidth } = Dimensions.get('window');
 
 export const ConversationOverview: React.FC<Props> = ({ overview }) => {
   const formatDate = (date: Date) => {
@@ -18,18 +19,14 @@ export const ConversationOverview: React.FC<Props> = ({ overview }) => {
     }).format(new Date(date));
   };
 
-  const getGoalStyle = (goal: string) => {
-    switch (goal) {
-      case 'Business':
-        return styles.businessGoal;
-      case 'Casual':
-        return styles.casualGoal;
-      case 'Academic':
-        return styles.academicGoal;
-      default:
-        return styles.businessGoal;
-    }
+  // Get participant colors based on their role or name
+  const getParticipantColor = (participant: any, index: number) => {
+    if (index === 0) return '#4A86E8'; // Blue for first participant
+    return '#34A853'; // Green for second participant
   };
+
+  // Determine if we should stack date/duration on small screens
+  const shouldStackDateDuration = screenWidth < 360; // Small screens
 
   return (
     <ThemedView style={styles.container}>
@@ -40,52 +37,56 @@ export const ConversationOverview: React.FC<Props> = ({ overview }) => {
         <ThemedText style={styles.label}>Participants</ThemedText>
         <View style={styles.participantsContainer}>
           {overview.participants.map((participant, index) => (
-            <View key={index} style={styles.participant}>
-              <View style={[styles.participantIcon, participant.role === 'user' ? styles.userIcon : styles.aiIcon]}>
-                <ThemedText style={styles.participantInitial}>
-                  {participant.name.charAt(0).toUpperCase()}
-                </ThemedText>
+            <React.Fragment key={index}>
+              <View style={styles.participantItem}>
+                <View style={[styles.participantIcon, { backgroundColor: getParticipantColor(participant, index) }]}>
+                  <ThemedText style={styles.participantInitial}>
+                    {participant.name.charAt(0).toUpperCase()}
+                  </ThemedText>
+                </View>
+                <View style={styles.participantNameContainer}>
+                  <ThemedText style={styles.participantName} numberOfLines={1} ellipsizeMode="tail">
+                    {participant.name}
+                  </ThemedText>
+                </View>
               </View>
-              <ThemedText style={styles.participantName}>{participant.name}</ThemedText>
               {index < overview.participants.length - 1 && (
-                <IconSymbol size={16} name="arrow.right" color="#888" style={styles.arrow} />
+                <View style={styles.arrowContainer}>
+                  <ThemedText style={styles.bidirectionalArrow}>⇄</ThemedText>
+                </View>
               )}
-            </View>
+            </React.Fragment>
           ))}
         </View>
       </View>
 
       {/* Date and Duration */}
-      <View style={styles.row}>
-        <View style={styles.column}>
+      <View style={[styles.row, shouldStackDateDuration && styles.column]}>
+        <View style={[styles.dateColumn, shouldStackDateDuration && styles.fullWidth]}>
           <ThemedText style={styles.label}>Date</ThemedText>
-          <ThemedText style={styles.value}>{formatDate(overview.date)}</ThemedText>
+          <View style={styles.inputBox}>
+            <ThemedText style={styles.inputValue} numberOfLines={1} ellipsizeMode="tail">
+              {formatDate(overview.date)}
+            </ThemedText>
+          </View>
         </View>
-        <View style={styles.column}>
+        <View style={[styles.durationColumn, shouldStackDateDuration && styles.fullWidth]}>
           <ThemedText style={styles.label}>Duration</ThemedText>
-          <ThemedText style={styles.value}>{overview.duration} minutes</ThemedText>
+          <View style={styles.inputBox}>
+            <ThemedText style={styles.inputValue} numberOfLines={1}>
+              {Math.round(overview.duration)} minutes
+            </ThemedText>
+          </View>
         </View>
       </View>
 
       {/* Scenario/Topic */}
       <View style={styles.section}>
         <ThemedText style={styles.label}>Scenario/Topic</ThemedText>
-        <ThemedText style={styles.value}>{overview.scenario}</ThemedText>
-      </View>
-
-      {/* Goal */}
-      <View style={styles.section}>
-        <ThemedText style={styles.label}>Goal</ThemedText>
-        <View style={styles.goalContainer}>
-          <View style={[styles.goalPill, getGoalStyle(overview.goal)]}>
-            <ThemedText style={styles.goalText}>{overview.goal}</ThemedText>
-          </View>
-          <View style={[styles.goalPill, styles.inactiveGoal]}>
-            <ThemedText style={styles.inactiveGoalText}>Casual</ThemedText>
-          </View>
-          <View style={[styles.goalPill, styles.inactiveGoal]}>
-            <ThemedText style={styles.inactiveGoalText}>Academic</ThemedText>
-          </View>
+        <View style={styles.inputBox}>
+          <ThemedText style={styles.inputValue} numberOfLines={2} ellipsizeMode="tail">
+            {overview.scenario}
+          </ThemedText>
         </View>
       </View>
 
@@ -93,7 +94,11 @@ export const ConversationOverview: React.FC<Props> = ({ overview }) => {
       {overview.excerpt && (
         <View style={styles.section}>
           <ThemedText style={styles.label}>Excerpt (optional)</ThemedText>
-          <ThemedText style={styles.excerpt}>{overview.excerpt}</ThemedText>
+          <View style={[styles.inputBox, styles.excerptBox]}>
+            <ThemedText style={styles.excerptValue} numberOfLines={4} ellipsizeMode="tail">
+              {overview.excerpt}
+            </ThemedText>
+          </View>
         </View>
       )}
     </ThemedView>
@@ -106,11 +111,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    maxWidth: '100%',
   },
   title: {
     marginBottom: 16,
     fontSize: 18,
     fontWeight: '600',
+    color: '#333',
   },
   section: {
     marginBottom: 16,
@@ -118,89 +125,96 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     marginBottom: 16,
+    gap: 12,
   },
   column: {
+    flexDirection: 'column',
+    gap: 12,
+  },
+  dateColumn: {
     flex: 1,
-    marginRight: 16,
+    minWidth: 0, // Allows flex item to shrink below content size
+  },
+  durationColumn: {
+    flex: 1,
+    minWidth: 0, // Allows flex item to shrink below content size
+  },
+  fullWidth: {
+    flex: 1,
+    width: '100%',
   },
   label: {
     fontSize: 14,
     fontWeight: '500',
     color: '#666',
-    marginBottom: 4,
-  },
-  value: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
+    marginBottom: 8,
   },
   participantsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  participant: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  participantIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  userIcon: {
-    backgroundColor: '#E3F2FD',
-  },
-  aiIcon: {
-    backgroundColor: '#E8F5E8',
-  },
-  participantInitial: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  participantName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-  },
-  arrow: {
-    marginHorizontal: 8,
-  },
-  goalContainer: {
-    flexDirection: 'row',
+    flexWrap: 'wrap', // Allow wrapping on very small screens
     gap: 8,
   },
-  goalPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+  participantItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0, // Important for text truncation
+    maxWidth: screenWidth < 320 ? 120 : 150, // Limit width on small screens
   },
-  businessGoal: {
-    backgroundColor: '#4A86E8',
+  participantIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0, // Don't shrink the icon
   },
-  casualGoal: {
-    backgroundColor: '#34A853',
+  participantNameContainer: {
+    flex: 1,
+    minWidth: 0, // Important for text truncation
   },
-  academicGoal: {
-    backgroundColor: '#9C27B0',
-  },
-  inactiveGoal: {
-    backgroundColor: '#F5F5F5',
-  },
-  goalText: {
-    fontSize: 12,
-    fontWeight: '500',
+  participantInitial: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#FFFFFF',
   },
-  inactiveGoalText: {
-    fontSize: 12,
+  participantName: {
+    fontSize: 16,
     fontWeight: '500',
-    color: '#999',
+    color: '#333',
   },
-  excerpt: {
+  arrowContainer: {
+    paddingHorizontal: 4,
+    flexShrink: 0,
+  },
+  bidirectionalArrow: {
+    fontSize: 16,
+    color: '#666',
+  },
+  inputBox: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E1E5E9',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  excerptBox: {
+    minHeight: 60, // Give more height for excerpt
+    alignItems: 'flex-start',
+    paddingVertical: 16,
+  },
+  inputValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  excerptValue: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,

@@ -37,35 +37,32 @@ export const ExportOptions: React.FC<Props> = ({
     {
       id: 'pdf',
       title: 'Export as PDF',
-      description: 'Generate a comprehensive PDF report',
-      icon: 'doc.fill' as const,
-      color: '#DC2626',
+      icon: 'doc.text.fill' as const,
+      isPrimary: false,
       action: () => handleExport('Export PDF', () => onExportPDF(reportId)),
     },
     {
       id: 'csv',
       title: 'Export as CSV',
-      description: 'Download data in spreadsheet format',
-      icon: 'square.grid.3x1.folder.fill.badge.plus' as const,
-      color: '#059669',
+      icon: 'doc.plaintext.fill' as const,
+      isPrimary: false,
       action: () => handleExport('Export CSV', () => onExportCSV(reportId)),
     },
     {
       id: 'share',
-      title: 'Generate Share Link',
-      description: 'Create a shareable link for this report',
-      icon: 'link' as const,
-      color: '#2563EB',
+      title: 'Share Report Link',
+      icon: 'square.and.arrow.up.fill' as const,
+      isPrimary: false,
       action: () => handleExport('Generate Share Link', () => onGenerateShareLink(reportId)),
     },
-    {
-      id: 'followup',
-      title: 'Schedule Follow-up',
-      description: 'Set a reminder to review progress',
-      icon: 'calendar.badge.plus' as const,
-      color: '#9333EA',
-      action: () => handleExport('Schedule Follow-up', () => onScheduleFollowUp(reportId)),
-    },
+    // {
+    //   id: 'followup',
+    //   title: 'Schedule Follow-up',
+    //   icon: 'calendar.circle.fill' as const,
+    //   isPrimary: false,
+    //   isSpecial: false,
+    //   action: () => handleExport('Schedule Follow-up', () => onScheduleFollowUp(reportId)),
+    // },
   ];
 
   return (
@@ -75,52 +72,57 @@ export const ExportOptions: React.FC<Props> = ({
         onPress={() => setIsExpanded(!isExpanded)}
         activeOpacity={0.7}
       >
-        <ThemedText type="subtitle" style={styles.title}>Export Options</ThemedText>
-        <IconSymbol 
-          size={20} 
-          name={isExpanded ? "chevron.up" : "chevron.down"} 
-          color="#666" 
-        />
+        <ThemedText type="subtitle" style={styles.title}>Export</ThemedText>
+        <View style={styles.iconContainer}>
+          <IconSymbol 
+            size={24} 
+            name={isExpanded ? "chevron.up" : "chevron.down"} 
+            color="#000" 
+          />
+        </View>
       </TouchableOpacity>
 
       {isExpanded && (
         <View style={styles.content}>
-          <ThemedText style={styles.description}>
-            Export your report in different formats or share it with others
-          </ThemedText>
-          
-          <View style={styles.optionsGrid}>
+          <View style={styles.optionsList}>
             {exportOptions.map((option) => (
               <TouchableOpacity
                 key={option.id}
-                style={[styles.optionCard, loading === option.id && styles.optionCardLoading]}
+                style={[
+                  styles.optionButton,
+                  option.isPrimary && styles.optionButtonPrimary,
+                  loading === option.id && styles.optionButtonLoading
+                ]}
                 onPress={option.action}
                 disabled={loading !== null}
                 activeOpacity={0.7}
               >
-                <View style={styles.optionHeader}>
-                  <View style={[styles.optionIcon, { backgroundColor: `${option.color}20` }]}>
-                    <IconSymbol size={24} name={option.icon} color={option.color} />
+                <View style={styles.optionContent}>
+                  <View style={[
+                    styles.optionIconContainer,
+                    option.isPrimary && styles.iconContainerPrimary,
+                    
+                  ]}>
+                    <IconSymbol 
+                      size={20} 
+                      name={option.icon} 
+                      color={option.isPrimary ? '#FFFFFF' : '#2196F3'} 
+                    />
                   </View>
+                  <ThemedText style={[
+                    styles.optionTitle,
+                    option.isPrimary && styles.optionTitlePrimary
+                  ]}>
+                    {option.title}
+                  </ThemedText>
                   {loading === option.id && (
                     <View style={styles.loadingIndicator}>
                       <IconSymbol size={16} name="arrow.2.circlepath" color="#666" />
                     </View>
                   )}
                 </View>
-                
-                <ThemedText style={styles.optionTitle}>{option.title}</ThemedText>
-                <ThemedText style={styles.optionDescription}>{option.description}</ThemedText>
               </TouchableOpacity>
             ))}
-          </View>
-
-          {/* Note */}
-          <View style={styles.noteContainer}>
-            <IconSymbol size={16} name="info.circle.fill" color="#4A86E8" />
-            <ThemedText style={styles.noteText}>
-              Exported files will be available for download for 7 days. Share links expire after 30 days.
-            </ThemedText>
           </View>
         </View>
       )}
@@ -140,91 +142,77 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
+    color: '#333',
+  },
+  iconContainer: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     padding: 16,
+    paddingTop: 0,
   },
-  description: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  optionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  optionsList: {
     gap: 12,
-    marginBottom: 16,
   },
-  optionCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: '#F8F9FA',
+  optionButton: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    minHeight: 120,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    overflow: 'hidden',
   },
-  optionCardLoading: {
+  optionButtonPrimary: {
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
+  },
+  optionButtonSpecial: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FF6B35',
+    borderWidth: 2,
+  },
+  optionButtonLoading: {
     opacity: 0.6,
   },
-  optionHeader: {
-    position: 'relative',
-    marginBottom: 8,
+  optionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
   },
-  optionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  optionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#F0F8FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingIndicator: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+  iconContainerPrimary: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  iconContainerSpecial: {
+    backgroundColor: '#FFF0EB',
   },
   optionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
     color: '#333',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  optionDescription: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  noteContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 12,
-    backgroundColor: '#F0F7FF',
-    borderRadius: 8,
-    gap: 8,
-  },
-  noteText: {
-    fontSize: 12,
-    color: '#4A86E8',
     flex: 1,
-    lineHeight: 16,
+  },
+  optionTitlePrimary: {
+    color: '#FFFFFF',
+  },
+  loadingIndicator: {
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 }); 

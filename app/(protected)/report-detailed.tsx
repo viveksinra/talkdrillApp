@@ -12,6 +12,7 @@ import { Scorecard } from '@/components/report/ScoreCard';
 import { DetailedAnalysis } from '@/components/report/DetailedAnalysis';
 import { StrengthsImprovements } from '@/components/report/StrengthsImprovements';
 import { ActionPlan } from '@/components/report/ActionPlan';
+import { Visuals } from '@/components/report/Visuals';
 import { ExportOptions } from '@/components/report/ExportOptions';
 
 import { DetailedReport } from '@/types';
@@ -45,187 +46,17 @@ export default function ReportDetailedScreen() {
       const response = await getReportById(id as string);
       
       if (response.variant === 'success' && response.myData) {
-        setReport(response.myData);
-        setIsSaved(response.myData.isSaved || false);
-        setLoading(false);
-        return;
+        setReport(response.myData.report || response.myData); // Handle both response formats
+        setIsSaved(response.myData.report?.isSaved || response.myData.isSaved || false);
+      } else {
+        // If API fails, show error instead of falling back to mock
+        Alert.alert('Error', response.message || 'Failed to load report');
       }
-      
-      // Fallback to mock data for development/testing
-      console.log('Using mock data for development');
-      
-      // Mock comprehensive report data matching our new structure
-      const mockReport: DetailedReport = {
-        id: id as string,
-        sessionId: 'session-123',
-        sessionType: 'ai-call',
-        conversationOverview: {
-          participants: [
-            { name: 'Vivek', role: 'user' },
-            { name: 'Meghanand', role: 'ai' }
-          ],
-          date: new Date(),
-          duration: 25,
-          scenario: 'Job Interview Preparation',
-          excerpt: 'Vivek discussed his previous work experience and qualifications for a marketing position at a technology company.',
-          goal: 'Business'
-        },
-        overallScore: 7,
-        metrics: {
-          fluencyCoherence: {
-            score: 7,
-            wordsPerMinute: 95,
-            pausesPerMinute: 4,
-            discourseMarkersUsed: 8,
-            analysis: 'Vivek demonstrates good overall fluency with appropriate use of fillers and discourse markers like "actually," "you know," and "I mean." Occasional pauses occur when discussing technical topics.'
-          },
-          grammarAccuracy: {
-            score: 6,
-            errorTypes: ['Tenses', 'Articles'],
-            errorsPerHundredWords: 4,
-            transcriptExamples: [
-              {
-                original: 'I am working in this company for five years.',
-                corrected: 'I have been working in this company for five years.'
-              },
-              {
-                original: 'I completed MBA from prestigious university.',
-                corrected: 'I completed an MBA from a prestigious university.'
-              }
-            ]
-          },
-          vocabularyRange: {
-            score: 8,
-            lexicalDiversity: 75,
-            businessTerms: {
-              used: ['quarterly results', 'stakeholders', 'ROI', 'deliverables'],
-              missing: ['KPIs', 'synergy', 'scalability']
-            }
-          },
-          pronunciationIntelligibility: {
-            score: 7,
-            phonemeLevelErrors: 12,
-            intelligibilityRating: 88,
-            commonChallenges: 'Common pronunciation challenges with /v/ vs /w/ sounds and word stress patterns in multisyllabic words.',
-            problematicWords: [
-              { word: 'development', issue: 'stress on second syllable instead of third' },
-              { word: 'variety', issue: '/w/ sound instead of /v/' }
-            ]
-          },
-          pragmaticsRegister: {
-            politenessStrategies: 'Appropriate',
-            formalityMatch: 85,
-            turnTaking: 'Good',
-            analysis: 'Vivek demonstrates appropriate business register with good use of formal expressions. Occasionally mixes casual phrases into formal context. Turn-taking is natural with appropriate back-channeling signals.'
-          }
-        },
-        strengths: [
-          {
-            title: 'Clear articulation of ideas',
-            description: 'Able to express complex thoughts in a structured manner'
-          },
-          {
-            title: 'Strong business vocabulary',
-            description: 'Uses appropriate industry terminology and business expressions'
-          },
-          {
-            title: 'Effective listening skills',
-            description: 'Responds appropriately to questions and maintains conversation flow'
-          }
-        ],
-        improvements: [
-          {
-            title: 'Grammar consistency with tenses',
-            description: 'Work on consistent use of perfect tenses in professional contexts',
-            action: 'Daily grammar drills focusing on past perfect and present perfect tenses'
-          },
-          {
-            title: 'Pronunciation of specific phonemes',
-            description: 'Focus on /v/ vs /w/ distinction and word stress patterns',
-            action: 'Targeted pronunciation exercises for /v/ vs /w/ sounds, record and review'
-          },
-          {
-            title: 'Advanced business terminology',
-            description: 'Expand vocabulary with specialized business terms',
-            action: 'Learn 5 new business terms daily, practice in role-play scenarios'
-          }
-        ],
-        actionPlan: {
-          shortTerm: [
-            {
-              task: 'Reduce speech pauses by 30% through daily 5-minute fluency drills',
-              timeframe: '1-2 weeks'
-            },
-            {
-              task: 'Learn and practice 2 new business idioms daily from provided resource list',
-              timeframe: '1-2 weeks'
-            },
-            {
-              task: 'Complete 10 grammar exercises focusing on article usage and tense consistency',
-              timeframe: '1-2 weeks'
-            }
-          ],
-          midTerm: [
-            {
-              task: 'Prepare and deliver a 3-minute formal business presentation with less than 5 grammar errors',
-              timeframe: '1-2 months'
-            },
-            {
-              task: 'Reduce pronunciation error rate to below 5 errors per 100 words',
-              timeframe: '1-2 months'
-            },
-            {
-              task: 'Participate in 4 mock interview sessions with feedback focusing on pragmatic appropriateness',
-              timeframe: '1-2 months'
-            }
-          ],
-          resources: {
-            apps: ['Talk Drill (pronunciation)', 'Grammarly (writing)', 'Business English by Cambridge'],
-            podcasts: ['Business English Pod', 'HBR IdeaCast', 'The English We Speak (BBC)'],
-            worksheets: ['Custom grammar exercises (shared via email)', 'Business vocabulary flashcards']
-          }
-        },
-        visualsData: {
-          errorRateOverTime: [
-            { time: '0:00', errorRate: 8 },
-            { time: '5:00', errorRate: 7 },
-            { time: '10:00', errorRate: 9 },
-            { time: '15:00', errorRate: 6 },
-            { time: '20:00', errorRate: 8 },
-            { time: '25:00', errorRate: 5 }
-          ],
-          skillProfile: [
-            { skill: 'Grammar', current: 6, target: 9 },
-            { skill: 'Vocabulary', current: 8, target: 9 },
-            { skill: 'Fluency', current: 7, target: 9 },
-            { skill: 'Pronunciation', current: 7, target: 8 },
-            { skill: 'Pragmatics', current: 8, target: 9 }
-          ],
-          vocabularyComparison: [
-            { level: 'Expert', current: 2, target: 8 },
-            { level: 'Advanced', current: 5, target: 12 },
-            { level: 'Intermediate', current: 8, target: 15 },
-            { level: 'Basic', current: 12, target: 10 }
-          ]
-        },
-        suggestions: [
-          'Work on sentence structure and grammar consistency',
-          'Practice speaking more fluently by reducing pauses',
-          'Expand your vocabulary with more specialized business terms',
-          'Focus on pronunciation accuracy for challenging sounds'
-        ],
-        isSaved: false,
-        exports: [],
-        createdAt: new Date()
-      };
-
-      setReport(mockReport);
-      setIsSaved(mockReport.isSaved);
     } catch (error) {
       console.error('Error fetching report:', error);
       Alert.alert('Error', 'Failed to load report. Please try again.');
     } finally {
-      setLoading(false);
+      setLoading(false); // Always set loading to false
     }
   };
 
@@ -404,7 +235,7 @@ export default function ReportDetailedScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol size={24} name="arrow.left" color="#333" />
         </TouchableOpacity>
@@ -418,7 +249,7 @@ export default function ReportDetailedScreen() {
             color={isSaved ? "#4A86E8" : "#666"} 
           />
         </TouchableOpacity>
-      </View>
+      </View> */}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
@@ -440,6 +271,10 @@ export default function ReportDetailedScreen() {
           {/* Action Plan */}
           <ActionPlan actionPlan={report.actionPlan} />
           
+          {/* Visuals */}
+          {/* TODO implement chart with libraries */}
+          {/* <Visuals visualsData={report.visualsData} /> */}
+          
           {/* Export Options */}
           <ExportOptions
             reportId={report.id}
@@ -450,14 +285,14 @@ export default function ReportDetailedScreen() {
           />
           
           {/* Footer info */}
-          <View style={styles.footer}>
+          {/* <View style={styles.footer}>
             <ThemedText style={styles.footerText}>
               Report generated on {new Date(report.createdAt).toLocaleDateString()}
             </ThemedText>
             <ThemedText style={styles.footerText}>
               Session duration: {Math.round(report.conversationOverview.duration)} minutes
             </ThemedText>
-          </View>
+          </View> */}
         </View>
       </ScrollView>
     </SafeAreaView>

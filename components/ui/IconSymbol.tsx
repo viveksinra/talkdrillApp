@@ -13,6 +13,9 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'chevron.up': 'keyboard-arrow-up',
+  'chevron.down': 'keyboard-arrow-down',
+  'info.circle.fill': 'info',
   'message.fill': 'message',
   'person.2.fill': 'group',
   'gear': 'settings',
@@ -22,7 +25,20 @@ const MAPPING = {
   'person.fill': 'person',
   'doc.text.fill': 'description',
   'clock.fill': 'access-time',
-  'pencil': 'edit'
+  'pencil': 'edit',
+  // Added for StrengthsImprovements component
+  'checkmark.circle.fill': 'check-circle',
+  'exclamationmark.triangle.fill': 'warning',
+  // Added for ActionPlan component
+  'smartphone': 'smartphone',
+  'headphones': 'headphones',
+  'doc.text': 'description',
+  // Added for ExportOptions component
+  'doc.plaintext.fill': 'insert-drive-file',
+  'square.and.arrow.up.fill': 'share',
+  'calendar.circle.fill': 'event',
+  'arrow.2.circlepath': 'refresh',
+  'link': 'link',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],

@@ -177,6 +177,29 @@ export interface Report {
   suggestions: string[];
 }
 
+export interface ReportItem {
+  id: string;
+  conversationOverview: {
+    participants: Array<{
+      name: string;
+      role: string;
+    }>;
+    date: string;
+    duration: number;
+    scenario: string;
+    goal: string;
+  };
+  overallScore: number;
+  metrics: {
+    fluencyCoherence: { score: number };
+    grammarAccuracy: { score: number };
+    vocabularyRange: { score: number };
+    pronunciationIntelligibility: { score: number };
+  };
+  isSaved: boolean;
+  createdAt: string;
+}
+
 export interface TranscriptItem {
   id: string;
   speaker: 'user' | 'ai' | 'peer';

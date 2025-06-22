@@ -23,9 +23,14 @@ export const getReportById = async (reportId: string) => {
 };
 
 // Get all user reports
-export const getUserReports = async () => {
+export const getUserReports = async (page: number = 1, limit: number = 10, saved: boolean = false) => {
   try {
-    const response = await get('/api/v1/report/user');
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      saved: saved.toString()
+    });
+    const response = await get(`/api/v1/report/user/all?${params}`);
     return response.data;
   } catch (error) {
     console.error('Error getting user reports:', error);
@@ -88,6 +93,17 @@ export const scheduleFollowUp = async (reportId: string, followUpData: {
     return response.data;
   } catch (error) {
     console.error('Error scheduling follow-up:', error);
+    throw error;
+  }
+};
+
+// Generate report from AI conversation
+export const generateReportFromConversation = async (conversationId: string) => {
+  try {
+    const response = await post(`/api/v1/report/conversation/${conversationId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error generating report from conversation:', error);
     throw error;
   }
 }; 

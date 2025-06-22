@@ -40,6 +40,10 @@ export default function ProfileScreen() {
     // Fallback to default avatar if path is invalid
     return require('@/assets/images/default-avatar-1.jpg');
   };
+
+  const handleViewSavedReports = () => {
+    router.push('/saved-reports');
+  };
   
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -81,7 +85,7 @@ export default function ProfileScreen() {
           </ThemedView> */}
           
           <ThemedView style={styles.menuContainer}>
-            {/* <TouchableOpacity style={styles.menuItem} onPress={handleViewSavedReports}>
+             <TouchableOpacity style={styles.menuItem} onPress={handleViewSavedReports}>
               <View style={styles.menuIcon}>
                 <IconSymbol size={24} name="doc.text.fill" color="#4A86E8" />
               </View>
@@ -91,7 +95,7 @@ export default function ProfileScreen() {
               </View>
               <IconSymbol size={20} name="chevron.right" color="#888" />
             </TouchableOpacity>
-            
+            {/*
             <TouchableOpacity style={styles.menuItem} onPress={handleViewSessionHistory}>
               <View style={styles.menuIcon}>
                 <IconSymbol size={24} name="clock.fill" color="#4A86E8" />
