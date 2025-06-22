@@ -233,19 +233,59 @@ export interface CoinTransaction {
 
 // Notification types
 export type NotificationType = 
-  | 'report-ready' 
-  | 'coin-bonus' 
-  | 'system-announcement';
+  | 'report_ready' 
+  | 'coin_bonus'
+  | 'coin_purchase'
+  | 'coin_low_balance'
+  | 'system'
+  | 'peer_request'
+  | 'peer_matched'
+  | 'session_started'
+  | 'session_ended'
+  | 'session_reminder'
+  | 'call_incoming'
+  | 'call_ended'
+  | 'call_extended'
+  | 'chat_message'
+  | 'ai_response_ready'
+  | 'maintenance'
+  | 'feature_announcement'
+  | 'daily_streak'
+  | 'achievement_unlocked';
+
+export type NotificationCategory = 'transaction' | 'session' | 'system' | 'social' | 'achievement';
+
+export type NotificationPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 export interface Notification {
   id: string;
-  userId: string;
-  type: NotificationType;
+  type: string;
+  category: string;
+  priority: string;
   title: string;
   message: string;
-  timestamp: Date;
-  read: boolean;
-  actionLink?: string;
+  data: Record<string, any>;
+  actionUrl?: string;
+  imageUrl?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface NotificationPreferences {
+  pushNotifications: boolean;
+  categories: {
+    transaction: boolean;
+    session: boolean;
+    system: boolean;
+    social: boolean;
+    achievement: boolean;
+  };
+}
+
+export interface DeviceToken {
+  token: string;
+  platform: 'ios' | 'android' | 'web';
+  deviceId: string;
 }
 
 // AI model types

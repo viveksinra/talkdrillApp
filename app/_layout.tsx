@@ -1,18 +1,21 @@
-import {DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack, SplashScreen, Slot } from 'expo-router';
+import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import 'react-native-reanimated';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { AuthProvider } from '../contexts/AuthContext';
+import 'react-native-reanimated/lib/reanimated2/js-reanimated/src/Animated';
+
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { AuthProvider } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Main layout component with auth provider
 export default function RootLayout() {
+  const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -28,15 +31,19 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView>
-        <AuthProvider>
-          <SocketProvider>
-            <ThemeProvider value={DefaultTheme}>
-              <StatusBar style="dark" translucent={false} />
-              <Slot />
-            </ThemeProvider>
-          </SocketProvider>
-        </AuthProvider>
-    </GestureHandlerRootView>
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <AuthProvider>
+        <SocketProvider>
+          <NotificationProvider>
+            <Stack>
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(protected)" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="auto" />
+          </NotificationProvider>
+        </SocketProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

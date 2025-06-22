@@ -1,83 +1,270 @@
-import React from 'react';
-import { FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Stack } from 'expo-router';
-import { useState } from 'react';
-
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  FlatList, 
+  StyleSheet, 
+  TouchableOpacity, 
+  View, 
+  RefreshControl,
+  Alert,
+  ActionSheetIOS,
+  Platform
+} from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import { Notification } from '@/types';
+import { Notification, NotificationCategory } from '@/types';
+import { useNotifications } from '@/contexts/NotificationContext';
+import { getNotificationIcon, getNotificationColor, formatNotificationTime, getPriorityColor } from '@/utils/notifications';
+
+const CATEGORY_FILTERS = [
+  { key: 'all', label: 'All', icon: 'tray.fill' },
+  { key: 'transaction', label: 'Coins', icon: 'bitcoinsign.circle.fill' },
+  { key: 'session', label: 'Sessions', icon: 'play.circle.fill' },
+  { key: 'social', label: 'Social', icon: 'person.2.fill' },
+  { key: 'achievement', label: 'Rewards', icon: 'trophy.fill' },
+  { key: 'system', label: 'System', icon: 'gear.circle.fill' },
+];
 
 export default function NotificationsScreen() {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      userId: 'user1',
-      type: 'report-ready',
-      title: 'New Report Available',
-      message: 'Your AI conversation report is ready to view.',
-      timestamp: new Date(Date.now() - 20 * 60 * 1000), // 20 minutes ago
-      read: false,
-      actionLink: '/report/1'
-    },
-    {
-      id: '2',
-      userId: 'user1',
-      type: 'coin-bonus',
-      title: 'Daily Bonus',
-      message: 'You received 10 coins for your daily check-in!',
-      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), // 3 hours ago
-      read: true
-    },
-    {
-      id: '3',
-      userId: 'user1',
-      type: 'system-announcement',
-      title: 'New Feature',
-      message: 'Try our new peer matching feature for better language practice!',
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-      read: false
+  const router = useRouter();
+  const {
+    notifications,
+    unreadCount,
+    unreadCounts,
+    loading,
+    refreshNotifications,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+  } = useNotifications();
+
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [filteredNotifications, setFilteredNotifications] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    filterNotifications();
+  }, [notifications, selectedCategory]);
+
+  const filterNotifications = () => {
+    if (selectedCategory === 'all') {
+      setFilteredNotifications(notifications);
+    } else {
+      setFilteredNotifications(
+        notifications.filter(notification => notification.category === selectedCategory)
+      );
     }
-  ]);
-  
-  const handleMarkAsRead = (id: string) => {
-    setNotifications(notifications.map(notification => 
-      notification.id === id ? { ...notification, read: true } : notification
-    ));
   };
-  
-  const handleDismiss = (id: string) => {
-    setNotifications(notifications.filter(notification => notification.id !== id));
+
+  const handleNotificationPress = async (notification: Notification) => {
+    try {
+      // Mark as read if unread
+      if (!notification.isRead) {
+        await markAsRead(notification.id);
+      }
+
+      // Handle navigation
+      if (notification.actionUrl) {
+        // Parse and navigate to the action URL
+        const url = notification.actionUrl;
+        if (url.startsWith('/')) {
+          router.push(url as any);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling notification press:', error);
+    }
   };
-  
+
+  const handleNotificationLongPress = (notification: Notification) => {
+    const options = [
+      notification.isRead ? 'Mark as Unread' : 'Mark as Read',
+      'Delete',
+      'Cancel'
+    ];
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: options.length - 1,
+          destructiveButtonIndex: 1,
+        },
+        async (buttonIndex) => {
+          if (buttonIndex === 0) {
+            if (notification.isRead) {
+              // Mark as unread (would need backend support)
+              console.log('Mark as unread - not implemented');
+            } else {
+              await markAsRead(notification.id);
+            }
+          } else if (buttonIndex === 1) {
+            handleDeleteNotification(notification.id);
+          }
+        }
+      );
+    } else {
+      Alert.alert(
+        'Notification Options',
+        'Choose an action',
+        [
+          {
+            text: notification.isRead ? 'Mark as Unread' : 'Mark as Read',
+            onPress: async () => {
+              if (!notification.isRead) {
+                await markAsRead(notification.id);
+              }
+            }
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => handleDeleteNotification(notification.id)
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]
+      );
+    }
+  };
+
+  const handleDeleteNotification = (notificationId: string) => {
+    Alert.alert(
+      'Delete Notification',
+      'Are you sure you want to delete this notification?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteNotification(notificationId);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete notification');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleMarkAllAsRead = () => {
+    const category = selectedCategory === 'all' ? undefined : selectedCategory as NotificationCategory;
+    Alert.alert(
+      'Mark All as Read',
+      `Mark all ${selectedCategory === 'all' ? '' : selectedCategory} notifications as read?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark All as Read',
+          onPress: async () => {
+            try {
+              await markAllAsRead(category);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to mark notifications as read');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const renderCategoryFilter = ({ item }: { item: typeof CATEGORY_FILTERS[0] }) => {
+    const isSelected = selectedCategory === item.key;
+    const categoryUnreadCount = item.key === 'all' ? unreadCount : (unreadCounts[item.key] || 0);
+
+    return (
+      <TouchableOpacity
+        style={[styles.categoryFilter, isSelected && styles.selectedCategoryFilter]}
+        onPress={() => setSelectedCategory(item.key)}
+      >
+        <IconSymbol 
+          size={20} 
+          name={item.icon as any} 
+          color={isSelected ? '#FFF' : '#4A86E8'} 
+        />
+        <ThemedText 
+          style={[
+            styles.categoryLabel, 
+            isSelected && styles.selectedCategoryLabel
+          ]}
+        >
+          {item.label}
+        </ThemedText>
+        {categoryUnreadCount > 0 && (
+          <View style={styles.unreadBadge}>
+            <ThemedText style={styles.unreadBadgeText}>
+              {categoryUnreadCount > 99 ? '99+' : categoryUnreadCount}
+            </ThemedText>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   const renderNotificationItem = ({ item }: { item: Notification }) => (
     <TouchableOpacity 
-      style={[styles.notificationItem, item.read ? styles.readNotification : styles.unreadNotification]}
-      onPress={() => handleMarkAsRead(item.id)}>
-      <View style={styles.notificationIcon}>
-        {item.type === 'report-ready' && (
-          <IconSymbol size={24} name="doc.text.fill" color="#4A86E8" />
-        )}
-        {item.type === 'coin-bonus' && (
-          <IconSymbol size={24} name="bitcoinsign.circle.fill" color="#F5A623" />
-        )}
-        {item.type === 'system-announcement' && (
-          <IconSymbol size={24} name="megaphone.fill" color="#FF3B30" />
-        )}
+      style={[
+        styles.notificationItem, 
+        !item.isRead && styles.unreadNotification
+      ]}
+      onPress={() => handleNotificationPress(item)}
+      onLongPress={() => handleNotificationLongPress(item)}
+    >
+      <View style={styles.notificationHeader}>
+        <View style={styles.notificationIcon}>
+          <IconSymbol 
+            size={24} 
+            name={getNotificationIcon(item.type) as any} 
+            color={getNotificationColor(item.type)} 
+          />
+        </View>
+        <View style={styles.notificationContent}>
+          <View style={styles.notificationTitleRow}>
+            <ThemedText 
+              type="defaultSemiBold" 
+              style={[styles.notificationTitle, !item.isRead && styles.unreadText]}
+            >
+              {item.title}
+            </ThemedText>
+            <View style={styles.notificationMeta}>
+              {item.priority !== 'medium' && (
+                <View 
+                  style={[
+                    styles.priorityIndicator, 
+                    { backgroundColor: getPriorityColor(item.priority) }
+                  ]} 
+                />
+              )}
+              <ThemedText style={styles.timestamp}>
+                {formatNotificationTime(new Date(item.createdAt))}
+              </ThemedText>
+            </View>
+          </View>
+          <ThemedText 
+            style={[styles.notificationMessage, !item.isRead && styles.unreadText]}
+            numberOfLines={2}
+          >
+            {item.message}
+          </ThemedText>
+          {!item.isRead && <View style={styles.unreadDot} />}
+        </View>
       </View>
-      <View style={styles.notificationContent}>
-        <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
-        <ThemedText>{item.message}</ThemedText>
-        <ThemedText style={styles.timestamp}>
-          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </ThemedText>
-      </View>
-      <TouchableOpacity onPress={() => handleDismiss(item.id)}>
-        <IconSymbol size={20} name="xmark" color="#888" />
-      </TouchableOpacity>
     </TouchableOpacity>
   );
-  
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <IconSymbol size={48} name="bell.slash.fill" color="#888" />
+      <ThemedText style={styles.emptyText}>
+        No {selectedCategory === 'all' ? '' : selectedCategory} notifications yet
+      </ThemedText>
+    </View>
+  );
+
   return (
     <>
       <Stack.Screen
@@ -85,21 +272,50 @@ export default function NotificationsScreen() {
           headerShown: true,
           title: 'Notifications',
           headerBackTitle: 'Back',
+          headerRight: () => (
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={() => router.push('/notification-settings' as any)}>
+                <IconSymbol size={24} name="gear" color="#4A86E8" />
+              </TouchableOpacity>
+              {unreadCount > 0 && (
+                <TouchableOpacity onPress={handleMarkAllAsRead} style={styles.markAllButton}>
+                  <ThemedText style={styles.markAllText}>Mark All Read</ThemedText>
+                </TouchableOpacity>
+              )}
+            </View>
+          ),
         }}
       />
       <ThemedView style={styles.container}>
-        {notifications.length > 0 ? (
+        {/* Category Filters */}
+        <FlatList
+          data={CATEGORY_FILTERS}
+          renderItem={renderCategoryFilter}
+          keyExtractor={item => item.key}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryFilters}
+          style={styles.categoryFiltersList}
+        />
+
+        {/* Notifications List */}
+        {filteredNotifications.length > 0 ? (
           <FlatList
-            data={notifications}
+            data={filteredNotifications}
             renderItem={renderNotificationItem}
             keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContainer}
+            contentContainerStyle={styles.notificationsList}
+            refreshControl={
+              <RefreshControl
+                refreshing={loading}
+                onRefresh={refreshNotifications}
+                tintColor="#4A86E8"
+              />
+            }
+            showsVerticalScrollIndicator={false}
           />
         ) : (
-          <View style={styles.emptyState}>
-            <IconSymbol size={48} name="bell.slash.fill" color="#888" />
-            <ThemedText style={styles.emptyText}>No notifications yet</ThemedText>
-          </View>
+          renderEmptyState()
         )}
       </ThemedView>
     </>
@@ -109,47 +325,146 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
   },
-  listContainer: {
-    gap: 8,
-  },
-  notificationItem: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
     gap: 12,
   },
-  unreadNotification: {
-    backgroundColor: '#ECF3FF',
+  markAllButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  readNotification: {
-    backgroundColor: '#F5F5F5',
+  markAllText: {
+    color: '#4A86E8',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  categoryFiltersList: {
+    maxHeight: 60,
+  },
+  categoryFilters: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  categoryFilter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F0F4FF',
+    gap: 6,
+  },
+  selectedCategoryFilter: {
+    backgroundColor: '#4A86E8',
+  },
+  categoryLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4A86E8',
+  },
+  selectedCategoryLabel: {
+    color: '#FFF',
+  },
+  unreadBadge: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  unreadBadgeText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  notificationsList: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  notificationItem: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: 'transparent',
+  },
+  unreadNotification: {
+    backgroundColor: '#F8FAFF',
+    borderLeftColor: '#4A86E8',
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
   },
   notificationIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'white',
+    backgroundColor: '#F0F4FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   notificationContent: {
     flex: 1,
+    position: 'relative',
+  },
+  notificationTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  notificationTitle: {
+    flex: 1,
+    marginRight: 8,
+  },
+  notificationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  priorityIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   timestamp: {
     color: '#888',
     fontSize: 12,
-    marginTop: 4,
+  },
+  notificationMessage: {
+    color: '#666',
+    lineHeight: 20,
+  },
+  unreadText: {
+    fontWeight: '600',
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4A86E8',
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 16,
+    paddingTop: 100,
   },
   emptyText: {
     color: '#888',
+    fontSize: 16,
+    textAlign: 'center',
   },
 }); 
