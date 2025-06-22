@@ -1,375 +1,378 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Share } from 'react-native';
-import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect } from 'react';
-
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Alert, ActivityIndicator, TouchableOpacity, View, Linking } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import { Report, TranscriptItem } from '@/types';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+// Import report components
+import { ConversationOverview } from '@/components/report/ConversationOverview';
+import { Scorecard } from '@/components/report/ScoreCard';
+import { DetailedAnalysis } from '@/components/report/DetailedAnalysis';
+import { StrengthsImprovements } from '@/components/report/StrengthsImprovements';
+import { ActionPlan } from '@/components/report/ActionPlan';
+import { Visuals } from '@/components/report/Visuals';
+import { ExportOptions } from '@/components/report/ExportOptions';
+
+import { DetailedReport } from '@/types';
+import { 
+  getReportById, 
+  toggleSaveReport, 
+  exportReportAsPDF, 
+  exportReportAsCSV, 
+  generateShareLink, 
+  scheduleFollowUp 
+} from '@/api/services/reportService';
 
 export default function ReportDetailedScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { reportId } = useLocalSearchParams();
-  
-  const [report, setReport] = useState<Report | null>(null);
+  const [report, setReport] = useState<DetailedReport | null>(null);
+  const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
-  
+
   useEffect(() => {
-    // Mock fetching report data with transcript
-    setReport({
-      id: reportId as string,
-      sessionId: '1',
-      sessionType: 'ai-chat',
-      generatedDate: new Date(),
-      proficiencyScore: 78,
-      metrics: {
-        fluency: 80,
-        grammar: 75,
-        vocabulary: 85,
-        pronunciation: 72
-      },
-      transcript: [
-        {
-          id: 'ai-1',
-          speaker: 'ai',
-          text: 'Hello! Can you tell me about your last vacation?',
-          timestamp: new Date(Date.now() - 500000),
-          errors: []
-        },
-        {
-          id: 'user-1',
-          speaker: 'user',
-          text: 'I went to beach last month. It were very beautiful and I swim everyday.',
-          timestamp: new Date(Date.now() - 400000),
-          errors: [
-            {
-              start: 9,
-              end: 14,
-              type: 'grammar',
-              suggestion: 'to the beach'
-            },
-            {
-              start: 25,
-              end: 29,
-              type: 'grammar',
-              suggestion: 'was'
-            },
-            {
-              start: 44,
-              end: 48,
-              type: 'grammar',
-              suggestion: 'swam'
-            }
-          ]
-        },
-        {
-          id: 'ai-2',
-          speaker: 'ai',
-          text: 'That sounds nice! What was your favorite thing about the trip?',
-          timestamp: new Date(Date.now() - 300000),
-          errors: []
-        },
-        {
-          id: 'user-2',
-          speaker: 'user',
-          text: 'I liked the food very much. I eated seafood every day. It was delicious.',
-          timestamp: new Date(Date.now() - 200000),
-          errors: [
-            {
-              start: 29,
-              end: 34,
-              type: 'grammar',
-              suggestion: 'ate'
-            }
-          ]
-        }
-      ],
-      suggestions: [
-        'Practice more past tense verb forms.',
-        'Try to use more varied vocabulary when describing experiences.',
-        'Work on the pronunciation of "th" sounds.'
-      ]
-    });
-  }, [reportId]);
-  
-  const handleSaveReport = () => {
-    setIsSaved(!isSaved);
-    // In a real app, save report to storage or server
-  };
-  
-  const handleShareReport = async () => {
+    if (id) {
+      fetchReport();
+    }
+  }, [id]);
+
+  const fetchReport = async () => {
     try {
-      await Share.share({
-        message: 'Check out my language practice report from TalkDrill!',
-      });
-    } catch (error) {
-      console.error('Error sharing report:', error);
-    }
-  };
-  
-  const renderTranscriptItem = (item: TranscriptItem) => {
-    if (item.errors && item.errors.length > 0) {
-      let lastIndex = 0;
-      const textParts = [];
+      setLoading(true);
       
-      // Sort errors by start position
-      const sortedErrors = [...item.errors].sort((a, b) => a.start - b.start);
+      // Use the proper report service to fetch data
+      const response = await getReportById(id as string);
       
-      sortedErrors.forEach((error, i) => {
-        // Add text before the error
-        if (error.start > lastIndex) {
-          textParts.push(
-            <ThemedText key={`${item.id}-text-${i}`}>
-              {item.text.substring(lastIndex, error.start)}
-            </ThemedText>
-          );
-        }
-        
-        // Add the error text with highlighting
-        textParts.push(
-          <TouchableOpacity key={`${item.id}-error-${i}`}>
-            <ThemedText style={[
-              styles.errorText,
-              error.type === 'grammar' ? styles.grammarError :
-              error.type === 'vocabulary' ? styles.vocabularyError :
-              styles.pronunciationError
-            ]}>
-              {item.text.substring(error.start, error.end)}
-            </ThemedText>
-          </TouchableOpacity>
-        );
-        
-        lastIndex = error.end;
-      });
-      
-      // Add any remaining text
-      if (lastIndex < item.text.length) {
-        textParts.push(
-          <ThemedText key={`${item.id}-text-last`}>
-            {item.text.substring(lastIndex)}
-          </ThemedText>
-        );
+      if (response.variant === 'success' && response.myData) {
+        setReport(response.myData.report || response.myData); // Handle both response formats
+        setIsSaved(response.myData.report?.isSaved || response.myData.isSaved || false);
+      } else {
+        // If API fails, show error instead of falling back to mock
+        Alert.alert('Error', response.message || 'Failed to load report');
       }
-      
-      return (
-        <View style={[
-          styles.transcriptItem,
-          item.speaker === 'user' ? styles.userTranscript : styles.aiTranscript
-        ]}>
-          <ThemedText type="defaultSemiBold">
-            {item.speaker === 'user' ? 'You' : 'AI'}:
-          </ThemedText>
-          <View style={styles.transcriptTextContainer}>
-            {textParts}
-          </View>
-          {item.errors.length > 0 && (
-            <View style={styles.errorsList}>
-              {item.errors.map((error, i) => (
-                <View key={`correction-${i}`} style={styles.correction}>
-                  <IconSymbol size={16} name="arrow.turn.up.right" color="#FF3B30" />
-                  <ThemedText style={styles.correctionText}>
-                    <ThemedText style={styles.correctionBold}>
-                      {item.text.substring(error.start, error.end)}
-                    </ThemedText>
-                    {" → "}
-                    <ThemedText style={styles.correctionBold}>
-                      {error.suggestion}
-                    </ThemedText>
-                  </ThemedText>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      );
+    } catch (error) {
+      console.error('Error fetching report:', error);
+      Alert.alert('Error', 'Failed to load report. Please try again.');
+    } finally {
+      setLoading(false); // Always set loading to false
     }
-    
-    return (
-      <View style={[
-        styles.transcriptItem,
-        item.speaker === 'user' ? styles.userTranscript : styles.aiTranscript
-      ]}>
-        <ThemedText type="defaultSemiBold">
-          {item.speaker === 'user' ? 'You' : 'AI'}:
-        </ThemedText>
-        <ThemedText>{item.text}</ThemedText>
-      </View>
-    );
   };
-  
-  if (!report) {
+
+  const handleSaveToggle = async () => {
+    if (!report) return;
+
+    try {
+      const response = await toggleSaveReport(report.id);
+      
+      if (response.variant === 'success') {
+        setIsSaved(!isSaved);
+        Alert.alert('Success', response.message);
+      } else {
+        Alert.alert('Error', response.message);
+      }
+    } catch (error) {
+      console.error('Error toggling save status:', error);
+      Alert.alert('Error', 'Failed to update report. Please try again.');
+    }
+  };
+
+  const handleExportPDF = async (reportId: string) => {
+    try {
+      const response = await exportReportAsPDF(reportId);
+      
+      if (response.variant === 'success') {
+        const { downloadUrl, fileName } = response.myData;
+        
+        Alert.alert(
+          'PDF Export Ready',
+          `Your report "${fileName}" has been generated successfully.`,
+          [
+            { 
+              text: 'Download', 
+              onPress: async () => {
+                try {
+                  // Construct full URL if it's a relative path
+                  const fullUrl = downloadUrl.startsWith('http') 
+                    ? downloadUrl 
+                    : `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:2040'}${downloadUrl}`;
+                  
+                  await Linking.openURL(fullUrl);
+                } catch (error) {
+                  console.error('Error opening download URL:', error);
+                  Alert.alert('Error', 'Failed to open download link.');
+                }
+              }
+            },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      } else {
+        Alert.alert('Error', response.message);
+      }
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      Alert.alert('Error', 'Failed to export PDF. Please try again.');
+      throw error;
+    }
+  };
+
+  const handleExportCSV = async (reportId: string) => {
+    try {
+      const response = await exportReportAsCSV(reportId);
+      
+      if (response.variant === 'success') {
+        const { downloadUrl, fileName } = response.myData;
+        
+        Alert.alert(
+          'CSV Export Ready',
+          `Your data file "${fileName}" has been generated successfully.`,
+          [
+            { 
+              text: 'Download', 
+              onPress: async () => {
+                try {
+                  // Construct full URL if it's a relative path
+                  const fullUrl = downloadUrl.startsWith('http') 
+                    ? downloadUrl 
+                    : `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:2040'}${downloadUrl}`;
+                  
+                  await Linking.openURL(fullUrl);
+                } catch (error) {
+                  console.error('Error opening download URL:', error);
+                  Alert.alert('Error', 'Failed to open download link.');
+                }
+              }
+            },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      } else {
+        Alert.alert('Error', response.message);
+      }
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+      Alert.alert('Error', 'Failed to export CSV. Please try again.');
+      throw error;
+    }
+  };
+
+  const handleGenerateShareLink = async (reportId: string) => {
+    try {
+      const response = await generateShareLink(reportId);
+      
+      if (response.variant === 'success') {
+        Alert.alert(
+          'Share Link Generated',
+          response.message,
+          [
+            { text: 'Copy Link', onPress: () => console.log('Link copied') },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      } else {
+        Alert.alert('Error', response.message);
+      }
+    } catch (error) {
+      console.error('Error generating share link:', error);
+      Alert.alert('Error', 'Failed to generate share link. Please try again.');
+      throw error;
+    }
+  };
+
+  const handleScheduleFollowUp = async (reportId: string) => {
+    try {
+      const followUpData = {
+        type: 'notification' as const,
+        scheduledFor: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        message: 'Time to review your English speaking progress!'
+      };
+      
+      const response = await scheduleFollowUp(reportId, followUpData);
+      
+      if (response.variant === 'success') {
+        Alert.alert(
+          'Follow-up Scheduled',
+          response.message,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', response.message);
+      }
+    } catch (error) {
+      console.error('Error scheduling follow-up:', error);
+      Alert.alert('Error', 'Failed to schedule follow-up. Please try again.');
+      throw error;
+    }
+  };
+
+  if (loading) {
     return (
-      <ThemedView style={styles.loadingContainer}>
-        <ThemedText>Loading detailed report...</ThemedText>
-      </ThemedView>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4A86E8" />
+          <ThemedText style={styles.loadingText}>Loading detailed report...</ThemedText>
+        </View>
+      </SafeAreaView>
     );
   }
-  
+
+  if (!report) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <IconSymbol size={48} name="exclamationmark.triangle" color="#666" />
+          <ThemedText style={styles.errorText}>Report not found</ThemedText>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <ThemedText style={styles.backButtonText}>Go Back</ThemedText>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'Detailed Feedback',
-          headerRight: () => (
-            <View style={{ flexDirection: 'row', gap: 16 }}>
-              <TouchableOpacity onPress={handleSaveReport}>
-                <IconSymbol 
-                  size={24} 
-                  name={isSaved ? "bookmark.fill" : "bookmark"} 
-                  color={isSaved ? "#4A86E8" : "#000"} 
-                />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleShareReport}>
-                <IconSymbol size={24} name="square.and.arrow.up" color="#000" />
-              </TouchableOpacity>
-            </View>
-          ),
-        }}
-      />
-      <ScrollView style={styles.container}>
-        <ThemedView style={styles.section}>
-          <ThemedText type="subtitle">Session Metrics</ThemedText>
-          <View style={styles.metricsRow}>
-            <View style={styles.metricBadge}>
-              <ThemedText style={styles.metricScore}>{report.metrics.fluency}</ThemedText>
-              <ThemedText style={styles.metricLabel}>Fluency</ThemedText>
-            </View>
-            <View style={styles.metricBadge}>
-              <ThemedText style={styles.metricScore}>{report.metrics.grammar}</ThemedText>
-              <ThemedText style={styles.metricLabel}>Grammar</ThemedText>
-            </View>
-            <View style={styles.metricBadge}>
-              <ThemedText style={styles.metricScore}>{report.metrics.vocabulary}</ThemedText>
-              <ThemedText style={styles.metricLabel}>Vocabulary</ThemedText>
-            </View>
-            <View style={styles.metricBadge}>
-              <ThemedText style={styles.metricScore}>{report.metrics.pronunciation}</ThemedText>
-              <ThemedText style={styles.metricLabel}>Pronunciation</ThemedText>
-            </View>
-          </View>
-        </ThemedView>
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      {/* <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <IconSymbol size={24} name="arrow.left" color="#333" />
+        </TouchableOpacity>
         
-        <ThemedView style={styles.section}>
-          <ThemedText type="subtitle">Suggestions for Improvement</ThemedText>
-          {report.suggestions.map((suggestion, index) => (
-            <View key={`suggestion-${index}`} style={styles.suggestionItem}>
-              <IconSymbol size={16} name="lightbulb.fill" color="#F5A623" />
-              <ThemedText style={styles.suggestionText}>{suggestion}</ThemedText>
-            </View>
-          ))}
-        </ThemedView>
+        <ThemedText style={styles.headerTitle}>Detailed Report</ThemedText>
         
-        <ThemedView style={styles.section}>
-          <ThemedText type="subtitle">Conversation Transcript</ThemedText>
-          <ThemedText style={styles.transcriptInfo}>
-            Tap on highlighted errors to see corrections.
-          </ThemedText>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSaveToggle}>
+          <IconSymbol 
+            size={24} 
+            name={isSaved ? "bookmark.fill" : "bookmark"} 
+            color={isSaved ? "#4A86E8" : "#666"} 
+          />
+        </TouchableOpacity>
+      </View> */}
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          {/* Conversation Overview */}
+          <ConversationOverview overview={report.conversationOverview} />
           
-          {report.transcript.map(item => (
-            <View key={item.id}>
-              {renderTranscriptItem(item)}
-            </View>
-          ))}
-        </ThemedView>
+          {/* Scorecard */}
+          <Scorecard overallScore={report.overallScore} metrics={report.metrics} />
+          
+          {/* Detailed Analysis */}
+          <DetailedAnalysis metrics={report.metrics} />
+          
+          {/* Strengths & Improvements */}
+          <StrengthsImprovements 
+            strengths={report.strengths} 
+            improvements={report.improvements} 
+          />
+          
+          {/* Action Plan */}
+          <ActionPlan actionPlan={report.actionPlan} />
+          
+          {/* Visuals */}
+          {/* TODO implement chart with libraries */}
+          {/* <Visuals visualsData={report.visualsData} /> */}
+          
+          {/* Export Options */}
+          <ExportOptions
+            reportId={report.id}
+            onExportPDF={handleExportPDF}
+            onExportCSV={handleExportCSV}
+            onGenerateShareLink={handleGenerateShareLink}
+            onScheduleFollowUp={handleScheduleFollowUp}
+          />
+          
+          {/* Footer info */}
+          {/* <View style={styles.footer}>
+            <ThemedText style={styles.footerText}>
+              Report generated on {new Date(report.createdAt).toLocaleDateString()}
+            </ThemedText>
+            <ThemedText style={styles.footerText}>
+              Session duration: {Math.round(report.conversationOverview.duration)} minutes
+            </ThemedText>
+          </View> */}
+        </View>
       </ScrollView>
-    </>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F5F7FA',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  section: {
-    padding: 16,
-    marginBottom: 16,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
-  metricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  metricBadge: {
-    alignItems: 'center',
-  },
-  metricScore: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4A86E8',
-  },
-  metricLabel: {
-    fontSize: 12,
-    color: '#888',
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginVertical: 8,
-    gap: 8,
-  },
-  suggestionText: {
+  errorContainer: {
     flex: 1,
-  },
-  transcriptInfo: {
-    fontStyle: 'italic',
-    color: '#888',
-    marginBottom: 12,
-  },
-  transcriptItem: {
-    marginBottom: 16,
-    padding: 12,
-    borderRadius: 8,
-  },
-  userTranscript: {
-    backgroundColor: '#ECF3FF',
-  },
-  aiTranscript: {
-    backgroundColor: 'white',
-  },
-  transcriptTextContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
   },
   errorText: {
-    textDecorationLine: 'underline',
+    marginTop: 16,
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
   },
-  grammarError: {
-    color: '#FF3B30',
-    textDecorationColor: '#FF3B30',
-  },
-  vocabularyError: {
-    color: '#F5A623',
-    textDecorationColor: '#F5A623',
-  },
-  pronunciationError: {
-    color: '#4CD964',
-    textDecorationColor: '#4CD964',
-  },
-  errorsList: {
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-    paddingTop: 8,
-  },
-  correction: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 4,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
-  correctionText: {
-    marginLeft: 4,
-    fontSize: 13,
+  backButton: {
+    padding: 8,
   },
-  correctionBold: {
-    fontWeight: 'bold',
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  saveButton: {
+    padding: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#4A86E8',
+    fontWeight: '500',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+  },
+  footer: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
   },
 }); 

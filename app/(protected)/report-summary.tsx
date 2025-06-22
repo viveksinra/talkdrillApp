@@ -1,4 +1,4 @@
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Alert } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
 
@@ -6,6 +6,8 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Report } from '@/types';
+import React from 'react';
+import { getReportById } from '@/api/services/reportService';
 
 export default function ReportSummaryScreen() {
   const router = useRouter();
@@ -14,26 +16,41 @@ export default function ReportSummaryScreen() {
   const [report, setReport] = useState<Report | null>(null);
   
   useEffect(() => {
-    // Mock fetching report data
-    setReport({
-      id: reportId as string,
-      sessionId: '1',
-      sessionType: type as any,
-      generatedDate: new Date(),
-      proficiencyScore: 78,
-      metrics: {
-        fluency: 80,
-        grammar: 75,
-        vocabulary: 85,
-        pronunciation: 72
-      },
-      transcript: [],
-      suggestions: [
-        'Practice more past tense verb forms.',
-        'Try to use more varied vocabulary when describing experiences.',
-        'Work on the pronunciation of "th" sounds.'
-      ]
-    });
+    const fetchReport = async () => {
+      try {
+        if (!reportId) return;
+        
+        const response = await getReportById(reportId as string);
+        
+        if (response.variant === 'success' && response.myData) {
+          const reportData = response.myData.report || response.myData;
+          
+          // Transform the detailed report data to match the Report interface
+          setReport({
+            id: reportData.id,
+            sessionId: reportData.conversationOverview?.conversationId || 'unknown',
+            sessionType: type as any,
+            generatedDate: new Date(reportData.createdAt),
+            proficiencyScore: reportData.overallScore,
+            metrics: {
+              fluency: reportData.metrics?.fluencyCoherence?.score || 0,
+              grammar: reportData.metrics?.grammarAccuracy?.score || 0,
+              vocabulary: reportData.metrics?.vocabularyRange?.score || 0,
+              pronunciation: reportData.metrics?.pronunciationIntelligibility?.score || 0
+            },
+            transcript: reportData.transcript || [],
+            suggestions: reportData.suggestions || []
+          });
+        } else {
+          Alert.alert('Error', 'Failed to load report');
+        }
+      } catch (error) {
+        console.error('Error fetching report:', error);
+        Alert.alert('Error', 'Failed to load report');
+      }
+    };
+
+    fetchReport();
   }, [reportId]);
   
   const handleViewDetailed = () => {
@@ -44,7 +61,7 @@ export default function ReportSummaryScreen() {
   };
   
   const handleGoHome = () => {
-    router.replace('/(tabs)');
+    router.replace('/(protected)/(tabs)');
   };
   
   if (!report) {
@@ -89,7 +106,7 @@ export default function ReportSummaryScreen() {
                   ]} 
                 />
               </View>
-              <ThemedText>{report.metrics.fluency}/100</ThemedText>
+              <ThemedText>{report.metrics.fluency}/10</ThemedText>
             </View>
             
             <View style={styles.metricItem}>
@@ -103,7 +120,7 @@ export default function ReportSummaryScreen() {
                   ]} 
                 />
               </View>
-              <ThemedText>{report.metrics.grammar}/100</ThemedText>
+              <ThemedText>{report.metrics.grammar}/10</ThemedText>
             </View>
           </View>
           
@@ -119,7 +136,7 @@ export default function ReportSummaryScreen() {
                   ]} 
                 />
               </View>
-              <ThemedText>{report.metrics.vocabulary}/100</ThemedText>
+              <ThemedText>{report.metrics.vocabulary}/10</ThemedText>
             </View>
             
             <View style={styles.metricItem}>
@@ -133,7 +150,7 @@ export default function ReportSummaryScreen() {
                   ]} 
                 />
               </View>
-              <ThemedText>{report.metrics.pronunciation}/100</ThemedText>
+              <ThemedText>{report.metrics.pronunciation}/10</ThemedText>
             </View>
           </View>
         </ThemedView>

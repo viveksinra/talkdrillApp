@@ -693,7 +693,19 @@ export default function AIVideoCallScreen() {
         await endConversation(conversation._id);
       }
 
-      router.back();
+      if(conversation){
+        console.log("Starting report generation");
+        router.replace({
+          pathname: '/report-loading',
+          params: {
+            type: 'ai-conversation',
+            conversationId: conversation._id,
+          }
+        })
+      }else{
+        router.back();
+      }
+
     } catch (error) {
       console.error("Error ending call:", error);
       router.back();
