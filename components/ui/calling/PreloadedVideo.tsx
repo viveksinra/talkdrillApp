@@ -79,7 +79,7 @@ export const PreloadedVideo: React.FC<PreloadedVideoProps> = ({
       ]}
       shouldPlay={isVisible && isLoaded && !hasError}
       isLooping={true}
-      resizeMode={isFullScreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
+      resizeMode={ResizeMode.COVER}
       onLoad={handleLoad}
       onError={handleError}
       volume={0}
