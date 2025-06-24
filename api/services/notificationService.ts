@@ -132,13 +132,34 @@ class NotificationService {
     }
   }
 
-  // Update notification preferences - UPDATED to use new API endpoint
-  async updatePreferences(preferences: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
+   // Update notification preferences - FIXED API call
+   async updatePreferences(preferences: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
     try {
-      const response = await put('/api/v1/device-token/preferences', preferences);
+      // Transform the data structure to match backend expectations
+      const requestData: any = {};
+      
+      if (preferences.pushNotifications !== undefined) {
+        requestData.pushNotifications = preferences.pushNotifications;
+      }
+      
+      if (preferences.categories) {
+        requestData.notificationCategories = preferences.categories;
+      }
+      
+      const response = await put('/api/v1/device-token/preferences', requestData);
       
       if (response.data.variant === 'success') {
-        return response.data.myData;
+        // Return the data in the expected frontend format
+        return {
+          pushNotifications: response.data.myData.pushNotifications,
+          categories: response.data.myData.notificationCategories || {
+            transaction: true,
+            session: true,
+            system: true,
+            social: true,
+            achievement: true
+          }
+        };
       } else {
         throw new Error(response.data.message || 'Failed to update notification preferences');
       }
@@ -148,16 +169,32 @@ class NotificationService {
     }
   }
 
-  // Get notification preferences - UPDATED to use new API endpoint
-  async getPreferences(): Promise<NotificationPreferences> {
-    try {
-      const response = await get('/api/v1/device-token');
-      
-      if (response.data.variant === 'success') {
-        const userSettings = response.data.myData.preferences;
+    // Get notification preferences - FIXED to use correct endpoint and data structure
+    async getPreferences(): Promise<NotificationPreferences> {
+      try {
+        const response = await get('/api/v1/device-token');
+        
+        if (response.data.variant === 'success') {
+          const userData = response.data.myData;
+          return {
+            pushNotifications: userData.settings?.pushNotifications ?? userData.pushNotifications ?? true,
+            categories: userData.settings?.notificationCategories ?? userData.notificationCategories ?? {
+              transaction: true,
+              session: true,
+              system: true,
+              social: true,
+              achievement: true
+            }
+          };
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch notification preferences');
+        }
+      } catch (error) {
+        console.error('Error fetching notification preferences:', error);
+        // Return defaults on error
         return {
-          pushNotifications: userSettings?.pushNotifications ?? true,
-          categories: userSettings?.notificationCategories ?? {
+          pushNotifications: true,
+          categories: {
             transaction: true,
             session: true,
             system: true,
@@ -165,24 +202,8 @@ class NotificationService {
             achievement: true
           }
         };
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch notification preferences');
       }
-    } catch (error) {
-      console.error('Error fetching notification preferences:', error);
-      // Return defaults on error
-      return {
-        pushNotifications: true,
-        categories: {
-          transaction: true,
-          session: true,
-          system: true,
-          social: true,
-          achievement: true
-        }
-      };
     }
-  }
 }
 
 export default new NotificationService();

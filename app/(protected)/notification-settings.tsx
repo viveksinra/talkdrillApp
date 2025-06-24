@@ -76,8 +76,11 @@ export default function NotificationSettingsScreen() {
       
       setLocalPreferences(updatedPrefs);
       await updatePreferences({ pushNotifications: value });
+      
+      console.log('Push notifications updated successfully');
     } catch (error) {
-      Alert.alert('Error', 'Failed to update notification settings');
+      console.error('Error updating push notifications:', error);
+      Alert.alert('Error', `Failed to update notification settings: ${(error as Error).message || 'Unknown error'}`);
       // Revert local state
       setLocalPreferences(preferences);
     } finally {
@@ -102,8 +105,11 @@ export default function NotificationSettingsScreen() {
       
       setLocalPreferences(updatedPrefs);
       await updatePreferences({ categories: updatedCategories });
+      
+      console.log(`Category ${category} updated successfully`);
     } catch (error) {
-      Alert.alert('Error', 'Failed to update category settings');
+      console.error('Error updating category settings:', error);
+      Alert.alert('Error', `Failed to update ${category} settings: ${(error as Error).message || 'Unknown error'}`);
       // Revert local state
       setLocalPreferences(preferences);
     } finally {
