@@ -47,6 +47,10 @@ const MAPPING = {
   'gift.fill': 'card-giftcard',
   'minus.circle.fill': 'remove-circle',
   'arrow.clockwise': 'refresh',
+  'person.crop.circle.fill': 'account-circle',
+  'play.circle.fill': 'play-circle-filled',
+  'trophy.fill': 'emoji-events',
+  'gear.circle.fill': 'settings',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],

@@ -7,7 +7,8 @@ import {
   RefreshControl,
   Alert,
   ActionSheetIOS,
-  Platform
+  Platform,
+  SafeAreaView
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
@@ -18,12 +19,10 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import { getNotificationIcon, getNotificationColor, formatNotificationTime, getPriorityColor } from '@/utils/notifications';
 
 const CATEGORY_FILTERS = [
-  { key: 'all', label: 'All', icon: 'tray.fill' },
-  { key: 'transaction', label: 'Coins', icon: 'bitcoinsign.circle.fill' },
-  { key: 'session', label: 'Sessions', icon: 'play.circle.fill' },
-  { key: 'social', label: 'Social', icon: 'person.2.fill' },
-  { key: 'achievement', label: 'Rewards', icon: 'trophy.fill' },
-  { key: 'system', label: 'System', icon: 'gear.circle.fill' },
+  { key: 'all', label: 'All', icon: 'tray.fill', color: '#5A67D8' },
+  { key: 'transaction', label: 'Coins', icon: 'bitcoinsign.circle.fill', color: '#48BB78' },
+  { key: 'session', label: 'Sessions', icon: 'play.circle.fill', color: '#ED8936' },
+  { key: 'social', label: 'Social', icon: 'person.2.fill', color: '#38B2AC' },
 ];
 
 export default function NotificationsScreen() {
@@ -178,14 +177,12 @@ export default function NotificationsScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.categoryFilter, isSelected && styles.selectedCategoryFilter]}
+        style={[
+          styles.categoryFilter, 
+          isSelected && { backgroundColor: item.color }
+        ]}
         onPress={() => setSelectedCategory(item.key)}
       >
-        <IconSymbol 
-          size={20} 
-          name={item.icon as any} 
-          color={isSelected ? '#FFF' : '#4A86E8'} 
-        />
         <ThemedText 
           style={[
             styles.categoryLabel, 
@@ -195,8 +192,8 @@ export default function NotificationsScreen() {
           {item.label}
         </ThemedText>
         {categoryUnreadCount > 0 && (
-          <View style={styles.unreadBadge}>
-            <ThemedText style={styles.unreadBadgeText}>
+          <View style={styles.categoryBadge}>
+            <ThemedText style={styles.categoryBadgeText}>
               {categoryUnreadCount > 99 ? '99+' : categoryUnreadCount}
             </ThemedText>
           </View>
@@ -205,68 +202,73 @@ export default function NotificationsScreen() {
     );
   };
 
-  const renderNotificationItem = ({ item }: { item: Notification }) => (
-    <TouchableOpacity 
-      style={[
-        styles.notificationItem, 
-        !item.isRead && styles.unreadNotification
-      ]}
-      onPress={() => handleNotificationPress(item)}
-      onLongPress={() => handleNotificationLongPress(item)}
-    >
-      <View style={styles.notificationHeader}>
-        <View style={styles.notificationIcon}>
-          <IconSymbol 
-            size={24} 
-            name={getNotificationIcon(item.type) as any} 
-            color={getNotificationColor(item.type)} 
-          />
+  const getNotificationIconAndColor = (type: string, category: string) => {
+    switch (category) {
+      case 'session':
+        return { icon: 'doc.text.fill', color: '#5A67D8', bgColor: '#E6FFFA' };
+      case 'transaction':
+        return { icon: 'bell.fill', color: '#48BB78', bgColor: '#F0FFF4' };
+      case 'social':
+        return { icon: 'person.2.fill', color: '#ED8936', bgColor: '#FFFAF0' };
+      case 'achievement':
+        return { icon: 'chart.line.uptrend.xyaxis', color: '#9F7AEA', bgColor: '#FAF5FF' };
+      case 'system':
+        return { icon: 'megaphone.fill', color: '#4299E1', bgColor: '#EBF8FF' };
+      default:
+        return { icon: 'bell.fill', color: '#5A67D8', bgColor: '#E6FFFA' };
+    }
+  };
+
+  const renderNotificationItem = ({ item }: { item: Notification }) => {
+    const { icon, color, bgColor } = getNotificationIconAndColor(item.type, item.category);
+    
+    return (
+      <TouchableOpacity 
+        style={[
+          styles.notificationItem,
+          !item.isRead && styles.unreadNotification
+        ]}
+        onPress={() => handleNotificationPress(item)}
+        onLongPress={() => handleNotificationLongPress(item)}
+      >
+        <View style={[styles.notificationIcon, { backgroundColor: bgColor }]}>
+          <IconSymbol size={24} name={icon as any} color={color} />
         </View>
+        
         <View style={styles.notificationContent}>
-          <View style={styles.notificationTitleRow}>
+          <View style={styles.notificationHeader}>
             <ThemedText 
-              type="defaultSemiBold" 
-              style={[styles.notificationTitle, !item.isRead && styles.unreadText]}
+              style={[
+                styles.notificationTitle,
+                !item.isRead && styles.unreadTitle
+              ]}
+              numberOfLines={1}
             >
               {item.title}
             </ThemedText>
-            <View style={styles.notificationMeta}>
-              {item.priority !== 'medium' && (
-                <View 
-                  style={[
-                    styles.priorityIndicator, 
-                    { backgroundColor: getPriorityColor(item.priority) }
-                  ]} 
-                />
-              )}
-              <ThemedText style={styles.timestamp}>
-                {formatNotificationTime(new Date(item.createdAt))}
-              </ThemedText>
-            </View>
+            <ThemedText style={styles.timestamp}>
+              {formatNotificationTime(new Date(item.createdAt))}
+            </ThemedText>
           </View>
+          
           <ThemedText 
-            style={[styles.notificationMessage, !item.isRead && styles.unreadText]}
+            style={[
+              styles.notificationMessage,
+              !item.isRead && styles.unreadMessage
+            ]}
             numberOfLines={2}
           >
             {item.message}
           </ThemedText>
-          {!item.isRead && <View style={styles.unreadDot} />}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <IconSymbol size={48} name="bell.slash.fill" color="#888" />
-      <ThemedText style={styles.emptyText}>
-        No {selectedCategory === 'all' ? '' : selectedCategory} notifications yet
-      </ThemedText>
-    </View>
-  );
+        
+        {!item.isRead && <View style={styles.unreadDot} />}
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <>
+    <SafeAreaView style={styles.safeContainer}>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -275,28 +277,30 @@ export default function NotificationsScreen() {
           headerRight: () => (
             <View style={styles.headerActions}>
               <TouchableOpacity onPress={() => router.push('/notification-settings' as any)}>
-                <IconSymbol size={24} name="gear" color="#4A86E8" />
+                <IconSymbol size={24} name="gear" color="#5A67D8" />
               </TouchableOpacity>
               {unreadCount > 0 && (
                 <TouchableOpacity onPress={handleMarkAllAsRead} style={styles.markAllButton}>
-                  <ThemedText style={styles.markAllText}>Mark All Read</ThemedText>
+                  <ThemedText style={styles.markAllText}>Mark all as read</ThemedText>
                 </TouchableOpacity>
               )}
             </View>
           ),
         }}
       />
+      
       <ThemedView style={styles.container}>
         {/* Category Filters */}
-        <FlatList
-          data={CATEGORY_FILTERS}
-          renderItem={renderCategoryFilter}
-          keyExtractor={item => item.key}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryFilters}
-          style={styles.categoryFiltersList}
-        />
+        <View style={styles.categoryContainer}>
+          <FlatList
+            data={CATEGORY_FILTERS}
+            renderItem={renderCategoryFilter}
+            keyExtractor={item => item.key}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryFilters}
+          />
+        </View>
 
         {/* Notifications List */}
         {filteredNotifications.length > 0 ? (
@@ -309,22 +313,32 @@ export default function NotificationsScreen() {
               <RefreshControl
                 refreshing={loading}
                 onRefresh={refreshNotifications}
-                tintColor="#4A86E8"
+                tintColor="#5A67D8"
               />
             }
             showsVerticalScrollIndicator={false}
           />
         ) : (
-          renderEmptyState()
+          <View style={styles.emptyState}>
+            <IconSymbol size={48} name="bell.slash.fill" color="#CBD5E0" />
+            <ThemedText style={styles.emptyText}>
+              No notifications yet
+            </ThemedText>
+          </View>
         )}
       </ThemedView>
-    </>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeContainer: {
+    flex: 1,
+    backgroundColor: '#F7FAFC',
+  },
   container: {
     flex: 1,
+    backgroundColor: '#F7FAFC',
   },
   headerActions: {
     flexDirection: 'row',
@@ -336,124 +350,117 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   markAllText: {
-    color: '#4A86E8',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#5A67D8',
+    fontSize: 16,
+    fontWeight: '400',
   },
-  categoryFiltersList: {
-    maxHeight: 60,
+  categoryContainer: {
+    backgroundColor: '#FFF',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   categoryFilters: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+    gap: 12,
   },
   categoryFilter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#F0F4FF',
-    gap: 6,
-  },
-  selectedCategoryFilter: {
-    backgroundColor: '#4A86E8',
+    backgroundColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   categoryLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4A86E8',
+    color: '#4A5568',
   },
   selectedCategoryLabel: {
     color: '#FFF',
   },
-  unreadBadge: {
-    backgroundColor: '#FF3B30',
+  categoryBadge: {
+    backgroundColor: '#E53E3E',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 4,
   },
-  unreadBadgeText: {
+  categoryBadgeText: {
     color: '#FFF',
     fontSize: 12,
     fontWeight: 'bold',
   },
   notificationsList: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    padding: 16,
+    gap: 8,
   },
   notificationItem: {
     backgroundColor: '#FFF',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: 'transparent',
-  },
-  unreadNotification: {
-    backgroundColor: '#F8FAFF',
-    borderLeftColor: '#4A86E8',
-  },
-  notificationHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  unreadNotification: {
+    backgroundColor: '#EDF2F7',
+    borderColor: '#E2E8F0',
   },
   notificationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F4FF',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
   notificationContent: {
     flex: 1,
-    position: 'relative',
+    gap: 4,
   },
-  notificationTitleRow: {
+  notificationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 4,
   },
   notificationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
     flex: 1,
     marginRight: 8,
   },
-  notificationMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  priorityIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  unreadTitle: {
+    color: '#1A202C',
   },
   timestamp: {
-    color: '#888',
     fontSize: 12,
+    color: '#A0AEC0',
+    fontWeight: '400',
   },
   notificationMessage: {
-    color: '#666',
+    fontSize: 14,
+    color: '#718096',
     lineHeight: 20,
   },
-  unreadText: {
-    fontWeight: '600',
+  unreadMessage: {
+    color: '#4A5568',
+    fontWeight: '500',
   },
   unreadDot: {
     position: 'absolute',
-    top: 0,
-    right: 0,
+    top: 12,
+    right: 12,
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4A86E8',
+    backgroundColor: '#5A67D8',
   },
   emptyState: {
     flex: 1,
@@ -463,7 +470,7 @@ const styles = StyleSheet.create({
     paddingTop: 100,
   },
   emptyText: {
-    color: '#888',
+    color: '#A0AEC0',
     fontSize: 16,
     textAlign: 'center',
   },

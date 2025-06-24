@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "270808071747",
+    "project_id": "talkdrill-test",
+    "storage_bucket": "talkdrill-test.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:270808071747:android:bfe609f6fef33afda49ef6",
+        "android_client_info": {
+          "package_name": "com.hrishi7.talkdrill"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "270808071747-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNcdsNl2jCsaoDzAR1Mv0IMtHQov12rEQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "270808071747-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        },
+        "analytics_service": {
+          "status": 1
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
