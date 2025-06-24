@@ -21,6 +21,8 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+serviceAccountKey.json
+
 # Metro
 .metro-health-check*
 
