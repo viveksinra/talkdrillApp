@@ -6,11 +6,11 @@ import {
   View,
   ScrollView,
   Alert,
-  SafeAreaView
 } from "react-native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -235,9 +235,9 @@ export default function HomeScreen() {
 
   return (
     <>
-      <StatusBar style="dark" backgroundColor="#FFF" translucent={false} />
-      <SafeAreaView style={styles.safeContainer}>
-        <ThemedView style={styles.mainContainer}>
+      <StatusBar style="dark" backgroundColor="#FFF" />
+      <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
+        <View style={styles.mainContainer}>
           <View style={styles.header}>
             <Image
               source={require("@/assets/images/talkdrill_logo.png")}
@@ -375,7 +375,7 @@ export default function HomeScreen() {
             onClose={() => setFilterDialogVisible(false)}
             onApply={handleStartMatching}
           />
-        </ThemedView>
+        </View>
       </SafeAreaView>
     </>
   );
