@@ -6,13 +6,16 @@ import {
   View,
   ScrollView,
   Alert,
+  SafeAreaView
 } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { IconSymbol } from "@/components/ui/IconSymbol";
+import { NotificationBell } from "@/components/shared/NotificationBell";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchAICharacters } from "@/api/services/public/aiCharacters";
 import { Colors } from "@/constants/Colors";
@@ -231,173 +234,177 @@ export default function HomeScreen() {
   };
 
   return (
-    <ThemedView style={{ flex: 1 }}>
-      <View style={styles.header}>
-        <Image
-          source={require("@/assets/images/talkdrill_logo.png")}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
-        <View style={{ flexDirection: "row", gap: 16 }}>
-          <TouchableOpacity onPress={() => router.push("/settings")}>
-            <IconSymbol size={24} name="gear" color="#000" />
-          </TouchableOpacity>
-          {/* TODO: Add notifications */}
-          {/* <TouchableOpacity onPress={() => router.push("/notifications")}>
-            <IconSymbol size={24} name="bell.fill" color="#000" />
-          </TouchableOpacity> */}
-        </View>
-      </View>
-      <ScrollView style={{ flex: 1, padding: 16 }}>
-        <ThemedView style={styles.greetingContainer}>
-          <ThemedText type="title">
-            Hello, {user?.name.split(" ")[0] || "User"}!
-          </ThemedText>
-          <ThemedText
-            style={{ fontWeight: "300", color: Colors.light.secondary }}
-          >
-            Ready to improve your English today?
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedView style={styles.sectionTitle}>
-          <ThemedText type="defaultSemiBold">
-            Choose Your Practice Method
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedView style={styles.practiceOptionsContainer}>
-          <ThemedView style={styles.practiceCard}>
-            <View style={styles.practiceCardHeader}>
-              <Image
-                source={require("@/assets/images/ai-assistant-icon.jpg")}
-                style={styles.practiceIcon}
-                defaultSource={require("@/assets/images/ai-assistant-icon.jpg")}
-              />
-              <ThemedText type="subtitle">Speak with AI</ThemedText>
-            </View>
-
-            <ThemedText style={styles.practiceDescription}>
-              Practice English with our intelligent AI assistant. Receive
-              instant feedback and corrections.
-            </ThemedText>
-
-            <View style={styles.practiceCardFooter}>
-              <ThemedText style={styles.availabilityText}>
-                Available 24/7
-              </ThemedText>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => {
-                  setIsFindAIAssistant(true);
-                  setFilterDialogVisible(true);
-                  setFilterDialogHeaderTitle("Find AI Assistant");
-                  setFilterDialogHeaderSubtitle(
-                    "Customize your conversation AI assistant"
-                  );
-                }}
-              >
-                <ThemedText style={styles.actionButtonText}>
-                  Start Conversation
-                </ThemedText>
+    <>
+      <StatusBar style="dark" backgroundColor="#FFF" translucent={false} />
+      <SafeAreaView style={styles.safeContainer}>
+        <ThemedView style={styles.mainContainer}>
+          <View style={styles.header}>
+            <Image
+              source={require("@/assets/images/talkdrill_logo.png")}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+            <View style={{ flexDirection: "row", gap: 16, alignItems: "center" }}>
+              <NotificationBell color="#000" size={24} />
+              <TouchableOpacity onPress={() => router.push("/settings")}>
+                <IconSymbol size={24} name="gear" color="#000" />
               </TouchableOpacity>
             </View>
-          </ThemedView>
-
-          <ThemedView style={styles.practiceCard}>
-            <View style={styles.practiceCardHeader}>
-              <Image
-                source={require("@/assets/images/peer-practice-icon.jpg")}
-                style={styles.practiceIcon}
-                defaultSource={require("@/assets/images/peer-practice-icon.jpg")}
-              />
-              <ThemedText type="subtitle">Peer Practice</ThemedText>
-            </View>
-
-            <ThemedText style={styles.practiceDescription}>
-              Connect with language partners around the world for real
-              conversations.
-            </ThemedText>
-
-            <View style={styles.practiceCardFooter}>
-              <ThemedText style={styles.availabilityText}>
-                {onlineUsers.length
-                  ? onlineUsers.length - 1 === 1
-                    ? "1 user"
-                    : onlineUsers.length - 1 > 1
-                    ? `${onlineUsers.length - 1} users`
-                    : "No users"
-                  : "No users"}{" "}
-                online
+          </View>
+          <ScrollView style={{ flex: 1, padding: 16 }}>
+            <ThemedView style={styles.greetingContainer}>
+              <ThemedText type="title">
+                Hello, {user?.name.split(" ")[0] || "User"}!
               </ThemedText>
-
-              <TouchableOpacity
-                style={[styles.actionButton, styles.peerActionButton]}
-                onPress={() => router.push("/peer-practice")}
+              <ThemedText
+                style={{ fontWeight: "300", color: Colors.light.secondary }}
               >
-                <ThemedText style={styles.actionButtonText}>
-                  Find Partner
+                Ready to improve your English today?
+              </ThemedText>
+            </ThemedView>
+
+            <ThemedView style={styles.sectionTitle}>
+              <ThemedText type="defaultSemiBold">
+                Choose Your Practice Method
+              </ThemedText>
+            </ThemedView>
+
+            <ThemedView style={styles.practiceOptionsContainer}>
+              <ThemedView style={styles.practiceCard}>
+                <View style={styles.practiceCardHeader}>
+                  <Image
+                    source={require("@/assets/images/ai-assistant-icon.jpg")}
+                    style={styles.practiceIcon}
+                    defaultSource={require("@/assets/images/ai-assistant-icon.jpg")}
+                  />
+                  <ThemedText type="subtitle">Speak with AI</ThemedText>
+                </View>
+
+                <ThemedText style={styles.practiceDescription}>
+                  Practice English with our intelligent AI assistant. Receive
+                  instant feedback and corrections.
                 </ThemedText>
+
+                <View style={styles.practiceCardFooter}>
+                  <ThemedText style={styles.availabilityText}>
+                    Available 24/7
+                  </ThemedText>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => {
+                      setIsFindAIAssistant(true);
+                      setFilterDialogVisible(true);
+                      setFilterDialogHeaderTitle("Find AI Assistant");
+                      setFilterDialogHeaderSubtitle(
+                        "Customize your conversation AI assistant"
+                      );
+                    }}
+                  >
+                    <ThemedText style={styles.actionButtonText}>
+                      Start Conversation
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+              </ThemedView>
+
+              <ThemedView style={styles.practiceCard}>
+                <View style={styles.practiceCardHeader}>
+                  <Image
+                    source={require("@/assets/images/peer-practice-icon.jpg")}
+                    style={styles.practiceIcon}
+                    defaultSource={require("@/assets/images/peer-practice-icon.jpg")}
+                  />
+                  <ThemedText type="subtitle">Peer Practice</ThemedText>
+                </View>
+
+                <ThemedText style={styles.practiceDescription}>
+                  Connect with language partners around the world for real
+                  conversations.
+                </ThemedText>
+
+                <View style={styles.practiceCardFooter}>
+                  <ThemedText style={styles.availabilityText}>
+                    {onlineUsers.length
+                      ? onlineUsers.length - 1 === 1
+                        ? "1 user"
+                        : onlineUsers.length - 1 > 1
+                        ? `${onlineUsers.length - 1} users`
+                        : "No users"
+                      : "No users"}{" "}
+                    online
+                  </ThemedText>
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.peerActionButton]}
+                    onPress={() => router.push("/peer-practice")}
+                  >
+                    <ThemedText style={styles.actionButtonText}>
+                      Find Partner
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+              </ThemedView>
+            </ThemedView>
+
+            {/* Popular AI Characters Section */}
+            <ThemedView style={styles.recentSection}>
+              <ThemedText type="subtitle">Popular AI Characters</ThemedText>
+              <TouchableOpacity
+                onPress={() => router.push("/(protected)/(tabs)/ai-characters")}
+              >
+                <ThemedText style={styles.viewAllText}>View All</ThemedText>
               </TouchableOpacity>
-            </View>
-          </ThemedView>
-        </ThemedView>
+            </ThemedView>
 
-        {/* Popular AI Characters Section */}
-        <ThemedView style={styles.recentSection}>
-          <ThemedText type="subtitle">Popular AI Characters</ThemedText>
-          <TouchableOpacity
-            onPress={() => router.push("/(protected)/(tabs)/ai-characters")}
-          >
-            <ThemedText style={styles.viewAllText}>View All</ThemedText>
-          </TouchableOpacity>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.charactersContainer}
+            >
+              {popularCharacters.map((character) => (
+                <View key={character._id} style={{ marginRight: 16 }}>
+                  {renderCharacterItem({ item: character })}
+                </View>
+              ))}
+            </ScrollView>
+          </ScrollView>
+          <FilterDialog
+            headerTitle={filterDialogHeaderTitle}
+            headerSubtitle={filterDialogHeaderSubtitle}
+            visible={filterDialogVisible}
+            onClose={() => setFilterDialogVisible(false)}
+            onApply={handleStartMatching}
+          />
         </ThemedView>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.charactersContainer}
-        >
-          {popularCharacters.map((character) => (
-            <View key={character._id} style={{ marginRight: 16 }}>
-              {renderCharacterItem({ item: character })}
-            </View>
-          ))}
-        </ScrollView>
-      </ScrollView>
-      <FilterDialog
-        headerTitle={filterDialogHeaderTitle}
-        headerSubtitle={filterDialogHeaderSubtitle}
-        visible={filterDialogVisible}
-        onClose={() => setFilterDialogVisible(false)}
-        onApply={handleStartMatching}
-      />
-    </ThemedView>
+      </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: "absolute",
+  safeContainer: {
+    flex: 1,
+    backgroundColor: '#FFF',
   },
-  greetingContainer: {
-    marginBottom: 24,
+  mainContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
+    backgroundColor: "#FFF",
   },
   headerLogo: {
     height: 32,
     width: 120,
+  },
+  greetingContainer: {
+    marginBottom: 24,
   },
   sectionTitle: {
     marginBottom: 16,
