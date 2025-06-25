@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View, ScrollView, SafeAreaView } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, ScrollView, SafeAreaView, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Image } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
@@ -85,6 +85,41 @@ export default function ProfileScreen() {
           </ThemedView> */}
           
           <ThemedView style={styles.menuContainer}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => {
+              try {
+                router.push('/(protected)/streak-dashboard' as any);
+              } catch (error) {
+                console.error('Navigation error:', error);
+                Alert.alert('Navigation', 'Streak dashboard feature coming soon!');
+              }
+            }}>
+              <View style={styles.menuIcon}>
+                <IconSymbol size={24} name="flame.fill" color="#FF6B35" />
+              </View>
+              <View style={styles.menuContent}>
+                <ThemedText style={styles.menuTitle}>Streak Dashboard</ThemedText>
+                <ThemedText style={styles.menuDescription}>Track your daily practice streak</ThemedText>
+              </View>
+              <IconSymbol size={20} name="chevron.right" color="#888" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => {
+              try {
+                router.push('/(protected)/weekly-reports' as any);
+              } catch (error) {
+                console.error('Navigation error:', error);
+                Alert.alert('Navigation', 'Weekly reports feature coming soon!');
+              }
+            }}>
+              <View style={styles.menuIcon}>
+                <IconSymbol size={24} name="chart.bar.fill" color="#4A86E8" />
+              </View>
+              <View style={styles.menuContent}>
+                <ThemedText style={styles.menuTitle}>Weekly Reports</ThemedText>
+                <ThemedText style={styles.menuDescription}>View your progress reports and achievements</ThemedText>
+              </View>
+              <IconSymbol size={20} name="chevron.right" color="#888" />
+            </TouchableOpacity>
              <TouchableOpacity style={styles.menuItem} onPress={handleViewSavedReports}>
               <View style={styles.menuIcon}>
                 <IconSymbol size={24} name="doc.text.fill" color="#4A86E8" />
