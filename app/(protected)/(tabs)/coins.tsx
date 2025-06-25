@@ -26,6 +26,12 @@ import {
   type CoinBalance,
   type DailyCheckInResult
 } from '@/api/services/coinService';
+import {
+  getStreakStats,
+  getStreakEmoji,
+  getStreakMessage,
+  type StreakStats
+} from '@/api/services/streakService';
 
 export default function CoinsScreen() {
   const router = useRouter();
@@ -33,6 +39,7 @@ export default function CoinsScreen() {
   // State
   const [coinBalance, setCoinBalance] = useState<CoinBalance | null>(null);
   const [coinPackages, setCoinPackages] = useState<CoinPackage[]>([]);
+  const [streakStats, setStreakStats] = useState<StreakStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
@@ -45,13 +52,15 @@ export default function CoinsScreen() {
   // Load initial data
   const loadData = useCallback(async () => {
     try {
-      const [balance, packages] = await Promise.all([
+      const [balance, packages, streak] = await Promise.all([
         getCoinBalance(),
-        getCoinPackages()
+        getCoinPackages(),
+        getStreakStats()
       ]);
       
       setCoinBalance(balance);
       setCoinPackages(packages);
+      setStreakStats(streak);
     } catch (error) {
       console.error('Error loading coin data:', error);
       Alert.alert('Error', 'Failed to load coin data. Please try again.');
@@ -328,6 +337,105 @@ export default function CoinsScreen() {
               <ThemedText style={styles.availableText}>Available Coins</ThemedText>
             </View>
           </ThemedView>
+
+          {/* Streak Section */}
+          {streakStats && (
+            <ThemedView style={styles.streakSection}>
+              <View style={styles.streakHeader}>
+                <View style={styles.streakIconContainer}>
+                  <ThemedText style={styles.streakEmoji}>
+                    {getStreakEmoji(streakStats.current)}
+                  </ThemedText>
+                </View>
+                <View style={styles.streakInfo}>
+                  <ThemedText type="defaultSemiBold" style={styles.streakTitle}>
+                    {streakStats.current}-Day Streak
+                  </ThemedText>
+                  <ThemedText style={styles.streakMessage}>
+                    {getStreakMessage(streakStats.current)}
+                  </ThemedText>
+                </View>
+                                 <TouchableOpacity 
+                   style={styles.streakDetailButton}
+                   onPress={() => {
+                     // Navigate to streak dashboard - will be implemented
+                     Alert.alert('Streak Dashboard', 'Detailed streak view coming soon!');
+                   }}
+                 >
+                   <IconSymbol size={20} name="chevron.right" color="#666" />
+                 </TouchableOpacity>
+              </View>
+              
+              {/* Today's Activity */}
+              <View style={styles.todayActivitySection}>
+                <View style={styles.activityStatus}>
+                  <View style={[
+                    styles.activityIndicator,
+                    streakStats.todayActivity.hasActivity && styles.activityIndicatorActive
+                  ]}>
+                    <IconSymbol 
+                      size={16} 
+                      name={streakStats.todayActivity.hasActivity ? "checkmark" : "plus"} 
+                      color={streakStats.todayActivity.hasActivity ? "#4CAF50" : "#999"} 
+                    />
+                  </View>
+                  <ThemedText style={[
+                    styles.activityText,
+                    streakStats.todayActivity.hasActivity && styles.activityTextComplete
+                  ]}>
+                    {streakStats.todayActivity.hasActivity 
+                      ? `Today: ${streakStats.todayActivity.activitiesCount} activities completed` 
+                      : 'Complete any session to continue your streak'
+                    }
+                  </ThemedText>
+                </View>
+                
+                {/* Rewards Section */}
+                {streakStats.todayActivity.hasActivity && !streakStats.todayActivity.rewardsClaimed && (
+                  <TouchableOpacity 
+                    style={styles.claimStreakButton}
+                    onPress={() => {
+                      // This would be handled by automatic claiming in the new system
+                      Alert.alert(
+                        'Rewards Available!',
+                        `You have ${streakStats.todayActivity.availableRewards} coins to claim from your streak activities.`,
+                                                 [
+                           { text: 'View Streak Details', onPress: () => Alert.alert('Coming Soon', 'Streak dashboard will be available soon!') },
+                           { text: 'OK' }
+                         ]
+                      );
+                    }}
+                  >
+                    <IconSymbol size={16} name="gift.fill" color="#F5A623" />
+                    <ThemedText style={styles.claimStreakText}>
+                      {streakStats.todayActivity.availableRewards} coins earned!
+                    </ThemedText>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Next Milestone */}
+              {streakStats.nextMilestone && (
+                <View style={styles.milestoneSection}>
+                  <View style={styles.milestoneProgress}>
+                    <View style={styles.progressBarContainer}>
+                      <View 
+                        style={[
+                          styles.progressBar,
+                          { 
+                            width: `${Math.min(100, ((streakStats.nextMilestone.target - streakStats.nextMilestone.remaining) / streakStats.nextMilestone.target) * 100)}%` 
+                          }
+                        ]}
+                      />
+                    </View>
+                    <ThemedText style={styles.milestoneText}>
+                      {streakStats.nextMilestone.remaining} days to {streakStats.nextMilestone.type} milestone (+{streakStats.nextMilestone.reward} coins)
+                    </ThemedText>
+                  </View>
+                </View>
+              )}
+            </ThemedView>
+          )}
 
           {/* Daily Check-in Card */}
           <View style={[
@@ -665,5 +773,108 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#fff',
+  },
+  // Streak Section Styles
+  streakSection: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#E3F2FD',
+  },
+  streakHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  streakIconContainer: {
+    marginRight: 12,
+  },
+  streakEmoji: {
+    fontSize: 32,
+  },
+  streakInfo: {
+    flex: 1,
+  },
+  streakTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  streakMessage: {
+    fontSize: 14,
+    color: '#666',
+  },
+  streakDetailButton: {
+    padding: 8,
+  },
+  todayActivitySection: {
+    marginBottom: 16,
+  },
+  activityStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  activityIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  activityIndicatorActive: {
+    backgroundColor: '#E8F5E8',
+  },
+  activityText: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
+  },
+  activityTextComplete: {
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+  claimStreakButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  claimStreakText: {
+    fontSize: 14,
+    color: '#F5A623',
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  milestoneSection: {
+    marginTop: 8,
+  },
+  milestoneProgress: {
+    alignItems: 'center',
+  },
+  progressBarContainer: {
+    width: '100%',
+    height: 6,
+    backgroundColor: '#E5E5E5',
+    borderRadius: 3,
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 3,
+  },
+  milestoneText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
   },
 }); 
