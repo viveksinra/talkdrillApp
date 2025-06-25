@@ -48,6 +48,8 @@ export default function LoginViaMobileScreen() {
   const [countryFlag, setCountryFlag] = useState('🇮🇳');
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [showReferralInput, setShowReferralInput] = useState(false);
   
   const filteredCountries = searchQuery 
     ? countryCodes.filter(country => 
@@ -75,7 +77,10 @@ export default function LoginViaMobileScreen() {
     if (isValidPhoneNumber()) {
       router.push({
         pathname: '/otp-verification',
-        params: { phoneNumber: countryCode + phoneNumber }
+        params: { 
+          phoneNumber: countryCode + phoneNumber,
+          referralCode: referralCode.trim() || undefined
+        }
       });
     }
   };
@@ -121,6 +126,32 @@ export default function LoginViaMobileScreen() {
             maxLength={10}
           />
         </View>
+        
+        {/* Referral Code Section */}
+        <TouchableOpacity 
+          style={styles.referralToggle}
+          onPress={() => setShowReferralInput(!showReferralInput)}
+        >
+          <ThemedText style={styles.referralToggleText}>
+            Have a referral code? {showReferralInput ? '(Hide)' : '(Enter to get bonus coins)'}
+          </ThemedText>
+        </TouchableOpacity>
+        
+        {showReferralInput && (
+          <View style={styles.referralContainer}>
+            <TextInput
+              style={styles.referralInput}
+              placeholder="Enter referral code (e.g., VIV2NZ)"
+              value={referralCode}
+              onChangeText={(text) => setReferralCode(text.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              maxLength={6}
+              autoCapitalize="characters"
+            />
+            <ThemedText style={styles.referralHint}>
+              Get 150 bonus coins when you join with a valid referral code!
+            </ThemedText>
+          </View>
+        )}
         
         {/* Validation message */}
         {phoneNumber.length > 0 && !isValidPhoneNumber() && (
@@ -205,57 +236,61 @@ export default function LoginViaMobileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
+    paddingHorizontal: 24,
   },
   backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  backText: {
-    fontSize: 18,
-    color: '#5D5FEF',
-    marginLeft: 8,
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 1,
   },
   content: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 100,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#666',
+    textAlign: 'center',
     marginBottom: 40,
+    lineHeight: 22,
   },
   inputContainer: {
     flexDirection: 'row',
-    marginBottom: 24,
+    width: '100%',
+    marginBottom: 8,
+    gap: 12,
   },
   countryCodeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: '#E5E5E5',
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginRight: 12,
-    width: 90,
-    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+    minWidth: 100,
   },
   codeWithFlag: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   flag: {
-    fontSize: 18,
-    marginRight: 6,
+    fontSize: 20,
   },
   countryCode: {
     fontSize: 16,
+    fontWeight: '500',
   },
   input: {
     flex: 1,
@@ -263,50 +298,90 @@ const styles = StyleSheet.create({
     borderColor: '#E5E5E5',
     borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     fontSize: 16,
+  },
+  inputError: {
+    borderColor: '#FF6B6B',
+  },
+  referralToggle: {
+    marginBottom: 16,
+  },
+  referralToggleText: {
+    color: '#5D5FEF',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  referralContainer: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  referralInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    textAlign: 'center',
+    letterSpacing: 2,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  referralHint: {
+    fontSize: 12,
+    color: '#28A745',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   continueButton: {
     backgroundColor: '#5D5FEF',
-    borderRadius: 8,
+    width: '100%',
     paddingVertical: 16,
+    borderRadius: 8,
     alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: 16,
   },
   disabledButton: {
-    backgroundColor: '#C4C4C4',
+    backgroundColor: '#CCCCCC',
   },
   continueButtonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
   },
   infoContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F2F3FF',
-    borderRadius: 8,
+    alignItems: 'flex-start',
+    backgroundColor: '#F8F9FF',
     padding: 16,
-    marginTop: 'auto',
-    marginBottom: 40,
+    borderRadius: 12,
+    gap: 12,
+    marginBottom: 30,
   },
   infoText: {
     flex: 1,
-    marginLeft: 12,
-    color: '#333',
-    fontSize: 16,
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
-  
-  // Modal styles
   modalContainer: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'white',
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
   },
@@ -317,27 +392,29 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 16,
-    paddingHorizontal: 12,
-    backgroundColor: '#F5F5F5',
+    margin: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
     borderRadius: 8,
-    height: 48,
+    gap: 12,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
     fontSize: 16,
   },
   countryItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+    gap: 16,
   },
   countryFlag: {
     fontSize: 24,
-    marginRight: 16,
   },
   countryInfo: {
     flex: 1,
@@ -349,17 +426,6 @@ const styles = StyleSheet.create({
   countryDialCode: {
     fontSize: 14,
     color: '#666',
-    marginTop: 4,
-  },
-  inputError: {
-    borderColor: '#FF4444',
-    borderWidth: 2,
-  },
-  errorText: {
-    color: '#FF4444',
-    fontSize: 14,
-    marginTop: -16,
-    marginBottom: 16,
-    marginLeft: 104, // Align with input field (90px + 12px margin + 2px adjustment)
+    marginTop: 2,
   },
 }); 

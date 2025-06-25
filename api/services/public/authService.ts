@@ -7,11 +7,16 @@ const VERIFY_OTP_ENDPOINT = '/api/v1/auth/verify-otp';
 /**
  * Send OTP to the provided phone number
  * @param phoneNumber - Phone number with country code (e.g. +91xxxxxxxxxx)
+ * @param referralCode - Optional referral code
  * @returns Promise with the API response
  */
-export const sendOTP = async (phoneNumber: string) => {
+export const sendOTP = async (phoneNumber: string, referralCode?: string) => {
   try {
-    const response = await post(SEND_OTP_ENDPOINT, { phoneNumber });
+    const payload: any = { phoneNumber };
+    if (referralCode && referralCode.trim()) {
+      payload.referralCode = referralCode.trim();
+    }
+    const response = await post(SEND_OTP_ENDPOINT, payload);
     return response.data;
   } catch (error) {
     console.error('Error sending OTP:', error);
