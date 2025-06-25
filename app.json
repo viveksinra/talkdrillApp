@@ -24,22 +24,20 @@
         "monochromeImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "googleServicesFile": "./google-services.json",
       "permissions": [
-        "INTERNET",
-        "CAMERA",
-        "RECORD_AUDIO",
-        "MODIFY_AUDIO_SETTINGS",
-        "WAKE_LOCK",
+        "android.permission.INTERNET",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.WAKE_LOCK",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.CAMERA",
-        "android.permission.INTERNET",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW",
-        "android.permission.WAKE_LOCK"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
       ],
       "package": "com.hrishi7.talkdrill"
     },
@@ -63,7 +61,8 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 24
+            "minSdkVersion": 24,
+            "usesCleartextTraffic": true
           }
         }
       ],
@@ -81,6 +80,16 @@
         {
           "microphonePermission": "Allow TalkDrill to use the microphone for speech recognition",
           "speechRecognitionPermission": "Allow TalkDrill to use speech recognition"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#4A86E8",
+          "defaultChannel": "default",
+          "android": {
+            "useNextNotificationsApi": true
+          }
         }
       ]
     ],

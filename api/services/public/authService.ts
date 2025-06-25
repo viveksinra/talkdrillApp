@@ -28,6 +28,7 @@ export const sendOTP = async (phoneNumber: string) => {
 export const verifyOTP = async (phoneNumber: string, otp: string) => {
   try {
     const response = await post(VERIFY_OTP_ENDPOINT, { phoneNumber, otp });
+    console.log('OTP verification response:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error verifying OTP:', error);
