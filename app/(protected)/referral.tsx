@@ -46,22 +46,37 @@ export default function ReferralScreen() {
   };
 
   const shareReferralCode = async () => {
-    if (!referralData?.referralCode) return;
+    if (!referralData?.referralCode) {
+      Alert.alert('Error', 'No referral code available');
+      return;
+    }
     
     const message = generateReferralMessage(referralData.referralCode);
     
     try {
-      await Share.share({ message });
+      await Share.share({ 
+        message,
+        title: 'Join TalkDrill with my referral code!'
+      });
     } catch (error) {
       console.error('Error sharing:', error);
+      Alert.alert('Error', 'Failed to share referral code');
     }
   };
 
   const copyReferralCode = async () => {
-    if (!referralData?.referralCode) return;
+    if (!referralData?.referralCode) {
+      Alert.alert('Error', 'No referral code available');
+      return;
+    }
     
-    await Clipboard.setStringAsync(referralData.referralCode);
-    Alert.alert('Copied!', 'Referral code copied to clipboard');
+    try {
+      await Clipboard.setStringAsync(referralData.referralCode);
+      Alert.alert('Success!', 'Referral code copied to clipboard');
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      Alert.alert('Error', 'Failed to copy referral code');
+    }
   };
 
   if (loading) {
@@ -85,6 +100,7 @@ export default function ReferralScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -102,9 +118,11 @@ export default function ReferralScreen() {
           </View>
           
           <View style={styles.codeContainer}>
-            <ThemedText style={styles.referralCode}>{referralData?.referralCode}</ThemedText>
+            <ThemedText style={styles.referralCode}>
+              {referralData?.referralCode || 'Loading...'}
+            </ThemedText>
             <TouchableOpacity onPress={copyReferralCode} style={styles.copyButton}>
-              <IconSymbol name="doc.on.doc" size={20} color={Colors.light.primary} />
+              <IconSymbol name="doc.on.doc" size={20} color="white" />
               <ThemedText style={styles.copyText}>Copy</ThemedText>
             </TouchableOpacity>
           </View>
@@ -201,6 +219,9 @@ export default function ReferralScreen() {
             </View>
           </View>
         )}
+        
+        {/* Bottom padding for better scrolling */}
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </ThemedView>
   );
@@ -345,20 +366,25 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     marginTop: 16,
+    paddingVertical: 8,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
+    paddingVertical: 12,
   },
   statNumber: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: Colors.light.primary,
+    marginBottom: 4,
+    lineHeight: 32,
   },
   statLabel: {
     fontSize: 14,
     color: '#666',
-    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   statDivider: {
     width: 1,
@@ -451,5 +477,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginLeft: 4,
+  },
+  bottomPadding: {
+    height: 40,
   },
 }); 
