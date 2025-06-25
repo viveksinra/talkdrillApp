@@ -11,7 +11,7 @@ import { sendOTP, verifyOTP } from '@/api/services/public/authService';
 export default function OTPVerificationScreen() {
   const router = useRouter();
   const { login } = useAuth();
-  const { phoneNumber } = useLocalSearchParams();
+  const { phoneNumber, referralCode } = useLocalSearchParams();
 
   const [otp, setOtp] = useState(["", "", "", ""]);
   const [timer, setTimer] = useState(30);
@@ -55,10 +55,7 @@ export default function OTPVerificationScreen() {
 
   /**
    * Initializes the OTP (One-Time Password) process for phone number verification.
-   * 
-   * @param {boolean} [isResend=false] - Indicates whether this is a resend attempt of the OTP.
-   * @returns {() => void} A cleanup function to clear the OTP timer interval.
-   * @throws {Error} Throws an error if OTP sending fails, with an alert shown to the user.
+   * Enhanced with referral code support
    */
   const initializeOTP = async (isResend = false) => {
     try {
@@ -66,8 +63,8 @@ export default function OTPVerificationScreen() {
         setResendLoading(true);
       }
       
-      // Call the API to send OTP
-      await sendOTP(phoneNumber as string);
+      // Call the API to send OTP with referral code
+      await sendOTP(phoneNumber as string, referralCode as string);
       
       // Start the timer
       const interval = startOTPTimer();
@@ -189,11 +186,7 @@ export default function OTPVerificationScreen() {
   
   /**
    * Handles the resending of the One-Time Password (OTP).
-   * 
-   * This function triggers the OTP resend process only if the resend functionality is currently active.
-   * It calls the initializeOTP method with a flag indicating a resend attempt.
-   * 
-   * @returns {Promise<void>} A promise that resolves when the OTP resend process is initiated.
+   * Enhanced with referral code support
    */
   const handleResendOtp = async () => {
     if (isResendActive) {
@@ -203,16 +196,7 @@ export default function OTPVerificationScreen() {
   
   /**
    * Handles the verification of the One-Time Password (OTP).
-   * 
-   * This function is triggered when the user attempts to verify their OTP:
-   * - Checks if a complete 4-digit OTP has been entered
-   * - Calls the OTP verification API with the phone number and entered OTP
-   * - Logs in the user upon successful verification
-   * - Navigates to the main app screen
-   * - Handles and displays any verification errors
-   * 
-   * @async
-   * @throws {Error} Throws an error if OTP verification fails
+   * Enhanced to show referral reward notifications
    */
   const handleVerifyOtp = async () => {
     const enteredOtp = otp.join('');
@@ -224,7 +208,16 @@ export default function OTPVerificationScreen() {
         const response = await verifyOTP(phoneNumber as string, enteredOtp);
 
         // Extract token and user data from response
-        const { token, user } = response;
+        const { token, user, referralProcessed } = response;
+
+        // Show referral success message if applicable
+        if (referralProcessed) {
+          Alert.alert(
+            '🎉 Bonus Coins Earned!',
+            'You and your referrer both received 150 bonus coins for the successful referral!',
+            [{ text: 'Awesome!' }]
+          );
+        }
 
         // Login the user
         await login(token, user);
@@ -262,6 +255,18 @@ export default function OTPVerificationScreen() {
           <ThemedText style={styles.changeText}>Change</ThemedText>
         </TouchableOpacity>
       </View>
+
+      {/* Show referral code info if provided */}
+      {referralCode && (
+        <View style={styles.referralInfoContainer}>
+          <ThemedText style={styles.referralInfoText}>
+            🎁 Using referral code: <ThemedText style={styles.referralCodeText}>{referralCode}</ThemedText>
+          </ThemedText>
+          <ThemedText style={styles.referralBonusText}>
+            You'll get 150 bonus coins upon verification!
+          </ThemedText>
+        </View>
+      )}
       
       <View style={styles.otpContainer}>
         {otp.map((digit, index) => (
@@ -350,11 +355,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    marginBottom: 32,
+    marginBottom: 16,
     gap: 8,
   },
   changeText: {
     color: '#4A86E8',
+    fontWeight: '600',
+  },
+  referralInfoContainer: {
+    backgroundColor: '#E8F5E8',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  referralInfoText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  referralCodeText: {
+    fontWeight: 'bold',
+    color: '#28A745',
+  },
+  referralBonusText: {
+    fontSize: 12,
+    color: '#28A745',
     fontWeight: '600',
   },
   otpContainer: {
@@ -397,35 +423,37 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   resendText: {
-    textAlign: 'center',
+    color: '#999',
     fontSize: 16,
   },
   resendButtonText: {
     color: '#4A86E8',
-    fontWeight: '600',
     fontSize: 16,
+    fontWeight: '600',
   },
   timerText: {
     color: '#4A86E8',
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   warningContainer: {
-    backgroundColor: '#FFF9E6',
     flexDirection: 'row',
-    borderRadius: 8,
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF8E1',
     padding: 16,
-    marginTop: 48,
+    borderRadius: 12,
     gap: 12,
+    marginTop: 20,
   },
   warningIconContainer: {
     marginTop: 2,
   },
   warningIcon: {
-    fontSize: 18,
-    color: '#CD6200',
+    fontSize: 16,
   },
   warningText: {
     flex: 1,
-    color: '#CD6200',
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
 }); 

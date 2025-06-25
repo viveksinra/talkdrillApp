@@ -127,6 +127,16 @@ export default function ProfileScreen() {
               </View>
               <IconSymbol size={20} name="chevron.right" color="#888" />
             </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/referral')}>
+              <View style={styles.menuIcon}>
+                <IconSymbol size={24} name="gift.fill" color="#4A86E8" />
+              </View>
+              <View style={styles.menuContent}>
+                <ThemedText style={styles.menuTitle}>Invite Friends</ThemedText>
+                <ThemedText style={styles.menuDescription}>Refer friends and earn rewards</ThemedText>
+              </View>
+              <IconSymbol size={20} name="chevron.right" color="#888" />
+            </TouchableOpacity>
           </ThemedView>
           
           <TouchableOpacity style={styles.logoutButton} onPress={logout}>
