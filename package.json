@@ -24,7 +24,6 @@
     "@react-navigation/native": "^7.0.14",
     "@stream-io/react-native-webrtc": "^125.2.1",
     "@stream-io/video-react-native-sdk": "^1.13.2",
-    "@ui-kitten/components": "^5.3.1",
     "expo": "~52.0.46",
     "expo-av": "~15.0.2",
     "expo-blur": "~14.0.3",
