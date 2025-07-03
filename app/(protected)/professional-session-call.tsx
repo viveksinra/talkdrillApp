@@ -5,7 +5,8 @@ import {
   View, 
   Alert,
   ActivityIndicator,
-  Text
+  Text,
+  Image
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -63,6 +64,8 @@ export default function ProfessionalSessionCallScreen() {
   const [showChat, setShowChat] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [professionalDisconnected, setProfessionalDisconnected] = useState(false);
+  const [lobbyState, setLobbyState] = useState<'loading' | 'lobby' | 'joined'>('loading');
+  const [lobbyData, setLobbyData] = useState<any>(null);
   
   const isInitializing = useRef(false);
   const callDurationTimer = useRef<NodeJS.Timeout | null>(null);
@@ -73,59 +76,26 @@ export default function ProfessionalSessionCallScreen() {
 
   const parsedDurationInMinutes = parseInt(durationInMinutes as string, 10) || 60;
 
-  // Initialize call
+  // Get lobby details first
   useEffect(() => {
     if (isInitializing.current) return;
     isInitializing.current = true;
 
-    const initializeCall = async () => {
+    const getLobbyDetails = async () => {
       try {
         setIsLoading(true);
-        setConnectionStatus('Joining professional session...');
+        setConnectionStatus('Getting session details...');
 
-        // Join the professional session
-        const joinResponse = await professionalSessionService.joinSessionCall(bookingId as string);
-        
-        setConnectionStatus('Getting authentication token...');
-        const client = await streamService.ensureInitialized(
-          user?.id || '',
-          user?.name,
-          user?.profileImage
-        );
-
-        setConnectionStatus('Connecting to session...');
-        const call = await streamService.joinCall(joinResponse.streamCallId);
-
-        // Set session end time
-        const endTime = moment().add(parsedDurationInMinutes, 'minutes');
-        setSessionEndTime(endTime);
-
-        // Set up call event listeners
-        setupCallEventListeners(call);
-
-        // Set up socket listeners for session events
-        setupSocketListeners();
-
-        // Set default media state (camera on, microphone on for student)
-        try {
-          await call.camera.enable();
-          await call.microphone.enable();
-        } catch (mediaError) {
-          console.warn('Error setting default media state:', mediaError);
-        }
-
-        setCallState({
-          client,
-          call
-        });
-
+        // Get lobby details first
+        const lobbyResponse = await professionalSessionService.getLobbyDetails(bookingId as string);
+        setLobbyData(lobbyResponse);
+        setLobbyState('lobby');
         setIsLoading(false);
-        setConnectionStatus('Connected');
       } catch (error: any) {
-        console.error('Error setting up professional session call:', error);
+        console.error('Error getting lobby details:', error);
         Alert.alert(
           'Connection Error',
-          'Failed to join the professional session. Please try again.',
+          'Failed to get session details. Please try again.',
           [
             {
               text: 'OK',
@@ -136,7 +106,7 @@ export default function ProfessionalSessionCallScreen() {
       }
     };
 
-    initializeCall();
+    getLobbyDetails();
 
     return () => {
       isInitializing.current = false;
@@ -153,7 +123,66 @@ export default function ProfessionalSessionCallScreen() {
       }
       streamService.cleanup();
     };
-  }, [bookingId, streamCallId, user?.id, parsedDurationInMinutes]);
+  }, [bookingId]);
+
+  const joinSession = async () => {
+    try {
+      setIsLoading(true);
+      setConnectionStatus('Joining professional session...');
+
+      // Join the professional session
+      const joinResponse = await professionalSessionService.joinSessionCall(bookingId as string);
+      
+      setConnectionStatus('Getting authentication token...');
+      const client = await streamService.ensureInitialized(
+        user?.id || '',
+        user?.name,
+        user?.profileImage
+      );
+
+      setConnectionStatus('Connecting to session...');
+      const call = await streamService.joinCall(joinResponse.streamCallId);
+
+      // Set session end time
+      const endTime = moment().add(parsedDurationInMinutes, 'minutes');
+      setSessionEndTime(endTime);
+
+      // Set up call event listeners
+      setupCallEventListeners(call);
+
+      // Set up socket listeners for session events
+      setupSocketListeners();
+
+      // Set default media state (camera on, microphone on for student)
+      try {
+        await call.camera.enable();
+        await call.microphone.enable();
+      } catch (mediaError) {
+        console.warn('Error setting default media state:', mediaError);
+      }
+
+      setCallState({
+        client,
+        call
+      });
+
+      setLobbyState('joined');
+      setIsLoading(false);
+      setConnectionStatus('Connected');
+    } catch (error: any) {
+      console.error('Error joining professional session call:', error);
+      Alert.alert(
+        'Connection Error',
+        'Failed to join the professional session. Please try again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => setIsLoading(false)
+          }
+        ]
+      );
+    }
+  };
 
   // Set up GetStream event listeners
   const setupCallEventListeners = (call: Call) => {
@@ -427,6 +456,61 @@ export default function ProfessionalSessionCallScreen() {
     );
   };
 
+  // Lobby Screen Component
+  const LobbyScreen = () => (
+    <ThemedView style={styles.container}>
+      <StatusBar style="dark" />
+      <View style={styles.lobbyContainer}>
+        <View style={styles.lobbyHeader}>
+          <ThemedText style={styles.lobbyTitle}>Professional Session</ThemedText>
+          <ThemedText style={styles.lobbySubtitle}>with {lobbyData?.participant?.name}</ThemedText>
+        </View>
+
+        <View style={styles.sessionDetails}>
+          <ThemedText style={styles.sessionTopic}>{lobbyData?.topic}</ThemedText>
+          <ThemedText style={styles.sessionDuration}>Duration: {parsedDurationInMinutes} minutes</ThemedText>
+        </View>
+
+        <View style={styles.participantInfo}>
+          {lobbyData?.participant?.profileImage && (
+            <Image 
+              source={{ uri: lobbyData.participant.profileImage }} 
+              style={styles.participantImage}
+            />
+          )}
+          <ThemedText style={styles.participantName}>{lobbyData?.participant?.name}</ThemedText>
+          {lobbyData?.participant?.specializations?.length > 0 && (
+            <ThemedText style={styles.specializations}>
+              {lobbyData.participant.specializations.join(', ')}
+            </ThemedText>
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={styles.joinButton}
+          onPress={joinSession}
+          disabled={!lobbyData?.canJoinSession}
+        >
+          <ThemedText style={styles.joinButtonText}>
+            {lobbyData?.canJoinSession ? 'Join Session' : 'Session Not Available'}
+          </ThemedText>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ThemedText style={styles.backButtonText}>Go Back</ThemedText>
+        </TouchableOpacity>
+      </View>
+    </ThemedView>
+  );
+
+  // Show lobby if not joined yet
+  if (lobbyState === 'lobby') {
+    return <LobbyScreen />;
+  }
+
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
@@ -463,7 +547,6 @@ export default function ProfessionalSessionCallScreen() {
             <View style={styles.callContainer}>
               <CallContent 
                 onHangupCallHandler={handleEndCall}
-                CallControls={CustomCallControls}
               />
               {professionalDisconnected && (
                 <View style={styles.reconnectingOverlay}>
@@ -624,6 +707,88 @@ const styles = StyleSheet.create({
   reconnectingText: {
     fontSize: 16,
     color: Colors.light.text,
+    textAlign: 'center'
+  },
+  lobbyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    gap: 32
+  },
+  lobbyHeader: {
+    alignItems: 'center',
+    gap: 8
+  },
+  lobbyTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: Colors.light.text
+  },
+  lobbySubtitle: {
+    fontSize: 16,
+    color: Colors.light.text,
+    opacity: 0.7
+  },
+  sessionDetails: {
+    alignItems: 'center',
+    gap: 8
+  },
+  sessionTopic: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: Colors.light.text,
+    textAlign: 'center'
+  },
+  sessionDuration: {
+    fontSize: 14,
+    color: Colors.light.text,
+    opacity: 0.7
+  },
+  participantInfo: {
+    alignItems: 'center',
+    gap: 12
+  },
+  participantImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.light.surface
+  },
+  participantName: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: Colors.light.text
+  },
+  specializations: {
+    fontSize: 14,
+    color: Colors.light.text,
+    opacity: 0.7,
+    textAlign: 'center'
+  },
+  joinButton: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 48,
+    paddingVertical: 16,
+    borderRadius: 12,
+    minWidth: 200
+  },
+  joinButtonText: {
+    color: Colors.light.background,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  backButton: {
+    backgroundColor: Colors.light.surface,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8
+  },
+  backButtonText: {
+    color: Colors.light.text,
+    fontSize: 14,
+    fontWeight: '500',
     textAlign: 'center'
   }
 }); 

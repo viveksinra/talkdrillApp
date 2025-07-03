@@ -62,6 +62,7 @@ export default function MySessionsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
+  const [joiningSession, setJoiningSession] = useState<string | null>(null);
 
   const loadBookings = useCallback(async () => {
     try {
@@ -181,19 +182,49 @@ export default function MySessionsScreen() {
   const canJoinLobby = (booking: BookingWithProfessional) => {
     const sessionDateTime = new Date(`${booking.scheduledDate}T${booking.scheduledTime}`);
     const now = new Date();
-    const diffMinutes = Math.floor((sessionDateTime.getTime() - now.getTime()) / (1000 * 60));
     
-    return (
-      (booking.sessionState === 'lobby_active' || booking.sessionState === 'in_progress') &&
-      diffMinutes <= 5 && diffMinutes >= -60 // 5 minutes before to 60 minutes after
-    );
+    // Calculate session end time = start time + duration (in minutes)
+    const sessionEndTime = new Date(sessionDateTime.getTime() + (booking.duration * 60 * 1000));
+    
+    // Calculate 5 minutes before session start
+    const fiveMinutesBeforeStart = new Date(sessionDateTime.getTime() - (5 * 60 * 1000));
+    
+    // Show join button if current time is between:
+    // 5 minutes before session start AND session end time
+    const canJoin = now >= fiveMinutesBeforeStart && now <= sessionEndTime;
+    
+    // Only show for non-cancelled sessions
+    const isValidSession = !['cancelled_by_student', 'cancelled_by_professional', 'completed'].includes(booking.status);
+    
+    return canJoin && isValidSession;
   };
 
-  const handleJoinLobby = (booking: BookingWithProfessional) => {
-    router.push({
-      pathname: '/session-waiting-room/[bookingId]',
-      params: { bookingId: booking._id }
-    });
+  const handleJoinSession = async (booking: BookingWithProfessional) => {
+    // Prevent multiple clicks
+    if (joiningSession === booking._id) return;
+    
+    try {
+      setJoiningSession(booking._id);
+      console.log('🚀 Attempting to join session:', booking._id);
+      
+      // Navigate directly to session call screen
+      router.push({
+        pathname: '/professional-session-call',
+        params: {
+          sessionId: booking.sessionId || 'new',
+          bookingId: booking._id,
+          professionalId: booking.professional._id,
+          professionalName: booking.professional.name,
+          durationInMinutes: booking.duration.toString()
+        }
+      });
+    } catch (error: any) {
+      console.error('Error joining session:', error);
+      Alert.alert('Error', error.message || 'Failed to join session. Please try again.');
+    } finally {
+      // Reset loading state after navigation
+      setTimeout(() => setJoiningSession(null), 2000);
+    }
   };
 
   const handleCancelBooking = async (booking: BookingWithProfessional) => {
@@ -219,10 +250,12 @@ export default function MySessionsScreen() {
 
   const renderBookingItem = ({ item }: { item: BookingWithProfessional }) => {
     const sessionDateTime = new Date(`${item.scheduledDate}T${item.scheduledTime}`);
+    const sessionEndTime = new Date(sessionDateTime.getTime() + (item.duration * 60 * 1000));
     const now = new Date();
-    const isUpcoming = sessionDateTime > now;
-    const minutesUntil = Math.floor((sessionDateTime.getTime() - now.getTime()) / (1000 * 60));
+    const minutesUntilStart = Math.floor((sessionDateTime.getTime() - now.getTime()) / (1000 * 60));
+    const minutesUntilEnd = Math.floor((sessionEndTime.getTime() - now.getTime()) / (1000 * 60));
     const canJoin = canJoinLobby(item);
+    const isJoining = joiningSession === item._id;
 
     return (
       <View style={styles.bookingContainer}>
@@ -254,32 +287,75 @@ export default function MySessionsScreen() {
 
         {/* Session Status & Actions */}
         <View style={styles.actionsContainer}>
-          {isUpcoming && minutesUntil <= 15 && minutesUntil > 0 && (
-            <View style={styles.reminderContainer}>
-              <Ionicons name="time" size={16} color={Colors.light.warning} />
-              <Text style={styles.reminderText}>
-                Session starts in {minutesUntil} minutes
+          {/* Show different timing info based on session state */}
+          {minutesUntilStart > 5 && (
+            <View style={styles.infoContainer}>
+              <Ionicons name="time-outline" size={16} color={Colors.light.icon} />
+              <Text style={styles.infoText}>
+                Available to join in {minutesUntilStart - 5} minutes
               </Text>
             </View>
           )}
 
+          {minutesUntilStart <= 5 && minutesUntilStart > 0 && (
+            <View style={styles.readyContainer}>
+              <Ionicons name="radio-button-on" size={16} color={Colors.light.success} />
+              <Text style={styles.readyText}>
+                Session starts in {minutesUntilStart} minutes - Ready to join!
+              </Text>
+            </View>
+          )}
+
+          {minutesUntilStart <= 0 && minutesUntilEnd > 0 && (
+            <View style={styles.activeContainer}>
+              <Ionicons name="videocam" size={16} color={Colors.light.primary} />
+              <Text style={styles.activeText}>
+                Session is active - {minutesUntilEnd} minutes remaining
+              </Text>
+            </View>
+          )}
+
+          {minutesUntilEnd <= 0 && (
+            <View style={styles.expiredContainer}>
+              <Ionicons name="time-outline" size={16} color={Colors.light.error} />
+              <Text style={styles.expiredText}>
+                Session time has ended
+              </Text>
+            </View>
+          )}
+
+          {/* Join button - show only during valid time window */}
           {canJoin && (
             <TouchableOpacity
-              style={styles.joinButton}
-              onPress={() => handleJoinLobby(item)}
+              style={[
+                styles.joinButton,
+                isJoining && styles.joinButtonLoading
+              ]}
+              onPress={() => handleJoinSession(item)}
+              disabled={isJoining}
             >
-              <Ionicons name="videocam" size={20} color={Colors.light.background} />
-              <Text style={styles.joinButtonText}>
-                {item.sessionState === 'in_progress' ? 'Rejoin Session' : 'Join Lobby'}
-              </Text>
+              {isJoining ? (
+                <>
+                  <ActivityIndicator size="small" color={Colors.light.background} />
+                  <Text style={styles.joinButtonText}>Joining...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="videocam" size={20} color={Colors.light.background} />
+                  <Text style={styles.joinButtonText}>Join Session</Text>
+                </>
+              )}
             </TouchableOpacity>
           )}
 
-          {item.sessionState === 'lobby_active' && !canJoin && (
-            <View style={styles.waitingInfoContainer}>
-              <Ionicons name="information-circle" size={16} color={Colors.light.info} />
-              <Text style={styles.waitingInfoText}>
-                Lobby is active - Join when ready
+          {/* Debug info for development */}
+          {__DEV__ && (
+            <View style={styles.debugContainer}>
+              <Text style={styles.debugText}>
+                Start: {minutesUntilStart}m | End: {minutesUntilEnd}m | CanJoin: {canJoin ? 'YES' : 'NO'}
+              </Text>
+              <Text style={styles.debugText}>
+                SessionTime: {sessionDateTime.toLocaleTimeString()} | EndTime: {sessionEndTime.toLocaleTimeString()}
               </Text>
             </View>
           )}
@@ -496,33 +572,79 @@ const styles = StyleSheet.create({
     marginTop: 8,
     gap: 8,
   },
-  reminderContainer: {
+  infoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: Colors.light.warning,
-    borderRadius: 8,
+    backgroundColor: Colors.light.surface,
+    borderRadius: 6,
   },
-  reminderText: {
-    fontSize: 14,
-    color: Colors.light.warning,
+  infoText: {
+    fontSize: 12,
+    color: Colors.light.icon,
+  },
+  readyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#e8f5e8',
+    borderRadius: 6,
+  },
+  readyText: {
+    fontSize: 12,
+    color: Colors.light.success,
     fontWeight: '500',
   },
+  activeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#e3f2fd',
+    borderRadius: 6,
+  },
+  activeText: {
+    fontSize: 12,
+    color: Colors.light.primary,
+    fontWeight: '500',
+  },
+  expiredContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#ffebee',
+    borderRadius: 6,
+  },
+  expiredText: {
+    fontSize: 12,
+    color: Colors.light.error,
+  },
   joinButton: {
+    backgroundColor: Colors.light.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 16,
+    minWidth: 180,
     gap: 8,
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
+  },
+  joinButtonLoading: {
+    opacity: 0.7,
   },
   joinButtonText: {
+    color: Colors.light.background,
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.background,
   },
   waitingInfoContainer: {
     flexDirection: 'row',
@@ -559,5 +681,16 @@ const styles = StyleSheet.create({
     color: Colors.light.background,
     fontSize: 16,
     fontWeight: '600',
+  },
+  debugContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 4,
+  },
+  debugText: {
+    fontSize: 10,
+    color: '#666',
+    fontFamily: 'monospace',
   },
 }); 
