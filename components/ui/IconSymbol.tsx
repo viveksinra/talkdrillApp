@@ -26,6 +26,7 @@ const MAPPING = {
   'doc.text.fill': 'description',
   'clock.fill': 'access-time',
   'pencil': 'edit',
+  'calendar': 'event',
   // Added for StrengthsImprovements component
   'checkmark.circle.fill': 'check-circle',
   'exclamationmark.triangle.fill': 'warning',

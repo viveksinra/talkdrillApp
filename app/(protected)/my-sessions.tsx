@@ -212,32 +212,17 @@ export default function MySessionsScreen() {
     const canJoin = canJoinSession(item);
     const isJoining = joiningSession === item._id;
 
-    return (
-      <View style={styles.bookingContainer}>
-        {/* Professional Info Header */}
-        <View style={styles.professionalHeader}>
-          <Image
-            source={{
-              uri: item.professional.profileImage || 'https://via.placeholder.com/40'
-            }}
-            style={styles.professionalImage}
-          />
-          <View style={styles.professionalInfo}>
-            <Text style={styles.professionalName}>{item.professional.name}</Text>
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={14} color={Colors.light.warning} />
-              <Text style={styles.rating}>{item.professional.averageRating.toFixed(1)}</Text>
-            </View>
-          </View>
-        </View>
+    const sessionInfo = item.status === 'completed' ? {
+      actualStartTime: item.scheduledTime,
+      actualEndTime: item.endTime,
+      sessionStatus: 'Completed'
+    } : undefined;
 
-        {/* Booking Card */}
+    return (
+      <View>
         <BookingCard
-          booking={item as any}
-          onPress={() => {
-            // Navigate to booking details if needed
-          }}
-          onCancel={() => handleCancelBooking(item)}
+          booking={item}
+          sessionInfo={sessionInfo}
         />
 
         {/* Session Status & Actions */}
@@ -342,6 +327,7 @@ export default function MySessionsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Content */}
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -362,6 +348,7 @@ export default function MySessionsScreen() {
           renderItem={renderBookingItem}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -401,24 +388,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.surface,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: Colors.light.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.surface,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: Colors.light.text,
-  },
-  addButton: {
-    padding: 8,
   },
   tabContainer: {
     flexDirection: 'row',
