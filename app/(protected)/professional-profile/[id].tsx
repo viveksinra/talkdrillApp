@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import {
   fetchProfessionalDetails,
   fetchProfessionalAvailability,
@@ -188,14 +188,11 @@ export default function ProfessionalProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
-        </TouchableOpacity>
-        <View style={{ width: 24 }} />
-      </View>
-
+    <View style={styles.container}>
+      <Stack.Screen options={{
+        headerShown: true,
+        title: professional.name
+      }} />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Section - Matching Screenshot */}
         <View style={styles.profileSection}>
@@ -459,7 +456,7 @@ export default function ProfessionalProfileScreen() {
           </View>
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 

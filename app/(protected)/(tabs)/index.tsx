@@ -461,7 +461,7 @@ export default function HomeScreen() {
             <ThemedView style={styles.recentSection}>
               <ThemedText type="subtitle">Talk with Professionals</ThemedText>
               <TouchableOpacity
-                onPress={() => router.push("/(protected)/(tabs)/professionals")}
+                onPress={() => router.push("/(protected)/professionals")}
               >
                 <ThemedText style={styles.viewAllText}>View All</ThemedText>
               </TouchableOpacity>

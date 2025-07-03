@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { fetchProfessionals, Professional } from '@/api/services/public/professionalService';
 import { ProfessionalCard } from '@/components/shared/ProfessionalCard';
 import { Colors } from '@/constants/Colors';
@@ -88,10 +88,13 @@ export default function ProfessionalsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Talk with Professionals</Text>
-      </View>
+    <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Talk with Professionals',
+        }}
+      />
 
       {/* Specialization Filters */}
       <View style={styles.filtersContainer}>
@@ -165,7 +168,7 @@ export default function ProfessionalsScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

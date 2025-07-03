@@ -10,9 +10,8 @@ import {
   Alert,
   Image
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 // Removed moment - using native Date APIs
 
 import { Colors } from '@/constants/Colors';
@@ -36,6 +35,7 @@ interface BookingWithProfessional {
     specializations: string[];
     averageRating: number;
   };
+  sessionId: string;
   scheduledDate: string;
   scheduledTime: string;
   endTime: string;
@@ -249,117 +249,50 @@ export default function MySessionsScreen() {
   };
 
   const renderBookingItem = ({ item }: { item: BookingWithProfessional }) => {
-    const sessionDateTime = new Date(`${item.scheduledDate}T${item.scheduledTime}`);
-    const sessionEndTime = new Date(sessionDateTime.getTime() + (item.duration * 60 * 1000));
-    const now = new Date();
-    const minutesUntilStart = Math.floor((sessionDateTime.getTime() - now.getTime()) / (1000 * 60));
-    const minutesUntilEnd = Math.floor((sessionEndTime.getTime() - now.getTime()) / (1000 * 60));
-    const canJoin = canJoinLobby(item);
-    const isJoining = joiningSession === item._id;
+    // Calculate session info for completed sessions
+    const sessionInfo = item.status === 'completed' ? {
+      actualStartTime: item.videoCallDetails?.lobbyActivatedAt ? 
+        new Date(item.videoCallDetails.lobbyActivatedAt).toLocaleTimeString() : 
+        item.scheduledTime,
+      actualEndTime: item.endTime,
+      sessionStatus: 'Completed'
+    } : undefined;
 
     return (
-      <View style={styles.bookingContainer}>
-        {/* Professional Info Header */}
-        <View style={styles.professionalHeader}>
-          <Image
-            source={{
-              uri: item.professional.profileImage || 'https://via.placeholder.com/40'
-            }}
-            style={styles.professionalImage}
-          />
-          <View style={styles.professionalInfo}>
-            <Text style={styles.professionalName}>{item.professional.name}</Text>
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={14} color={Colors.light.warning} />
-              <Text style={styles.rating}>{item.professional.averageRating.toFixed(1)}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Booking Card */}
+      <View>
         <BookingCard
-          booking={item as any}
-          onPress={() => {
-            // Navigate to booking details if needed
-          }}
-          onCancel={() => handleCancelBooking(item)}
+          booking={item}
+          sessionInfo={sessionInfo}
         />
-
-        {/* Session Status & Actions */}
-        <View style={styles.actionsContainer}>
-          {/* Show different timing info based on session state */}
-          {minutesUntilStart > 5 && (
-            <View style={styles.infoContainer}>
-              <Ionicons name="time-outline" size={16} color={Colors.light.icon} />
-              <Text style={styles.infoText}>
-                Available to join in {minutesUntilStart - 5} minutes
-              </Text>
-            </View>
-          )}
-
-          {minutesUntilStart <= 5 && minutesUntilStart > 0 && (
-            <View style={styles.readyContainer}>
-              <Ionicons name="radio-button-on" size={16} color={Colors.light.success} />
-              <Text style={styles.readyText}>
-                Session starts in {minutesUntilStart} minutes - Ready to join!
-              </Text>
-            </View>
-          )}
-
-          {minutesUntilStart <= 0 && minutesUntilEnd > 0 && (
-            <View style={styles.activeContainer}>
-              <Ionicons name="videocam" size={16} color={Colors.light.primary} />
-              <Text style={styles.activeText}>
-                Session is active - {minutesUntilEnd} minutes remaining
-              </Text>
-            </View>
-          )}
-
-          {minutesUntilEnd <= 0 && (
-            <View style={styles.expiredContainer}>
-              <Ionicons name="time-outline" size={16} color={Colors.light.error} />
-              <Text style={styles.expiredText}>
-                Session time has ended
-              </Text>
-            </View>
-          )}
-
-          {/* Join button - show only during valid time window */}
-          {canJoin && (
-            <TouchableOpacity
-              style={[
-                styles.joinButton,
-                isJoining && styles.joinButtonLoading
-              ]}
-              onPress={() => handleJoinSession(item)}
-              disabled={isJoining}
-            >
-              {isJoining ? (
-                <>
-                  <ActivityIndicator size="small" color={Colors.light.background} />
-                  <Text style={styles.joinButtonText}>Joining...</Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="videocam" size={20} color={Colors.light.background} />
-                  <Text style={styles.joinButtonText}>Join Session</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
-
-          {/* Debug info for development */}
-          {__DEV__ && (
-            <View style={styles.debugContainer}>
-              <Text style={styles.debugText}>
-                Start: {minutesUntilStart}m | End: {minutesUntilEnd}m | CanJoin: {canJoin ? 'YES' : 'NO'}
-              </Text>
-              <Text style={styles.debugText}>
-                SessionTime: {sessionDateTime.toLocaleTimeString()} | EndTime: {sessionEndTime.toLocaleTimeString()}
-              </Text>
-            </View>
-          )}
-        </View>
+        
+        {/* Session Actions for upcoming sessions */}
+        {(item.status === 'booked' || item.status === 'confirmed' || item.status === 'in_progress') && (
+          <View style={styles.actionsContainer}>
+            {/* Your existing join button and status logic */}
+            {canJoinLobby(item) && (
+              <TouchableOpacity
+                style={[
+                  styles.joinButton,
+                  joiningSession === item._id && styles.joinButtonLoading
+                ]}
+                onPress={() => handleJoinSession(item)}
+                disabled={joiningSession === item._id}
+              >
+                {joiningSession === item._id ? (
+                  <>
+                    <ActivityIndicator size="small" color={Colors.light.background} />
+                    <Text style={styles.joinButtonText}>Joining...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="videocam" size={20} color={Colors.light.background} />
+                    <Text style={styles.joinButtonText}>Join Session</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
     );
   };
@@ -367,16 +300,21 @@ export default function MySessionsScreen() {
   const filteredBookings = getFilteredBookings();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Sessions</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push('/(protected)/(tabs)/professionals')}
-        >
-          <Ionicons name="add" size={24} color={Colors.light.primary} />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'My Sessions',
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/(protected)/professionals')}
+              style={{ marginRight: 16 }}
+            >
+              <Ionicons name="add" size={24} color={Colors.light.primary} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
@@ -398,6 +336,7 @@ export default function MySessionsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Content */}
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -418,6 +357,7 @@ export default function MySessionsScreen() {
           renderItem={renderBookingItem}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -440,7 +380,7 @@ export default function MySessionsScreen() {
               {activeTab === 'upcoming' && (
                 <TouchableOpacity
                   style={styles.bookSessionButton}
-                  onPress={() => router.push('/(protected)/(tabs)/professionals')}
+                  onPress={() => router.push('/(protected)/professionals')}
                 >
                   <Text style={styles.bookSessionButtonText}>Book a Session</Text>
                 </TouchableOpacity>
@@ -449,7 +389,7 @@ export default function MySessionsScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -457,24 +397,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.surface,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: Colors.light.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.surface,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: Colors.light.text,
-  },
-  addButton: {
-    padding: 8,
   },
   tabContainer: {
     flexDirection: 'row',
@@ -535,107 +457,23 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
   },
-  bookingContainer: {
-    marginBottom: 20,
-  },
-  professionalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  professionalImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  professionalInfo: {
-    flex: 1,
-  },
-  professionalName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 2,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  rating: {
-    fontSize: 14,
-    color: Colors.light.icon,
+  separator: {
+    height: 1,
+    backgroundColor: '#E8E8E8',
+    marginVertical: 8,
   },
   actionsContainer: {
-    marginTop: 8,
-    gap: 8,
-  },
-  infoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.light.surface,
-    borderRadius: 6,
-  },
-  infoText: {
-    fontSize: 12,
-    color: Colors.light.icon,
-  },
-  readyContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#e8f5e8',
-    borderRadius: 6,
-  },
-  readyText: {
-    fontSize: 12,
-    color: Colors.light.success,
-    fontWeight: '500',
-  },
-  activeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#e3f2fd',
-    borderRadius: 6,
-  },
-  activeText: {
-    fontSize: 12,
-    color: Colors.light.primary,
-    fontWeight: '500',
-  },
-  expiredContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#ffebee',
-    borderRadius: 6,
-  },
-  expiredText: {
-    fontSize: 12,
-    color: Colors.light.error,
+    marginTop: -8,
+    marginBottom: 8,
   },
   joinButton: {
     backgroundColor: Colors.light.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 12,
-    marginTop: 16,
-    minWidth: 180,
+    borderRadius: 8,
     gap: 8,
   },
   joinButtonLoading: {
@@ -645,19 +483,6 @@ const styles = StyleSheet.create({
     color: Colors.light.background,
     fontSize: 16,
     fontWeight: '600',
-  },
-  waitingInfoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.light.info,
-    borderRadius: 8,
-  },
-  waitingInfoText: {
-    fontSize: 14,
-    color: Colors.light.info,
   },
   emptyContainer: {
     flex: 1,
@@ -681,16 +506,5 @@ const styles = StyleSheet.create({
     color: Colors.light.background,
     fontSize: 16,
     fontWeight: '600',
-  },
-  debugContainer: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 4,
-  },
-  debugText: {
-    fontSize: 10,
-    color: '#666',
-    fontFamily: 'monospace',
   },
 }); 
