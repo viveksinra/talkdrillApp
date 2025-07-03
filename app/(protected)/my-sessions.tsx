@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import moment from 'moment';
+// Removed moment - using native Date APIs
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,13 +22,33 @@ import { BookingCard } from '@/components/shared/BookingCard';
 import { Booking } from '@/api/services/public/professionalService';
 import { get } from '@/api/config/axiosConfig';
 
-interface BookingWithProfessional extends Booking {
+interface BookingWithProfessional {
+  _id: string;
+  student: {
+    _id: string;
+    name: string;
+    profileImage?: string;
+  };
   professional: {
     _id: string;
     name: string;
     profileImage?: string;
     specializations: string[];
     averageRating: number;
+  };
+  scheduledDate: string;
+  scheduledTime: string;
+  endTime: string;
+  duration: number;
+  topic?: string;
+  studentNotes?: string;
+  status: string;
+  sessionState?: 'scheduled' | 'lobby_active' | 'in_progress' | 'completed';
+  amount: number;
+  coinsDeducted: number;
+  videoCallDetails?: {
+    streamCallId?: string;
+    lobbyActivatedAt?: string;
   };
 }
 
@@ -48,16 +68,23 @@ export default function MySessionsScreen() {
       setLoading(true);
       setError(null);
       
+      console.log('🔄 Loading bookings...');
       // Fetch user's bookings from backend
       const response = await get('/api/v1/bookings/my-bookings');
+      console.log('📡 API Response:', response.data);
+      
       if (response.data.variant === 'success') {
-        setBookings(response.data.myData.bookings || []);
+        const bookingsData = response.data.myData.bookings || [];
+        console.log('📅 Bookings data:', bookingsData);
+        console.log('📊 Total bookings:', bookingsData.length);
+        setBookings(bookingsData);
       } else {
         throw new Error(response.data.message || 'Failed to load bookings');
       }
     } catch (err: any) {
+      console.error('❌ Error loading bookings:', err);
+      console.error('❌ Error details:', err.response?.data);
       setError(err.message || 'Failed to load sessions. Please try again.');
-      console.error('Error loading bookings:', err);
     } finally {
       setLoading(false);
     }
@@ -77,17 +104,18 @@ export default function MySessionsScreen() {
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    const handleSessionStartingSoon = (data: any) => {
-      // Refresh bookings to get updated state
-      loadBookings();
+    const handleSessionReminder = (data: any) => {
+      console.log('📢 Session reminder:', data);
+      loadBookings(); // Refresh bookings when session state changes
     };
 
-    const handleWaitingRoomAvailable = (data: any) => {
-      // Refresh bookings to show waiting room availability
-      loadBookings();
+    const handleLobbyAvailable = (data: any) => {
+      console.log('🚪 Lobby available:', data);
+      loadBookings(); // Refresh bookings
     };
 
     const handleSessionStateChanged = (data: any) => {
+      console.log('🔄 Session state changed:', data);
       // Update booking state in real-time
       setBookings(prev => prev.map(booking => 
         booking._id === data.bookingId 
@@ -96,50 +124,72 @@ export default function MySessionsScreen() {
       ));
     };
 
-    socket.on('session_starting_soon', handleSessionStartingSoon);
-    socket.on('session_waiting_room_available', handleWaitingRoomAvailable);
+    socket.on('session_reminder', handleSessionReminder);
+    socket.on('lobby_available', handleLobbyAvailable);
     socket.on('session_state_changed', handleSessionStateChanged);
 
     return () => {
-      socket.off('session_starting_soon', handleSessionStartingSoon);
-      socket.off('session_waiting_room_available', handleWaitingRoomAvailable);
+      socket.off('session_reminder', handleSessionReminder);
+      socket.off('lobby_available', handleLobbyAvailable);
       socket.off('session_state_changed', handleSessionStateChanged);
     };
   }, [socket, isConnected, loadBookings]);
 
   const getFilteredBookings = () => {
-    const now = moment();
+    const now = new Date();
+    console.log('🔍 Filtering bookings. Total bookings:', bookings.length);
+    console.log('📋 All bookings:', bookings);
+    console.log('🏷️ Active tab:', activeTab);
     
     if (activeTab === 'upcoming') {
-      return bookings.filter(booking => 
-        ['booked', 'confirmed', 'waiting_room_available', 'in_progress'].includes(booking.status) &&
-        moment(`${booking.scheduledDate} ${booking.scheduledTime}`).isAfter(now.subtract(2, 'hours'))
-      ).sort((a, b) => 
-        moment(`${a.scheduledDate} ${a.scheduledTime}`).valueOf() - 
-        moment(`${b.scheduledDate} ${b.scheduledTime}`).valueOf()
-      );
+      const upcomingBookings = bookings.filter(booking => {
+        const sessionDateTime = new Date(`${booking.scheduledDate}T${booking.scheduledTime}`);
+        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        
+        console.log(`📅 Booking ${booking._id}:`, {
+          status: booking.status,
+          sessionDateTime: sessionDateTime.toISOString(),
+          twoHoursAgo: twoHoursAgo.toISOString(),
+          isAfterTwoHoursAgo: sessionDateTime > twoHoursAgo,
+          statusMatches: ['booked', 'confirmed', 'lobby_active', 'in_progress'].includes(booking.status)
+        });
+        
+        return ['booked', 'confirmed', 'lobby_active', 'in_progress'].includes(booking.status) &&
+               sessionDateTime > twoHoursAgo;
+      }).sort((a, b) => {
+        const dateA = new Date(`${a.scheduledDate}T${a.scheduledTime}`);
+        const dateB = new Date(`${b.scheduledDate}T${b.scheduledTime}`);
+        return dateA.getTime() - dateB.getTime();
+      });
+      
+      console.log('⏰ Upcoming bookings:', upcomingBookings.length);
+      return upcomingBookings;
     } else {
-      return bookings.filter(booking => 
+      const completedBookings = bookings.filter(booking => 
         ['completed', 'cancelled_by_student', 'cancelled_by_professional'].includes(booking.status)
-      ).sort((a, b) => 
-        moment(`${b.scheduledDate} ${b.scheduledTime}`).valueOf() - 
-        moment(`${a.scheduledDate} ${a.scheduledTime}`).valueOf()
-      );
+      ).sort((a, b) => {
+        const dateA = new Date(`${a.scheduledDate}T${a.scheduledTime}`);
+        const dateB = new Date(`${b.scheduledDate}T${b.scheduledTime}`);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      console.log('✅ Completed bookings:', completedBookings.length);
+      return completedBookings;
     }
   };
 
-  const canJoinWaitingRoom = (booking: BookingWithProfessional) => {
-    const sessionTime = moment(`${booking.scheduledDate} ${booking.scheduledTime}`);
-    const now = moment();
-    const diffMinutes = sessionTime.diff(now, 'minutes');
+  const canJoinLobby = (booking: BookingWithProfessional) => {
+    const sessionDateTime = new Date(`${booking.scheduledDate}T${booking.scheduledTime}`);
+    const now = new Date();
+    const diffMinutes = Math.floor((sessionDateTime.getTime() - now.getTime()) / (1000 * 60));
     
     return (
-      (booking.sessionState === 'waiting_room_available' || booking.status === 'in_progress') &&
+      (booking.sessionState === 'lobby_active' || booking.sessionState === 'in_progress') &&
       diffMinutes <= 5 && diffMinutes >= -60 // 5 minutes before to 60 minutes after
     );
   };
 
-  const handleJoinWaitingRoom = (booking: BookingWithProfessional) => {
+  const handleJoinLobby = (booking: BookingWithProfessional) => {
     router.push({
       pathname: '/session-waiting-room/[bookingId]',
       params: { bookingId: booking._id }
@@ -168,11 +218,11 @@ export default function MySessionsScreen() {
   };
 
   const renderBookingItem = ({ item }: { item: BookingWithProfessional }) => {
-    const sessionTime = moment(`${item.scheduledDate} ${item.scheduledTime}`);
-    const now = moment();
-    const isUpcoming = sessionTime.isAfter(now);
-    const minutesUntil = sessionTime.diff(now, 'minutes');
-    const canJoin = canJoinWaitingRoom(item);
+    const sessionDateTime = new Date(`${item.scheduledDate}T${item.scheduledTime}`);
+    const now = new Date();
+    const isUpcoming = sessionDateTime > now;
+    const minutesUntil = Math.floor((sessionDateTime.getTime() - now.getTime()) / (1000 * 60));
+    const canJoin = canJoinLobby(item);
 
     return (
       <View style={styles.bookingContainer}>
@@ -195,7 +245,7 @@ export default function MySessionsScreen() {
 
         {/* Booking Card */}
         <BookingCard
-          booking={item}
+          booking={item as any}
           onPress={() => {
             // Navigate to booking details if needed
           }}
@@ -216,20 +266,20 @@ export default function MySessionsScreen() {
           {canJoin && (
             <TouchableOpacity
               style={styles.joinButton}
-              onPress={() => handleJoinWaitingRoom(item)}
+              onPress={() => handleJoinLobby(item)}
             >
               <Ionicons name="videocam" size={20} color={Colors.light.background} />
               <Text style={styles.joinButtonText}>
-                {item.status === 'in_progress' ? 'Rejoin Session' : 'Join Waiting Room'}
+                {item.sessionState === 'in_progress' ? 'Rejoin Session' : 'Join Lobby'}
               </Text>
             </TouchableOpacity>
           )}
 
-          {item.sessionState === 'waiting_room_available' && !canJoin && (
+          {item.sessionState === 'lobby_active' && !canJoin && (
             <View style={styles.waitingInfoContainer}>
               <Ionicons name="information-circle" size={16} color={Colors.light.info} />
               <Text style={styles.waitingInfoText}>
-                Waiting room available - Join when ready
+                Lobby is active - Join when ready
               </Text>
             </View>
           )}
@@ -367,7 +417,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 16,
-    color: Colors.light.textSecondary,
+    color: Colors.light.icon,
   },
   activeTabText: {
     color: Colors.light.primary,
@@ -381,7 +431,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: Colors.light.textSecondary,
+    color: Colors.light.icon,
   },
   errorContainer: {
     flex: 1,
@@ -440,7 +490,7 @@ const styles = StyleSheet.create({
   },
   rating: {
     fontSize: 14,
-    color: Colors.light.textSecondary,
+    color: Colors.light.icon,
   },
   actionsContainer: {
     marginTop: 8,
@@ -452,7 +502,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: Colors.light.warningLight,
+    backgroundColor: Colors.light.warning,
     borderRadius: 8,
   },
   reminderText: {
@@ -480,7 +530,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: Colors.light.infoLight,
+    backgroundColor: Colors.light.info,
     borderRadius: 8,
   },
   waitingInfoText: {
@@ -496,7 +546,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: Colors.light.textSecondary,
+    color: Colors.light.icon,
     textAlign: 'center',
   },
   bookSessionButton: {

@@ -6,21 +6,21 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  ScrollView
+  Animated
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import moment from 'moment';
+// Removed moment - using native Date APIs
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
-import professionalSessionService, { WaitingRoomDetails } from '@/api/services/professionalSessionService';
+import professionalSessionService, { LobbyDetails } from '@/api/services/professionalSessionService';
 
-export default function SessionWaitingRoomScreen() {
+export default function SessionLobbyScreen() {
   const router = useRouter();
   const { bookingId } = useLocalSearchParams();
   const { user } = useAuth();
@@ -28,137 +28,140 @@ export default function SessionWaitingRoomScreen() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [waitingRoomDetails, setWaitingRoomDetails] = useState<WaitingRoomDetails | null>(null);
-  const [timeLeft, setTimeLeft] = useState<string>('');
+  const [lobbyDetails, setLobbyDetails] = useState<LobbyDetails | null>(null);
+  const [timeUntilSession, setTimeUntilSession] = useState<string>('');
   const [canJoinSession, setCanJoinSession] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  const [partnerInWaitingRoom, setPartnerInWaitingRoom] = useState(false);
+  const [partnerInLobby, setPartnerInLobby] = useState(false);
 
+  // Simple heartbeat animation (like match-making)
+  const heartbeatAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const hasJoinedWaitingRoom = useRef(false);
+  const hasJoinedLobby = useRef(false);
 
-  // Load waiting room details
+  // Load lobby details
   useEffect(() => {
-    loadWaitingRoomDetails();
+    loadLobbyDetails();
   }, [bookingId]);
 
-  // Set up socket listeners for session events
+  // Simple heartbeat animation loop
+  useEffect(() => {
+    const startHeartbeat = () => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(heartbeatAnim, {
+            toValue: 1.2,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(heartbeatAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    };
+
+    startHeartbeat();
+  }, [heartbeatAnim]);
+
+  // SIMPLIFIED: Socket listeners for lobby events
   useEffect(() => {
     if (!socket || !isConnected || !bookingId) return;
 
-    const handleSessionStartingSoon = (data: any) => {
+    const handleSessionReminder = (data: any) => {
       if (data.bookingId === bookingId) {
-        console.log('Session starting soon notification received');
+        console.log('📢 Session reminder received');
       }
     };
 
-    const handleWaitingRoomAvailable = (data: any) => {
+    const handleLobbyAvailable = (data: any) => {
       if (data.bookingId === bookingId) {
-        console.log('Waiting room available');
+        console.log('🚪 Lobby available');
         setCanJoinSession(true);
-        loadWaitingRoomDetails(); // Refresh details
+        loadLobbyDetails(); // Refresh details
       }
     };
 
-    const handleAutoJoinTriggered = (data: any) => {
-      if (data.bookingId === bookingId && data.action === 'auto_join_session') {
-        console.log('Auto-join triggered, navigating to session call');
+    const handleSessionCallCreated = (data: any) => {
+      if (data.bookingId === bookingId) {
+        console.log('🎬 Session call created, navigating to video call');
         navigateToSessionCall();
       }
     };
 
-    const handleSessionEndingSoon = (data: any) => {
-      if (data.bookingId === bookingId) {
-        Alert.alert(
-          'Session Ending Soon',
-          `Your session will end in ${data.minutesLeft} minutes`,
-          [{ text: 'OK' }]
-        );
-      }
-    };
-
-    const handleParticipantJoinedWaitingRoom = (data: any) => {
-      console.log('Participant joined waiting room:', data);
+    const handleParticipantJoinedLobby = (data: any) => {
+      console.log('👋 Participant joined lobby:', data);
       if (data.userRole === 'professional') {
-        setPartnerInWaitingRoom(true);
+        setPartnerInLobby(true);
       }
     };
 
-    const handleParticipantLeftWaitingRoom = (data: any) => {
-      console.log('Participant left waiting room:', data);
+    const handleParticipantLeftLobby = (data: any) => {
+      console.log('👋 Participant left lobby:', data);
       if (data.userRole === 'professional') {
-        setPartnerInWaitingRoom(false);
+        setPartnerInLobby(false);
       }
     };
 
-    // Register socket listeners
-    socket.on('session_starting_soon', handleSessionStartingSoon);
-    socket.on('session_waiting_room_available', handleWaitingRoomAvailable);
-    socket.on('session_auto_join_triggered', handleAutoJoinTriggered);
-    socket.on('session_ending_soon', handleSessionEndingSoon);
-    socket.on('participant_joined_waiting_room', handleParticipantJoinedWaitingRoom);
-    socket.on('participant_left_waiting_room', handleParticipantLeftWaitingRoom);
+    // Register SIMPLIFIED socket listeners
+    socket.on('session_reminder', handleSessionReminder);
+    socket.on('lobby_available', handleLobbyAvailable);
+    socket.on('session_call_created', handleSessionCallCreated);
+    socket.on('participant_joined_lobby', handleParticipantJoinedLobby);
+    socket.on('participant_left_lobby', handleParticipantLeftLobby);
 
-    // Join waiting room socket room
-    if (!hasJoinedWaitingRoom.current) {
-      socket.emit('join_session_waiting_room', {
+    // Join lobby socket room (simplified)
+    if (!hasJoinedLobby.current && canJoinSession) {
+      socket.emit('join_lobby', {
         bookingId: bookingId,
         userId: user?.id,
         userRole: 'student'
       });
-      hasJoinedWaitingRoom.current = true;
+      hasJoinedLobby.current = true;
     }
 
     return () => {
-      socket.off('session_starting_soon', handleSessionStartingSoon);
-      socket.off('session_waiting_room_available', handleWaitingRoomAvailable);
-      socket.off('session_auto_join_triggered', handleAutoJoinTriggered);
-      socket.off('session_ending_soon', handleSessionEndingSoon);
-      socket.off('participant_joined_waiting_room', handleParticipantJoinedWaitingRoom);
-      socket.off('participant_left_waiting_room', handleParticipantLeftWaitingRoom);
+      socket.off('session_reminder', handleSessionReminder);
+      socket.off('lobby_available', handleLobbyAvailable);
+      socket.off('session_call_created', handleSessionCallCreated);
+      socket.off('participant_joined_lobby', handleParticipantJoinedLobby);
+      socket.off('participant_left_lobby', handleParticipantLeftLobby);
 
-      // Leave waiting room socket room
-      if (hasJoinedWaitingRoom.current) {
-        socket.emit('leave_session_waiting_room', {
+      // Leave lobby socket room
+      if (hasJoinedLobby.current) {
+        socket.emit('leave_lobby', {
           bookingId: bookingId,
           userId: user?.id,
           userRole: 'student'
         });
       }
     };
-  }, [socket, isConnected, bookingId, user?.id]);
+  }, [socket, isConnected, bookingId, user?.id, canJoinSession]);
 
-  // Timer for countdown and session state
+  // Simple timer for countdown - using native Date APIs
   useEffect(() => {
-    if (!waitingRoomDetails) return;
+    if (!lobbyDetails) return;
 
     const updateTimer = () => {
-      const now = moment();
-      const sessionDate = moment(waitingRoomDetails.scheduledDate);
-      const sessionTime = moment(`${sessionDate.format('YYYY-MM-DD')} ${waitingRoomDetails.scheduledTime}`);
+      const now = new Date();
+      const sessionDateTime = new Date(`${lobbyDetails.scheduledDate}T${lobbyDetails.scheduledTime}`);
       
-      const diff = sessionTime.diff(now);
+      const diff = sessionDateTime.getTime() - now.getTime();
       
       if (diff <= 0) {
-        setTimeLeft('Session time has arrived!');
-        setCanJoinSession(true);
+        setTimeUntilSession('Session time has arrived!');
       } else {
-        const duration = moment.duration(diff);
-        const hours = Math.floor(duration.asHours());
-        const minutes = duration.minutes();
-        const seconds = duration.seconds();
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         
         if (hours > 0) {
-          setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+          setTimeUntilSession(`${hours}h ${minutes}m until session`);
         } else if (minutes > 0) {
-          setTimeLeft(`${minutes}m ${seconds}s`);
+          setTimeUntilSession(`${minutes}m until session`);
         } else {
-          setTimeLeft(`${seconds}s`);
-        }
-
-        // Enable join button 5 minutes before
-        if (diff <= 5 * 60 * 1000) {
-          setCanJoinSession(true);
+          setTimeUntilSession('Starting soon...');
         }
       }
     };
@@ -171,20 +174,18 @@ export default function SessionWaitingRoomScreen() {
         clearInterval(timerRef.current);
       }
     };
-  }, [waitingRoomDetails]);
+  }, [lobbyDetails]);
 
-  const loadWaitingRoomDetails = async () => {
+  const loadLobbyDetails = async () => {
     try {
       setLoading(true);
-      const details = await professionalSessionService.getWaitingRoomDetails(bookingId as string);
-      setWaitingRoomDetails(details);
+      const details = await professionalSessionService.getLobbyDetails(bookingId as string);
+      setLobbyDetails(details);
       
-      // Check if waiting room is already available
-      if (details.sessionState === 'waiting_room_available' || details.sessionState === 'in_progress') {
-        setCanJoinSession(true);
-      }
+      // Check if lobby is available
+      setCanJoinSession(details.canJoinSession);
     } catch (error: any) {
-      console.error('Error loading waiting room details:', error);
+      console.error('Error loading lobby details:', error);
       setError(error.message || 'Failed to load session details');
     } finally {
       setLoading(false);
@@ -192,7 +193,7 @@ export default function SessionWaitingRoomScreen() {
   };
 
   const handleJoinSession = async () => {
-    if (!waitingRoomDetails || isJoining) return;
+    if (!lobbyDetails || isJoining) return;
 
     try {
       setIsJoining(true);
@@ -206,261 +207,226 @@ export default function SessionWaitingRoomScreen() {
   };
 
   const navigateToSessionCall = async () => {
-    router.push({
-      pathname: '/professional-session-call/[bookingId]',
-      params: { bookingId: bookingId as string }
-    });
+    try {
+      const joinResponse = await professionalSessionService.joinSessionCall(bookingId as string);
+      
+      // Navigate to professional session video call
+      router.push({
+        pathname: '/professional-session-call',
+        params: {
+          sessionId: joinResponse.sessionId,
+          bookingId: joinResponse.bookingId,
+          streamCallId: joinResponse.streamCallId,
+          professionalId: lobbyDetails?.participant.role === 'professional' ? 'professional' : '',
+          professionalName: lobbyDetails?.participant.name || '',
+          durationInMinutes: lobbyDetails?.duration?.toString() || '60',
+          sessionType: 'professional_session'
+        }
+      });
+    } catch (error: any) {
+      console.error('Error navigating to session call:', error);
+      throw error;
+    }
   };
 
   const handleGoBack = () => {
     Alert.alert(
-      'Leave Waiting Room',
-      'Are you sure you want to leave the waiting room? You might miss your session.',
+      'Leave Lobby',
+      'Are you sure you want to leave the lobby?',
       [
-        { text: 'Stay', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         { text: 'Leave', style: 'destructive', onPress: () => router.back() }
       ]
     );
   };
 
-  const renderStars = (rating: number) => {
-    return (
-      <View style={styles.starsContainer}>
-        {Array.from({ length: 5 }, (_, index) => (
-          <Ionicons
-            key={index}
-            name={index < Math.floor(rating) ? 'star' : index < rating ? 'star-half' : 'star-outline'}
-            size={16}
-            color="#FFC107"
-          />
-        ))}
-      </View>
-    );
-  };
-
   if (loading) {
     return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.light.primary} />
-        <ThemedText style={styles.loadingText}>Loading session details...</ThemedText>
+      <ThemedView style={styles.container}>
+        <StatusBar style="light" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+          <ThemedText style={styles.loadingText}>Loading session details...</ThemedText>
+        </View>
       </ThemedView>
     );
   }
 
-  if (error || !waitingRoomDetails) {
+  if (error) {
     return (
-      <ThemedView style={styles.errorContainer}>
-        <Ionicons name="alert-circle" size={48} color={Colors.light.error} />
-        <ThemedText style={styles.errorTitle}>Unable to Load Session</ThemedText>
-        <ThemedText style={styles.errorText}>
-          {error || 'Session details not found'}
-        </ThemedText>
-        <TouchableOpacity style={styles.retryButton} onPress={loadWaitingRoomDetails}>
-          <ThemedText style={styles.retryButtonText}>Try Again</ThemedText>
-        </TouchableOpacity>
+      <ThemedView style={styles.container}>
+        <StatusBar style="light" />
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={64} color={Colors.light.error} />
+          <ThemedText style={styles.errorTitle}>Unable to Load Session</ThemedText>
+          <ThemedText style={styles.errorText}>{error}</ThemedText>
+          <TouchableOpacity style={styles.retryButton} onPress={loadLobbyDetails}>
+            <ThemedText style={styles.retryButtonText}>Try Again</ThemedText>
+          </TouchableOpacity>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  if (!canJoinSession && lobbyDetails?.sessionState === 'scheduled') {
+    return (
+      <ThemedView style={styles.container}>
+        <StatusBar style="light" />
+        <View style={styles.waitingContainer}>
+          <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
+            <Ionicons name="chevron-back" size={24} color={Colors.light.text} />
+          </TouchableOpacity>
+          
+          <View style={styles.sessionInfoContainer}>
+            <ThemedText style={styles.sessionTitle}>Session with {lobbyDetails.participant.name}</ThemedText>
+            <ThemedText style={styles.sessionTime}>
+              {new Date(lobbyDetails.scheduledDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {lobbyDetails.scheduledTime}
+            </ThemedText>
+            <ThemedText style={styles.countdown}>{timeUntilSession}</ThemedText>
+            
+            {lobbyDetails.timeToLobby && (
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle" size={20} color={Colors.light.info} />
+                <ThemedText style={styles.infoText}>{lobbyDetails.timeToLobby}</ThemedText>
+              </View>
+            )}
+          </View>
+        </View>
       </ThemedView>
     );
   }
 
   return (
-    <>
-      <StatusBar style="dark" />
-      <ThemedView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={Colors.light.text} />
-          </TouchableOpacity>
-          <ThemedText style={styles.headerTitle}>Session Waiting Room</ThemedText>
-          <View style={styles.headerSpacer} />
-        </View>
+    <ThemedView style={styles.container}>
+      <StatusBar style="light" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
+          <Ionicons name="chevron-back" size={24} color={Colors.light.text} />
+        </TouchableOpacity>
+        <ThemedText style={styles.headerTitle}>Session Lobby</ThemedText>
+      </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Session Status */}
-          <View style={styles.statusCard}>
-            <View style={styles.statusHeader}>
-              <Ionicons name="time" size={24} color={Colors.light.primary} />
-              <ThemedText style={styles.statusTitle}>Session Status</ThemedText>
-            </View>
-            <ThemedText style={styles.timeLeft}>{timeLeft}</ThemedText>
-            <ThemedText style={styles.sessionTime}>
-              {moment(waitingRoomDetails.scheduledDate).format('MMMM DD, YYYY')} at {waitingRoomDetails.scheduledTime}
-            </ThemedText>
-            <View style={styles.sessionStateContainer}>
-              <View style={[
-                styles.sessionStateIndicator,
-                { backgroundColor: canJoinSession ? '#4CAF50' : '#FF9800' }
-              ]} />
-              <ThemedText style={styles.sessionStateText}>
-                {canJoinSession ? 'Ready to Join' : 'Waiting for Session Time'}
-              </ThemedText>
-            </View>
+      {/* SIMPLE Lobby Content - Like Match Making */}
+      <View style={styles.lobbyContent}>
+        {/* Heartbeat Animation */}
+        <Animated.View style={[styles.heartbeatContainer, { transform: [{ scale: heartbeatAnim }] }]}>
+          <View style={styles.heartbeatCircle}>
+            <Ionicons name="videocam" size={48} color={Colors.light.primary} />
           </View>
+        </Animated.View>
 
-          {/* Professional Info */}
-          <View style={styles.professionalCard}>
-            <ThemedText style={styles.sectionTitle}>Your Professional</ThemedText>
-            <View style={styles.professionalInfo}>
-              <View style={styles.professionalAvatar}>
-                {waitingRoomDetails.participant.profileImage ? (
-                  <Image
-                    source={{ uri: waitingRoomDetails.participant.profileImage }}
-                    style={styles.avatarImage}
-                  />
-                ) : (
-                  <Ionicons name="person" size={32} color="#666" />
-                )}
-              </View>
-              <View style={styles.professionalDetails}>
-                <ThemedText style={styles.professionalName}>
-                  {waitingRoomDetails.participant.name}
-                </ThemedText>
-                <View style={styles.ratingContainer}>
-                  {renderStars(waitingRoomDetails.participant.averageRating)}
-                  <ThemedText style={styles.ratingText}>
-                    ({waitingRoomDetails.participant.averageRating.toFixed(1)})
-                  </ThemedText>
-                </View>
-                <View style={styles.specializationsContainer}>
-                  {waitingRoomDetails.participant.specializations.slice(0, 2).map((spec, index) => (
-                    <View key={index} style={styles.specializationTag}>
-                      <ThemedText style={styles.specializationText}>{spec}</ThemedText>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              <View style={styles.onlineStatusContainer}>
-                <View style={[
-                  styles.onlineIndicator,
-                  { backgroundColor: partnerInWaitingRoom ? '#4CAF50' : '#666' }
-                ]} />
-                <ThemedText style={styles.onlineStatusText}>
-                  {partnerInWaitingRoom ? 'In Waiting Room' : 'Not Yet Joined'}
-                </ThemedText>
-              </View>
-            </View>
-          </View>
+        {/* Simple Messages */}
+        <ThemedText style={styles.lobbyTitle}>Session Lobby</ThemedText>
+        <ThemedText style={styles.lobbySubtitle}>
+          Please wait here in lobby until session starts
+        </ThemedText>
 
-          {/* Session Details */}
-          <View style={styles.sessionCard}>
-            <ThemedText style={styles.sectionTitle}>Session Details</ThemedText>
-            <View style={styles.sessionDetail}>
-              <Ionicons name="time-outline" size={20} color={Colors.light.primary} />
-              <ThemedText style={styles.sessionDetailText}>
-                Duration: {waitingRoomDetails.duration} minutes
-              </ThemedText>
-            </View>
-            {waitingRoomDetails.topic && (
-              <View style={styles.sessionDetail}>
-                <Ionicons name="chatbubble-outline" size={20} color={Colors.light.primary} />
-                <ThemedText style={styles.sessionDetailText}>
-                  Topic: {waitingRoomDetails.topic}
-                </ThemedText>
-              </View>
-            )}
-            {waitingRoomDetails.studentNotes && (
-              <View style={styles.sessionDetail}>
-                <Ionicons name="document-text-outline" size={20} color={Colors.light.primary} />
-                <ThemedText style={styles.sessionDetailText}>
-                  Your Notes: {waitingRoomDetails.studentNotes}
-                </ThemedText>
-              </View>
-            )}
-          </View>
-
-          {/* Session Guidelines */}
-          <View style={styles.guidelinesCard}>
-            <ThemedText style={styles.sectionTitle}>Session Guidelines</ThemedText>
-            <View style={styles.guideline}>
-              <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-              <ThemedText style={styles.guidelineText}>
-                Ensure you have a stable internet connection
-              </ThemedText>
-            </View>
-            <View style={styles.guideline}>
-              <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-              <ThemedText style={styles.guidelineText}>
-                Find a quiet place for the session
-              </ThemedText>
-            </View>
-            <View style={styles.guideline}>
-              <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-              <ThemedText style={styles.guidelineText}>
-                Test your microphone and camera
-              </ThemedText>
-            </View>
-            <View style={styles.guideline}>
-              <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-              <ThemedText style={styles.guidelineText}>
-                Session will be recorded for your learning
-              </ThemedText>
-            </View>
-          </View>
-        </ScrollView>
-
-        {/* Join Session Button */}
-        <View style={styles.bottomContainer}>
-          <TouchableOpacity
-            style={[
-              styles.joinButton,
-              {
-                backgroundColor: canJoinSession && !isJoining 
-                  ? Colors.light.primary 
-                  : '#ccc'
-              }
-            ]}
-            onPress={handleJoinSession}
-            disabled={!canJoinSession || isJoining}
-          >
-            {isJoining ? (
-              <ActivityIndicator size="small" color="#fff" />
+        {/* Session Info */}
+        <View style={styles.sessionCard}>
+          <View style={styles.professionalInfo}>
+            {lobbyDetails?.participant.profileImage ? (
+              <Image
+                source={{ uri: lobbyDetails.participant.profileImage }}
+                style={styles.professionalImage}
+              />
             ) : (
-              <>
-                <Ionicons name="videocam" size={24} color="#fff" />
-                <ThemedText style={styles.joinButtonText}>
-                  {canJoinSession ? 'Join Session' : `Available in ${timeLeft}`}
+              <View style={styles.avatarPlaceholder}>
+                <ThemedText style={styles.avatarText}>
+                  {lobbyDetails?.participant.name.charAt(0)}
                 </ThemedText>
-              </>
+              </View>
             )}
-          </TouchableOpacity>
+            <View>
+              <ThemedText style={styles.professionalName}>{lobbyDetails?.participant.name}</ThemedText>
+              <ThemedText style={styles.sessionTopic}>{lobbyDetails?.topic || 'General Session'}</ThemedText>
+            </View>
+          </View>
+          
+          <ThemedText style={styles.sessionTime}>
+            {new Date(lobbyDetails?.scheduledDate || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {lobbyDetails?.scheduledTime}
+          </ThemedText>
         </View>
-      </ThemedView>
-    </>
+
+        {/* Partner Status */}
+        {partnerInLobby && (
+          <View style={styles.partnerStatus}>
+            <View style={styles.onlineIndicator} />
+            <ThemedText style={styles.partnerText}>Professional is in lobby</ThemedText>
+          </View>
+        )}
+
+        {/* Join Button */}
+        <TouchableOpacity
+          style={[styles.joinButton, !canJoinSession && styles.joinButtonDisabled]}
+          onPress={handleJoinSession}
+          disabled={!canJoinSession || isJoining}
+        >
+          {isJoining ? (
+            <ActivityIndicator size="small" color={Colors.light.background} />
+          ) : (
+            <>
+              <Ionicons name="videocam" size={24} color={Colors.light.background} />
+              <ThemedText style={styles.joinButtonText}>
+                {lobbyDetails?.sessionState === 'in_progress' ? 'Rejoin Session' : 'Join Session'}
+              </ThemedText>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.light.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: Colors.light.text,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    padding: 20,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: Colors.light.text,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
     padding: 20,
   },
   errorTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '600',
     marginTop: 16,
     marginBottom: 8,
+    color: Colors.light.text,
   },
   errorText: {
     fontSize: 16,
-    color: '#666',
+    color: Colors.light.secondary,
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -471,207 +437,154 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryButtonText: {
-    color: '#fff',
+    color: Colors.light.background,
     fontSize: 16,
     fontWeight: '600',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: 50,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
+  waitingContainer: {
     flex: 1,
-    fontSize: 18,
+    padding: 20,
+  },
+  sessionInfoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sessionTitle: {
+    fontSize: 24,
     fontWeight: '600',
     textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  statusCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  statusHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statusTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  timeLeft: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: Colors.light.primary,
     marginBottom: 8,
+    color: Colors.light.text,
   },
   sessionTime: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 18,
+    color: Colors.light.primary,
     marginBottom: 16,
   },
-  sessionStateContainer: {
+  countdown: {
+    fontSize: 16,
+    color: Colors.light.secondary,
+    marginBottom: 24,
+  },
+  infoBox: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  sessionStateIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  sessionStateText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  professionalCard: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.light.surface,
+    padding: 16,
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
+    marginTop: 20,
   },
-  sectionTitle: {
-    fontSize: 18,
+  infoText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: Colors.light.text,
+  },
+  lobbyContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  heartbeatContainer: {
+    marginBottom: 32,
+  },
+  heartbeatCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.light.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.light.primary,
+  },
+  lobbyTitle: {
+    fontSize: 24,
     fontWeight: '600',
-    marginBottom: 16,
+    marginBottom: 8,
+    color: Colors.light.text,
+  },
+  lobbySubtitle: {
+    fontSize: 16,
+    color: Colors.light.secondary,
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  sessionCard: {
+    width: '100%',
+    backgroundColor: Colors.light.surface,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
   },
   professionalInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  professionalAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#f0f0f0',
+  professionalImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  avatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: Colors.light.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
-  avatarImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  professionalDetails: {
-    flex: 1,
+  avatarText: {
+    color: Colors.light.background,
+    fontSize: 20,
+    fontWeight: '600',
   },
   professionalName: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 4,
+    color: Colors.light.text,
   },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    marginRight: 8,
-  },
-  ratingText: {
+  sessionTopic: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.light.secondary,
   },
-  specializationsContainer: {
+  partnerStatus: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  specializationTag: {
-    backgroundColor: '#e3f2fd',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-    marginBottom: 4,
-  },
-  specializationText: {
-    fontSize: 12,
-    color: Colors.light.primary,
-    fontWeight: '500',
-  },
-  onlineStatusContainer: {
     alignItems: 'center',
+    marginBottom: 24,
   },
   onlineIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginBottom: 4,
+    backgroundColor: Colors.light.success,
+    marginRight: 8,
   },
-  onlineStatusText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
-  sessionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-  },
-  sessionDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sessionDetailText: {
-    fontSize: 16,
-    marginLeft: 12,
-    flex: 1,
-  },
-  guidelinesCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-  },
-  guideline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  guidelineText: {
+  partnerText: {
     fontSize: 14,
-    marginLeft: 12,
-    flex: 1,
-    color: '#666',
-  },
-  bottomContainer: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    color: Colors.light.success,
   },
   joinButton: {
+    backgroundColor: Colors.light.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
+    paddingHorizontal: 32,
     borderRadius: 12,
+    marginTop: 'auto',
+    minWidth: 200,
+  },
+  joinButtonDisabled: {
+    backgroundColor: Colors.light.inactive,
+    opacity: 0.6,
   },
   joinButtonText: {
-    color: '#fff',
+    color: Colors.light.background,
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 8,
