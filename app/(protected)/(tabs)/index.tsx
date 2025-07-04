@@ -18,6 +18,7 @@ import { IconSymbol } from "@/components/ui/IconSymbol";
 import { NotificationBell } from "@/components/shared/NotificationBell";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchAICharacters } from "@/api/services/public/aiCharacters";
+import { fetchProfessionals, Professional } from "@/api/services/public/professionalService";
 import { Colors } from "@/constants/Colors";
 import { FilterDialog, FilterOptions } from "@/components/FilterDialog";
 import { useSocket } from "@/contexts/SocketContext";
@@ -39,6 +40,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { onlineUsers } = useSocket();
   const [popularCharacters, setPopularCharacters] = useState<AICharacter[]>([]);
+  const [popularProfessionals, setPopularProfessionals] = useState<Professional[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterDialogVisible, setFilterDialogVisible] = useState(false);
   const [filterDialogHeaderTitle, setFilterDialogHeaderTitle] =
@@ -49,23 +51,34 @@ export default function HomeScreen() {
   const [isFindAIAssistant, setIsFindAIAssistant] = useState(false);
   const [allCharacters, setAllCharacters] = useState<AICharacter[]>([]);
 
-  // Fetch popular AI characters on component mount
+  // Fetch popular AI characters and professionals on component mount
   useEffect(() => {
-    const loadCharacters = async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
-        const data = await fetchAICharacters();
-        setAllCharacters(data); // store all
-        // Take first 5 characters for the popular section
-        setPopularCharacters(data.slice(0, 6));
+        
+        // Load AI Characters
+        const charactersData = await fetchAICharacters();
+        setAllCharacters(charactersData);
+        setPopularCharacters(charactersData.slice(0, 6));
+
+        // Load Professionals
+        const professionalsData = await fetchProfessionals({
+          page: 1,
+          limit: 6,
+          sortBy: 'averageRating',
+          sortOrder: 'desc'
+        });
+        setPopularProfessionals(professionalsData.professionals);
+        
       } catch (error) {
-        console.error("Error loading popular AI characters:", error);
+        console.error("Error loading data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadCharacters();
+    loadData();
   }, []);
 
   const renderCharacterItem = ({ item }: { item: AICharacter }) => (
@@ -139,6 +152,82 @@ export default function HomeScreen() {
           onPress={() => router.push(`/(protected)/ai-character/${item._id}`)}
         >
           <ThemedText style={styles.startSessionText}>Start Session</ThemedText>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderProfessionalItem = ({ item }: { item: Professional }) => (
+    <TouchableOpacity
+      style={styles.characterCard}
+      onPress={() => router.push(`/(protected)/professional-profile/${item._id}`)}
+    >
+      <View style={styles.imageContainer}>
+        <Image
+          source={{
+            uri: item.profileImage || "https://via.placeholder.com/150",
+          }}
+          style={styles.characterImage}
+        />
+        <View
+          style={[
+            styles.badgeContainer,
+            item.isAvailableForBooking 
+              ? styles.availableBadge
+              : styles.busyBadge,
+          ]}
+        >
+          <ThemedText style={styles.badgeText}>
+            {item.isAvailableForBooking ? "Available" : "Busy"}
+          </ThemedText>
+        </View>
+      </View>
+      <View style={styles.cardContentContainer}>
+        <View style={styles.cardHeader}>
+          <ThemedText
+            style={styles.characterName}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {item.name.length > 10 ? item.name.slice(0, 10) + "..." : item.name}
+          </ThemedText>
+          <View style={styles.ratingContainer}>
+            <Ionicons name="star" size={18} color="#FFC107" />
+            <ThemedText style={styles.ratingText}>
+              {item.averageRating > 0 ? item.averageRating.toFixed(1) : '4.9'}
+            </ThemedText>
+          </View>
+        </View>
+
+        <ThemedText
+          style={styles.characterProfession}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {item.specializations.length > 0 
+            ? item.specializations[0].replace('_', ' ').toUpperCase()
+            : 'Medical Doctor'}
+        </ThemedText>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.sessionsContainer}>
+            <Ionicons name="time-outline" size={16} color="#2196F3" />
+            <ThemedText style={styles.sessionsText}>
+              {item.completedSessions} sessions
+            </ThemedText>
+          </View>
+
+          <View style={styles.statusContainer}>
+            <Ionicons name="wallet-outline" size={16} color="#50E3C2" />
+            <ThemedText style={styles.statusText}>₹{item.hourlyRate}/hr</ThemedText>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.bookSessionButton}
+          onPress={() => router.push(`/(protected)/professional-profile/${item._id}`)}
+        >
+          <ThemedText style={styles.bookSessionText}>Book Session</ThemedText>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -367,6 +456,30 @@ export default function HomeScreen() {
                 </View>
               ))}
             </ScrollView>
+
+            {/* Talk with Professionals Section */}
+            <ThemedView style={styles.recentSection}>
+              <ThemedText type="subtitle">Talk with Professionals</ThemedText>
+              <TouchableOpacity
+                onPress={() => router.push("/(protected)/professionals")}
+              >
+                <ThemedText style={styles.viewAllText}>View All</ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.charactersContainer}
+            >
+              {popularProfessionals.map((professional) => (
+                <View key={professional._id} style={{ marginRight: 16 }}>
+                  {renderProfessionalItem({ item: professional })}
+                </View>
+              ))}
+            </ScrollView>
+
+            
           </ScrollView>
           <FilterDialog
             headerTitle={filterDialogHeaderTitle}
@@ -617,5 +730,23 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     color: "white",
     fontWeight: "500",
+  },
+  availableBadge: {
+    backgroundColor: "rgba(76, 175, 80, 0.8)",
+  },
+  busyBadge: {
+    backgroundColor: "rgba(255, 100, 100, 0.8)",
+  },
+  bookSessionButton: {
+    backgroundColor: "#5933F9",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  bookSessionText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
