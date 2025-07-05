@@ -18,7 +18,7 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { BookingCard } from '@/components/shared/BookingCard';
-import { Booking } from '@/api/services/public/professionalService';
+import { Booking, cancelBooking } from '@/api/services/public/professionalService';
 import { get } from '@/api/config/axiosConfig';
 
 interface BookingWithProfessional {
@@ -228,6 +228,27 @@ export default function MySessionsScreen() {
   };
 
   const handleCancelBooking = async (booking: BookingWithProfessional) => {
+    // Parse the scheduled date and time
+    const scheduledDate = new Date(booking.scheduledDate);
+    const [hours, minutes] = booking.scheduledTime.split(':').map(Number);
+    
+    // Create session start time by combining date and time
+    const sessionStartTime = new Date(scheduledDate);
+    sessionStartTime.setHours(hours, minutes, 0, 0);
+    
+    const now = new Date();
+    const timeDiff = sessionStartTime.getTime() - now.getTime();
+    const minutesDiff = timeDiff / (1000 * 60);
+
+    if (minutesDiff < 10) {
+      Alert.alert(
+        'Cannot Cancel',
+        'Sessions can only be cancelled at least 10 minutes before the scheduled time.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     Alert.alert(
       'Cancel Session',
       'Are you sure you want to cancel this session? Your coins will be refunded.',
@@ -238,9 +259,20 @@ export default function MySessionsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Implement cancellation API call
-            } catch (error) {
-              Alert.alert('Error', 'Failed to cancel session. Please try again.');
+              console.log('🚫 Cancelling booking:', booking._id);
+              await cancelBooking(booking._id, 'Cancelled by student');
+              
+              // Update the booking status locally
+              setBookings(prev => prev.map(b => 
+                b._id === booking._id 
+                  ? { ...b, status: 'cancelled_by_student' }
+                  : b
+              ));
+              
+              Alert.alert('Success', 'Session cancelled successfully. Your coins have been refunded.');
+            } catch (error: any) {
+              console.error('Error cancelling booking:', error);
+              Alert.alert('Error', error.message || 'Failed to cancel session. Please try again.');
             }
           }
         }
@@ -258,42 +290,62 @@ export default function MySessionsScreen() {
       sessionStatus: 'Completed'
     } : undefined;
 
-    return (
-      <View>
-        <BookingCard
-          booking={item}
-          sessionInfo={sessionInfo}
-        />
+    // Check if booking can be cancelled (at least 10 minutes before)
+    const canCancelBooking = () => {
+      try {
+        // Handle different date formats
+        let sessionStartTime;
         
-        {/* Session Actions for upcoming sessions */}
-        {(item.status === 'booked' || item.status === 'confirmed' || item.status === 'in_progress') && (
-          <View style={styles.actionsContainer}>
-            {/* Your existing join button and status logic */}
-            {canJoinLobby(item) && (
-              <TouchableOpacity
-                style={[
-                  styles.joinButton,
-                  joiningSession === item._id && styles.joinButtonLoading
-                ]}
-                onPress={() => handleJoinSession(item)}
-                disabled={joiningSession === item._id}
-              >
-                {joiningSession === item._id ? (
-                  <>
-                    <ActivityIndicator size="small" color={Colors.light.background} />
-                    <Text style={styles.joinButtonText}>Joining...</Text>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="videocam" size={20} color={Colors.light.background} />
-                    <Text style={styles.joinButtonText}>Join Session</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
+        if (item.scheduledDate.includes('T')) {
+          // ISO format: "2025-07-05T00:00:00.000+00:00"
+          const dateOnly = item.scheduledDate.split('T')[0]; // Get "2025-07-05"
+          sessionStartTime = new Date(`${dateOnly}T${item.scheduledTime}:00`);
+        } else {
+          // Date only format: "2025-07-05"
+          sessionStartTime = new Date(`${item.scheduledDate}T${item.scheduledTime}:00`);
+        }
+
+        const now = new Date();
+        
+        // Calculate time difference
+        const timeDiff = sessionStartTime.getTime() - now.getTime();
+        const minutesDiff = timeDiff / (1000 * 60);
+        
+        // Check conditions
+        const isBeforeSession = now < sessionStartTime;
+        const hasEnoughTimeToCancel = minutesDiff >= 10; // 10 minutes before session
+        const isValidStatus = ['booked', 'confirmed'].includes(item.status);
+        
+        console.log(`📅 Cancellation check for booking ${item._id}:`, {
+          scheduledDate: item.scheduledDate,
+          scheduledTime: item.scheduledTime,
+          sessionStartTime: sessionStartTime.toISOString(),
+          currentTime: now.toISOString(),
+          minutesDiff: minutesDiff.toFixed(2),
+          isBeforeSession,
+          hasEnoughTimeToCancel,
+          isValidStatus,
+          canCancel: isBeforeSession && hasEnoughTimeToCancel && isValidStatus
+        });
+        
+        return isBeforeSession && hasEnoughTimeToCancel && isValidStatus;
+        
+      } catch (error) {
+        console.error(`❌ Error in canCancelBooking for ${item._id}:`, error);
+        return false;
+      }
+    };
+
+    return (
+      <BookingCard
+        booking={item}
+        sessionInfo={sessionInfo}
+        onCancel={() => handleCancelBooking(item)}
+        onJoin={() => handleJoinSession(item)}
+        canCancel={canCancelBooking()}
+        canJoin={canJoinLobby(item)}
+        isJoining={joiningSession === item._id}
+      />
     );
   };
 
@@ -461,28 +513,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#E8E8E8',
     marginVertical: 8,
-  },
-  actionsContainer: {
-    marginTop: -8,
-    marginBottom: 8,
-  },
-  joinButton: {
-    backgroundColor: Colors.light.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    gap: 8,
-  },
-  joinButtonLoading: {
-    opacity: 0.7,
-  },
-  joinButtonText: {
-    color: Colors.light.background,
-    fontSize: 16,
-    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,

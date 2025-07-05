@@ -1,4 +1,4 @@
-import { get, post } from '@/api/config/axiosConfig';
+import { get, post, put } from '@/api/config/axiosConfig';
 
 export interface Professional {
   _id: string;
@@ -164,6 +164,22 @@ export const fetchUserBookings = async (params?: {
     throw new Error(response.data.message || 'Failed to fetch bookings');
   } catch (error) {
     console.error('Error fetching user bookings:', error);
+    throw error;
+  }
+};
+
+/**
+ * Cancel a booking
+ */
+export const cancelBooking = async (bookingId: string, reason?: string): Promise<Booking> => {
+  try {
+    const response = await put(`${BOOKING_ENDPOINT}/${bookingId}/cancel`, { reason });
+    if (response.data.variant === 'success') {
+      return response.data.myData.booking;
+    }
+    throw new Error(response.data.message || 'Failed to cancel booking');
+  } catch (error) {
+    console.error('Error cancelling booking:', error);
     throw error;
   }
 }; 

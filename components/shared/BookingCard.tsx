@@ -4,6 +4,8 @@ import {
   Text,
   StyleSheet,
   Image,
+  TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
@@ -32,11 +34,22 @@ interface BookingCardProps {
     actualEndTime?: string;
     sessionStatus?: string;
   };
+  // Action props
+  onCancel?: () => void;
+  onJoin?: () => void;
+  canCancel?: boolean;
+  canJoin?: boolean;
+  isJoining?: boolean;
 }
 
 export const BookingCard: React.FC<BookingCardProps> = ({
   booking,
   sessionInfo,
+  onCancel,
+  onJoin,
+  canCancel = false,
+  canJoin = false,
+  isJoining = false,
 }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -167,6 +180,49 @@ export const BookingCard: React.FC<BookingCardProps> = ({
           <View style={styles.ongoingIndicator}>
             <View style={styles.pulsingDot} />
             <Text style={styles.ongoingText}>Session is active</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Action Buttons */}
+      {(canCancel || canJoin) && (
+        <View style={styles.actionsSection}>
+          <View style={styles.actionButtonsRow}>
+            {/* Cancel Button */}
+            {canCancel && onCancel && (
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={onCancel}
+              >
+                <Ionicons name="close-circle-outline" size={18} color={Colors.light.error} />
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* Join Button */}
+            {canJoin && onJoin && (
+              <TouchableOpacity
+                style={[
+                  styles.joinButton,
+                  isJoining && styles.joinButtonLoading,
+                  canCancel && styles.joinButtonWithCancel
+                ]}
+                onPress={onJoin}
+                disabled={isJoining}
+              >
+                {isJoining ? (
+                  <>
+                    <ActivityIndicator size="small" color={Colors.light.background} />
+                    <Text style={styles.joinButtonText}>Joining...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="videocam" size={20} color={Colors.light.background} />
+                    <Text style={styles.joinButtonText}>Join Session</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       )}
@@ -305,5 +361,56 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.primary,
     fontWeight: '500',
+  },
+  // Action button styles
+  actionsSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F5F5F5',
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelButton: {
+    backgroundColor: Colors.light.background,
+    borderWidth: 1,
+    borderColor: Colors.light.error,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+    flex: 1,
+  },
+  cancelButtonText: {
+    color: Colors.light.error,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  joinButton: {
+    backgroundColor: Colors.light.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    gap: 8,
+    flex: 1,
+  },
+  joinButtonLoading: {
+    opacity: 0.7,
+  },
+  joinButtonText: {
+    color: Colors.light.background,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  joinButtonWithCancel: {
+    flex: 2,
   },
 }); 
