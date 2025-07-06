@@ -126,6 +126,7 @@ export const bookProfessionalSession = async (bookingData: {
   professionalId: string;
   scheduledDate: string;
   scheduledTime: string;
+  scheduledEndTime: string;
   topic?: string;
   studentNotes?: string;
 }): Promise<Booking> => {

@@ -387,6 +387,15 @@ export default function CoinsScreen() {
           <View style={styles.packagesContainer}>
             {coinPackages.map((packageItem) => (
               <View key={packageItem.id} style={styles.packageCard}>
+                {/* Angled Percentage Sticker */}
+                {packageItem.extraPercentage && (
+                  <View style={styles.percentageSticker}>
+                    <ThemedText style={styles.percentageStickerText}>
+                      +{packageItem.extraPercentage}% Extra
+                    </ThemedText>
+                  </View>
+                )}
+                
                 <View style={styles.packageInfo}>
                   <ThemedText type="defaultSemiBold" style={styles.packageCoins}>
                     {packageItem.coins} Coins
@@ -482,6 +491,19 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
   },
+  extraPercentageBadge: {
+    backgroundColor: '#F5A623',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  extraPercentageText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   balanceSection: {
     alignItems: 'center',
     marginBottom: 24,
@@ -573,7 +595,7 @@ const styles = StyleSheet.create({
   },
   packagesContainer: {
     marginBottom: 24,
-    gap: 12,
+    gap: 16,
   },
   packageCard: {
     backgroundColor: '#F8F9FA',
@@ -582,19 +604,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    position: 'relative',
+    overflow: 'hidden',
+    marginTop: 8,
+    paddingLeft: 50,
   },
   packageInfo: {
     flex: 1,
+    alignItems: 'flex-start',
+    marginLeft: 20,
   },
   packageCoins: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
     marginBottom: 4,
+    textAlign: 'left',
   },
   packagePrice: {
     fontSize: 16,
     color: '#666',
+    textAlign: 'left',
+  },
+  percentageSticker: {
+    position: 'absolute',
+    top: 8,
+    left: -15,
+    backgroundColor: '#F5A623',
+    paddingHorizontal: 25,
+    paddingVertical: 8,
+    transform: [{ rotate: '-45deg' }],
+    zIndex: 1,
+    minWidth: 90,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  percentageStickerText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   bestValueBadge: {
     backgroundColor: '#F5A623',

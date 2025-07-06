@@ -24,6 +24,8 @@ interface BookingCardProps {
   canCancel?: boolean;
   canJoin?: boolean;
   isJoining?: boolean;
+  joinInfo?: string;
+  processing?: boolean;
 }
 
 export const BookingCard: React.FC<BookingCardProps> = ({
@@ -34,6 +36,8 @@ export const BookingCard: React.FC<BookingCardProps> = ({
   canCancel = false,
   canJoin = false,
   isJoining = false,
+  joinInfo,
+  processing,
 }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -179,7 +183,9 @@ export const BookingCard: React.FC<BookingCardProps> = ({
                 onPress={onCancel}
               >
                 <Ionicons name="close-circle-outline" size={18} color={Colors.light.error} />
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                {processing ?
+                  <ActivityIndicator size="small" color={Colors.light.error} />
+                  : <Text style={styles.cancelButtonText}>Cancel</Text>}
               </TouchableOpacity>
             )}
             
@@ -210,6 +216,12 @@ export const BookingCard: React.FC<BookingCardProps> = ({
           </View>
         </View>
       )}
+
+      {joinInfo && (
+        <View style={styles.joinInfoSection}>
+          <Text style={styles.joinInfoText}>{joinInfo}</Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -227,6 +239,16 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: '#F0F0F0',
+  },
+  joinInfoSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F5F5F5',
+  },
+  joinInfoText: { 
+    fontSize: 12,
+    color: Colors.light.icon,
   },
   professionalSection: {
     flexDirection: 'row',
