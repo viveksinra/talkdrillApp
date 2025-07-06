@@ -63,9 +63,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="coins"
+        name="wallet"
         options={{
-          title: 'Coins',
+          title: 'Wallet',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="bitcoinsign.circle.fill" color={color} />,
         }}
       />

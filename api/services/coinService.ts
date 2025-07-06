@@ -5,6 +5,10 @@ export interface CoinBalance {
   coins: number;
   userId: string;
 }
+export interface SessionLicenseBalance {
+  sessionLicenses: number;
+  userId: string;
+}
 
 export interface CoinTransaction {
   id: string;
@@ -32,7 +36,25 @@ export interface CoinPackage {
   extraPercentage?: number;
 }
 
+export interface ComboPackage {
+  id: string;
+  name: string;
+  coins: number;
+  sessionLicenses: number;
+  sellingPrice: number;
+  realPrice: number;
+  currency: string;
+  priceDisplay: string;
+  originalPriceDisplay: string;
+  packageType: 'trial' | 'standard' | 'premium';
+  eligible?: boolean;
+  eligibilityReason?: string;
+  bestValue?: boolean;
+  extraPercentage?: number;
+}
+
 export interface PaymentOrder {
+  isFree?: boolean;
   orderId: string;
   amount: number;
   currency: string;
@@ -59,6 +81,20 @@ export const getCoinBalance = async (): Promise<CoinBalance> => {
     throw new Error(response.data.message || 'Failed to get coin balance');
   } catch (error) {
     console.error('Error getting coin balance:', error);
+    throw error;
+  }
+};
+
+// Get user's session license balance
+export const getSessionLicenseBalance = async (): Promise<SessionLicenseBalance> => {
+  try {
+    const response = await get('/api/v1/coin/session-license-balance');
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to get session license balance');
+  } catch (error) {
+    console.error('Error getting session license balance:', error);
     throw error;
   }
 };
@@ -100,6 +136,20 @@ export const getCoinPackages = async (): Promise<CoinPackage[]> => {
   }
 };
 
+// Get available combo packages
+export const getComboPackages = async (): Promise<ComboPackage[]> => {
+  try {
+    const response = await get('/api/v1/combo-packages');
+    if (response.data.variant === 'success') {
+      return response.data.myData.packages;
+    }
+    throw new Error(response.data.message || 'Failed to get combo packages');
+  } catch (error) {
+    console.error('Error getting combo packages:', error);
+    throw error;
+  }
+};
+
 // Create payment order for coin purchase
 export const createPaymentOrder = async (packageId: string): Promise<PaymentOrder> => {
   try {
@@ -129,6 +179,39 @@ export const verifyPaymentAndAddCoins = async (paymentData: {
     throw new Error(response.data.message || 'Failed to verify payment');
   } catch (error) {
     console.error('Error verifying payment:', error);
+    throw error;
+  }
+};
+
+// Create payment order for combo purchase
+export const createComboPaymentOrder = async (packageId: string): Promise<PaymentOrder> => {
+  try {
+    const response = await post('/api/v1/combo-packages/create-order', { packageId });
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to create combo payment order');
+  } catch (error) {
+    console.error('Error creating combo payment order:', error);
+    throw error;
+  }
+};
+
+// Verify combo payment and add coins
+export const verifyComboPaymentAndAddCoins = async (paymentData: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  packageId: string;
+}) => {
+  try {
+    const response = await post('/api/v1/combo-packages/verify-payment', paymentData);
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to verify combo payment');
+  } catch (error) { 
+    console.error('Error verifying combo payment:', error);
     throw error;
   }
 };

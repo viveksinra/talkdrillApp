@@ -19,12 +19,18 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 import {
   getCoinBalance,
   getCoinPackages,
+  getComboPackages,
+  getSessionLicenseBalance,
   createPaymentOrder,
   verifyPaymentAndAddCoins,
+  createComboPaymentOrder,
+  verifyComboPaymentAndAddCoins,
   dailyCheckIn,
   type CoinPackage,
   type CoinBalance,
-  type DailyCheckInResult
+  type DailyCheckInResult,
+  type SessionLicenseBalance,
+  ComboPackage
 } from '@/api/services/coinService';
 
 export default function CoinsScreen() {
@@ -33,6 +39,7 @@ export default function CoinsScreen() {
   // State
   const [coinBalance, setCoinBalance] = useState<CoinBalance | null>(null);
   const [coinPackages, setCoinPackages] = useState<CoinPackage[]>([]);
+  const [sessionLicenseBalance, setSessionLicenseBalance] = useState<SessionLicenseBalance | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
@@ -41,17 +48,22 @@ export default function CoinsScreen() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentHtml, setPaymentHtml] = useState('');
   const [currentPackageId, setCurrentPackageId] = useState<string>('');
-
+  const [coinPackageModal, setCoinPackageModal] = useState(false);
+  const [comboPackages, setComboPackages] = useState<ComboPackage[]>([]);
   // Load initial data
   const loadData = useCallback(async () => {
     try {
-      const [balance, packages] = await Promise.all([
+      const [balance, sessionLicenseBalance, packages, comboPackages] = await Promise.all([
         getCoinBalance(),
-        getCoinPackages()
+        getSessionLicenseBalance(),
+        getCoinPackages(),
+        getComboPackages()
       ]);
       
       setCoinBalance(balance);
+      setSessionLicenseBalance(sessionLicenseBalance);
       setCoinPackages(packages);
+      setComboPackages(comboPackages);
     } catch (error) {
       console.error('Error loading coin data:', error);
       Alert.alert('Error', 'Failed to load coin data. Please try again.');
@@ -234,6 +246,22 @@ export default function CoinsScreen() {
           console.error('Payment verification error:', verifyError);
           Alert.alert('Payment Verification Failed', 'Please contact support if coins were not added.');
         }
+      } else if (message.type === 'COMBO_PAYMENT_SUCCESS') {
+        setShowPaymentModal(false);
+        
+        try {
+          // Verify combo payment and add licenses + coins
+          const result = await verifyComboPaymentAndAddCoins(message.data);
+          
+          Alert.alert(
+            'Payment Successful!',
+            `${result.sessionLicensesAdded} session licenses and ${result.coinsAdded} coins have been added to your wallet.`,
+            [{ text: 'Great!', onPress: () => loadData() }]
+          );
+        } catch (verifyError) {
+          console.error('Combo payment verification error:', verifyError);
+          Alert.alert('Payment Verification Failed', 'Please contact support if package was not activated.');
+        }
       } else if (message.type === 'PAYMENT_CANCELLED') {
         setShowPaymentModal(false);
         console.log('Payment was cancelled by user');
@@ -279,6 +307,172 @@ export default function CoinsScreen() {
     }
   };
 
+  const handleComboPurchase = async (packageItem: ComboPackage) => {
+    if (processingPayment) return;
+    
+    console.log('=== Starting combo purchase ===');
+    console.log('Package:', packageItem);
+    setProcessingPayment(packageItem.id);
+    setCurrentPackageId(packageItem.id);
+
+    try {
+      // Create payment order
+      console.log('Creating payment order...');
+      const paymentOrder = await createComboPaymentOrder(packageItem.id);
+      console.log('Payment order response:', JSON.stringify(paymentOrder, null, 2));
+      
+      // Handle free packages (like trial)
+      if (paymentOrder.isFree) {
+        // For free packages, directly verify without payment
+        const result = await verifyComboPaymentAndAddCoins({
+          packageId: packageItem.id,
+          razorpay_order_id: 'free_package',
+          razorpay_payment_id: 'free_package',
+          razorpay_signature: 'free_package'
+        });
+        
+        Alert.alert(
+          'Package Activated!',
+          `${result.sessionLicensesAdded} session licenses and ${result.coinsAdded} coins have been added to your wallet.`,
+          [{ text: 'Great!', onPress: () => loadData() }]
+        );
+        setProcessingPayment(null);
+        return;
+      }
+      
+      // Validate payment order response for paid packages
+      if (!paymentOrder?.orderId || !paymentOrder?.razorpayKeyId) {
+        console.error('Invalid payment order response:', paymentOrder);
+        throw new Error('Invalid payment order response');
+      }
+      
+      // Generate HTML for WebView (modify the existing function to handle combo packages)
+      const html = generateComboRazorpayHTML(paymentOrder, packageItem);
+      setPaymentHtml(html);
+      setShowPaymentModal(true);
+      
+    } catch (error) {
+      console.error('=== Error in handleComboPurchase ===');
+      console.error('Error details:', error);
+      Alert.alert('Error', `Failed to initiate payment: ${(error as Error).message || 'Please try again.'}`);
+      setProcessingPayment(null);
+    }
+  };
+
+  // Generate Razorpay HTML for combo packages
+  const generateComboRazorpayHTML = (paymentOrder: any, packageItem: ComboPackage) => {
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Payment</title>
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .container {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                text-align: center;
+            }
+            .loading {
+                margin: 20px 0;
+            }
+            button {
+                background-color: #F5A623;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 16px;
+                cursor: pointer;
+                margin: 10px;
+            }
+            button:hover {
+                background-color: #e8941f;
+            }
+            .cancel-btn {
+                background-color: #666;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>Complete Your Payment</h2>
+            <p>Package: ${packageItem.name}</p>
+            <p>Session Licenses: ${packageItem.sessionLicenses}</p>
+            <p>Coins: ${packageItem.coins}</p>
+            <p>Amount: ${packageItem.priceDisplay}</p>
+            <div class="loading">
+                <p>Click the button below to proceed with payment</p>
+            </div>
+            <button onclick="startPayment()">Pay Now</button>
+            <button class="cancel-btn" onclick="cancelPayment()">Cancel</button>
+        </div>
+
+        <script>
+            function startPayment() {
+                var options = {
+                    key: "${paymentOrder.razorpayKeyId}",
+                    amount: ${paymentOrder.amount},
+                    currency: "${paymentOrder.currency}",
+                    name: "TalkDrill",
+                    description: "Purchase ${packageItem.name} combo package",
+                    order_id: "${paymentOrder.orderId}",
+                    theme: {
+                        color: "#F5A623"
+                    },
+                    prefill: {
+                        name: "User",
+                        email: "user@example.com",
+                        contact: "9999999999"
+                    },
+                    handler: function(response) {
+                        // Payment successful
+                        window.ReactNativeWebView.postMessage(JSON.stringify({
+                            type: 'COMBO_PAYMENT_SUCCESS',
+                            data: {
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_signature: response.razorpay_signature,
+                                packageId: "${packageItem.id}"
+                            }
+                        }));
+                    },
+                    modal: {
+                        ondismiss: function() {
+                            // Payment cancelled
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                                type: 'PAYMENT_CANCELLED'
+                            }));
+                        }
+                    }
+                };
+                
+                var rzp = new Razorpay(options);
+                rzp.open();
+            }
+            
+            function cancelPayment() {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'PAYMENT_CANCELLED'
+                }));
+            }
+            
+            // Auto-start payment after page loads
+            setTimeout(startPayment, 1000);
+        </script>
+    </body>
+    </html>
+    `;
+  };
+
   if (loading) {
     return (
       <ThemedView style={styles.container}>
@@ -302,7 +496,7 @@ export default function CoinsScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Coins',
+          title: 'Wallet',
           headerTitleAlign: 'center',
         }}
       />
@@ -314,20 +508,63 @@ export default function CoinsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Balance Section */}
-          <ThemedView style={styles.balanceSection}>
-            <ThemedText type="defaultSemiBold" style={styles.balanceLabel}>
-              Your Coins
-            </ThemedText>
-            <View style={styles.balanceDisplay}>
-              <View style={styles.coinIcon}>
-                <IconSymbol size={48} name="bitcoinsign.circle.fill" color="#F5A623" />
-              </View>
-              <ThemedText type="title" style={styles.balanceAmount}>
-                {coinBalance?.coins.toLocaleString() || '0'}
+          {/* Balance Sections - Side by Side */}
+          <View style={styles.balanceRow}>
+            {/* Coins Balance Section */}
+            <ThemedView style={[styles.balanceSection, styles.balanceSectionHalf]}>
+              <ThemedText type="defaultSemiBold" style={styles.balanceLabel}>
+                Your Coins
               </ThemedText>
-              <ThemedText style={styles.availableText}>Available Coins</ThemedText>
-            </View>
-          </ThemedView>
+              <View style={styles.balanceDisplay}>
+                <View style={styles.coinIcon}>
+                  <IconSymbol size={48} name="bitcoinsign.circle.fill" color="#F5A623" />
+                </View>
+                <ThemedText type="title" style={styles.balanceAmount}>
+                  {coinBalance?.coins.toLocaleString() || '0'}
+                </ThemedText>
+                <ThemedText style={styles.availableText}>Available Coins</ThemedText>
+              </View>
+              <TouchableOpacity 
+                style={styles.buyCoinsButton}
+                onPress={() => {
+                  setCoinPackageModal(true);
+                  // Navigate to coin packages or show purchase options
+                  // This will be implemented based on your coin purchase flow
+                }}
+              >
+                <ThemedText style={styles.buyCoinsButtonText}>
+                  Buy Coins
+                </ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+
+            {/* Session Licenses Section */}
+            <ThemedView style={[styles.balanceSection, styles.balanceSectionHalf]}>
+              <ThemedText type="defaultSemiBold" style={styles.balanceLabel}>
+                Session Licenses
+              </ThemedText>
+              <View style={styles.balanceDisplay}>
+                <View style={styles.coinIcon}>
+                  <IconSymbol size={48} name="video.circle.fill" color="#4A86E8" />
+                </View>
+                <ThemedText type="title" style={styles.balanceAmount}>
+                  {sessionLicenseBalance?.sessionLicenses?.toLocaleString() || '0'}
+                </ThemedText>
+                <ThemedText style={styles.availableText}>Available Sessions</ThemedText>
+              </View>
+              {/* <TouchableOpacity 
+                style={styles.buyCoinsButton}
+                onPress={() => {
+                  // Navigate to coin packages or show purchase options
+                  // This will be implemented based on your coin purchase flow
+                }}
+              >
+                <ThemedText style={styles.buyCoinsButtonText}>
+                  Buy Package
+                </ThemedText>
+              </TouchableOpacity> */}
+            </ThemedView>
+          </View>
 
           {/* Daily Check-in Card */}
           <View style={[
@@ -381,50 +618,53 @@ export default function CoinsScreen() {
           
           {/* Buy Coins Section */}
           <ThemedView style={styles.sectionHeader}>
-            <ThemedText type="subtitle">Buy Coins</ThemedText>
+            <ThemedText type="subtitle">Buy Combo Packages</ThemedText>
           </ThemedView>
-          
-          <View style={styles.packagesContainer}>
-            {coinPackages.map((packageItem) => (
-              <View key={packageItem.id} style={styles.packageCard}>
-                {/* Angled Percentage Sticker */}
-                {packageItem.extraPercentage && (
-                  <View style={styles.percentageSticker}>
-                    <ThemedText style={styles.percentageStickerText}>
-                      +{packageItem.extraPercentage}% Extra
-                    </ThemedText>
+          {/* <ScrollView style={styles.packageScrollView} showsVerticalScrollIndicator={false}> */}
+            <View style={styles.packageContainer}>
+              {comboPackages.map((packageItem) => (
+                <View key={packageItem.id} style={styles.packageCard}>
+                  <View style={styles.packageIcon}>
+                    <IconSymbol size={24} name="gift.fill" color="#4A86E8" />
                   </View>
-                )}
-                
-                <View style={styles.packageInfo}>
-                  <ThemedText type="defaultSemiBold" style={styles.packageCoins}>
-                    {packageItem.coins} Coins
-                  </ThemedText>
-                  <ThemedText type="subtitle" style={styles.packagePrice}>
-                    ₹{(packageItem.price/100).toFixed(2)}
-                  </ThemedText>
-                  {packageItem.bestValue && (
-                    <View style={styles.bestValueBadge}>
-                      <ThemedText style={styles.bestValueText}>Best Value</ThemedText>
-                    </View>
-                  )}
+                  <View style={styles.packageInfo}>
+                   
+                    <ThemedText type="defaultSemiBold" style={styles.packageCoins}>
+                      {packageItem.name}
+                    </ThemedText>
+                    <ThemedText type="subtitle" style={styles.packagePrice}>
+                      {packageItem.priceDisplay}
+                    </ThemedText>
+                    {packageItem.bestValue && (
+                      <View style={styles.bestValueBadge}>
+                        <ThemedText style={styles.bestValueText}>Best Value</ThemedText>
+                      </View>
+                    )}
+                  </View>
+                  <TouchableOpacity 
+                    style={[
+                      styles.buyButton,
+                      processingPayment === packageItem.id && styles.buyButtonProcessing
+                    ]}
+                    onPress={() => handleComboPurchase(packageItem)}
+                    disabled={processingPayment !== null}
+                  >
+                    {processingPayment === packageItem.id ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <ThemedText style={styles.buyButtonText}>Buy</ThemedText>
+                    )}
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity 
-                  style={[
-                    styles.buyButton,
-                    processingPayment === packageItem.id && styles.buyButtonProcessing
-                  ]}
-                  onPress={() => handleCoinPurchase(packageItem)}
-                  disabled={processingPayment !== null}
-                >
-                  {processingPayment === packageItem.id ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <ThemedText style={styles.buyButtonText}>Buy</ThemedText>
-                  )}
-                </TouchableOpacity>
-              </View>
-            ))}
+              ))}
+            </View>
+          {/* </ScrollView> */}
+          {/* Payment Info */}
+          <View style={styles.paymentInfo}>
+            <IconSymbol size={20} name="shield.checkered" color="#4A86E8" />
+            <ThemedText style={styles.paymentInfoText}>
+              Secure payment powered by Razorpay
+            </ThemedText>
           </View>
           
           {/* Transaction History Button */}
@@ -473,6 +713,80 @@ export default function CoinsScreen() {
             />
           </View>
         </Modal>
+        {/* Coin Packages Modal */}
+        <Modal
+          visible={coinPackageModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <ThemedText type="subtitle" style={styles.modalTitle}>
+                Buy Coins
+              </ThemedText>
+              <TouchableOpacity
+                onPress={() => setCoinPackageModal(false)}
+                style={styles.closeButton}
+              >
+                <IconSymbol size={24} name="xmark" color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.packageScrollView} showsVerticalScrollIndicator={false}>
+              <View style={styles.packageContainer}>
+                {coinPackages.map((packageItem) => (
+                  <View key={packageItem.id} style={styles.packageCard}>
+                    {/* Angled Percentage Sticker */}
+                    {packageItem.extraPercentage && (
+                      <View style={styles.percentageSticker}>
+                        <ThemedText style={styles.percentageStickerText}>
+                          +{packageItem.extraPercentage}% Extra
+                        </ThemedText>
+                      </View>
+                    )}
+                    
+                    <View style={styles.packageInfo}>
+                      <ThemedText type="defaultSemiBold" style={styles.packageCoins}>
+                        {packageItem.coins} Coins
+                      </ThemedText>
+                      <ThemedText type="subtitle" style={styles.packagePrice}>
+                        ₹{(packageItem.price/100).toFixed(2)}
+                      </ThemedText>
+                      {packageItem.bestValue && (
+                        <View style={styles.bestValueBadge}>
+                          <ThemedText style={styles.bestValueText}>Best Value</ThemedText>
+                        </View>
+                      )}
+                    </View>
+                    <TouchableOpacity 
+                      style={[
+                        styles.buyButton,
+                        processingPayment === packageItem.id && styles.buyButtonProcessing
+                      ]}
+                      onPress={() => handleCoinPurchase(packageItem)}
+                      disabled={processingPayment !== null}
+                    >
+                      {processingPayment === packageItem.id ? (
+                        <ActivityIndicator size="small" color="white" />
+                      ) : (
+                        <ThemedText style={styles.buyButtonText}>Buy</ThemedText>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                
+                
+                
+                <View style={styles.paymentInfo}>
+                  <IconSymbol size={20} name="shield.checkered" color="#4A86E8" />
+                  <ThemedText style={styles.paymentInfoText}>
+                    Secure payment powered by Razorpay
+                  </ThemedText>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </Modal>
       </ThemedView>
     </>
   );
@@ -491,6 +805,57 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
   },
+  packageScrollView: {
+    flex: 1,
+  },
+  packageContainer: {
+    padding: 16,
+  },
+  packageIcon: {
+    marginRight: 10,
+  },
+  paymentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  paymentInfoText: {  
+    fontSize: 14,
+    color: '#666',
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  buyCoinsButton: {
+    backgroundColor: '#4A86E8',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    minWidth: 80,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  buyCoinsButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  balanceSectionHalf: {
+    flex: 1,
+  },
+  balanceSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+    padding: 20,
+    backgroundColor: '#F8F9FF',
+    borderRadius: 16,
+  }, 
+
   extraPercentageBadge: {
     backgroundColor: '#F5A623',
     paddingHorizontal: 8,
@@ -504,13 +869,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  balanceSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-    padding: 20,
-    backgroundColor: '#F8F9FF',
-    borderRadius: 16,
-  },
+
   balanceLabel: {
     fontSize: 16,
     color: '#666',
