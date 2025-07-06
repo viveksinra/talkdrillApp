@@ -29,6 +29,7 @@ export interface CoinPackage {
   name: string;
   priceDisplay: string;
   bestValue?: boolean;
+  extraPercentage?: number;
 }
 
 export interface PaymentOrder {

@@ -59,6 +59,7 @@ export default function MySessionsScreen() {
   
   const [bookings, setBookings] = useState<BookingWithProfessional[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
@@ -260,6 +261,7 @@ export default function MySessionsScreen() {
           onPress: async () => {
             try {
               console.log('🚫 Cancelling booking:', booking._id);
+              setProcessing(true);
               await cancelBooking(booking._id, 'Cancelled by student');
               
               // Update the booking status locally
@@ -273,6 +275,8 @@ export default function MySessionsScreen() {
             } catch (error: any) {
               console.error('Error cancelling booking:', error);
               Alert.alert('Error', error.message || 'Failed to cancel session. Please try again.');
+            } finally {
+              setProcessing(false);
             }
           }
         }
@@ -341,10 +345,14 @@ export default function MySessionsScreen() {
         booking={item}
         sessionInfo={sessionInfo}
         onCancel={() => handleCancelBooking(item)}
+        processing={processing}
         onJoin={() => handleJoinSession(item)}
         canCancel={canCancelBooking()}
         canJoin={canJoinLobby(item)}
         isJoining={joiningSession === item._id}
+        joinInfo={!canJoinLobby(item) && ['booked', 'confirmed'].includes(item.status) ? 
+          "Join Session Option will be appear Only 5 minutes before your scheduled session time" : undefined
+        }
       />
     );
   };

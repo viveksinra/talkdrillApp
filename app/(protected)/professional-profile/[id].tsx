@@ -31,6 +31,7 @@ export default function ProfessionalProfileScreen() {
   const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedSlot, setSelectedSlot] = useState<string>('');
+  const [selectedSlotEndTime, setSelectedSlotEndTime] = useState<string>('');
   const [bookingLoading, setBookingLoading] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
@@ -92,6 +93,7 @@ export default function ProfessionalProfileScreen() {
     generateAvailableDates();
     setShowScheduleModal(true);
     setSelectedSlot(''); // Reset selected slot
+    setSelectedSlotEndTime('');
   };
 
   const handleBookSession = async () => {
@@ -106,6 +108,7 @@ export default function ProfessionalProfileScreen() {
         professionalId: professional._id,
         scheduledDate: selectedDate,
         scheduledTime: selectedSlot,
+        scheduledEndTime: selectedSlotEndTime,
         topic: 'General Conversation',
       });
 
@@ -389,13 +392,16 @@ export default function ProfessionalProfileScreen() {
                         styles.slotButton,
                         selectedSlot === slot.startTime && styles.selectedSlotButton
                       ]}
-                      onPress={() => setSelectedSlot(slot.startTime)}
+                      onPress={() => {
+                        setSelectedSlot(slot.startTime);
+                        setSelectedSlotEndTime(slot.endTime);
+                      }}
                     >
                       <Text style={[
                         styles.slotButtonText,
                         selectedSlot === slot.startTime && styles.selectedSlotButtonText
                       ]}>
-                        {formatTime(slot.startTime)}
+                        {formatTime(slot.startTime)} - {formatTime(slot.endTime)}
                       </Text>
                     </TouchableOpacity>
                   ))}
