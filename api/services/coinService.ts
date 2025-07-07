@@ -13,7 +13,7 @@ export interface SessionLicenseBalance {
 export interface CoinTransaction {
   id: string;
   amount: number;
-  type: 'earned' | 'spent' | 'purchased' | 'refunded';
+  type: 'earned' | 'spent' | 'purchased' | 'refunded' | 'combo_purchased';
   description: string;
   balance: number;
   timestamp: string;
@@ -46,7 +46,7 @@ export interface ComboPackage {
   currency: string;
   priceDisplay: string;
   originalPriceDisplay: string;
-  packageType: 'trial' | 'standard' | 'premium';
+  packageType: 'trial' | 'regular';
   eligible?: boolean;
   eligibilityReason?: string;
   bestValue?: boolean;
