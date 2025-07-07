@@ -52,6 +52,12 @@ const MAPPING = {
   'play.circle.fill': 'play-circle-filled',
   'trophy.fill': 'emoji-events',
   'gear.circle.fill': 'settings',
+  // Added for video/session features
+  'video.circle.fill': 'videocam',
+  // Added for security/protection features
+  'shield.checkered': 'security',
+  // Added for close/cancel actions
+  'xmark': 'close',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],
