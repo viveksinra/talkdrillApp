@@ -50,6 +50,21 @@ export default function CoinsScreen() {
   const [currentPackageId, setCurrentPackageId] = useState<string>('');
   const [coinPackageModal, setCoinPackageModal] = useState(false);
   const [comboPackages, setComboPackages] = useState<ComboPackage[]>([]);
+
+  // Validation functions
+  const validateCoinPackage = (pkg: any): boolean => {
+    return pkg && 
+           typeof pkg.id === 'string' && 
+           typeof pkg.coins === 'number' && 
+           typeof pkg.price === 'number';
+  };
+
+  const validateComboPackage = (pkg: any): boolean => {
+    return pkg && 
+           typeof pkg.id === 'string' && 
+           typeof pkg.name === 'string' && 
+           typeof pkg.packageType === 'string';
+  };
   // Load initial data
   const loadData = useCallback(async () => {
     try {
@@ -60,13 +75,30 @@ export default function CoinsScreen() {
         getComboPackages()
       ]);
       
+      console.log('Loaded coin packages:', packages);
+      console.log('Loaded combo packages:', comboPackages);
+      
       setCoinBalance(balance);
       setSessionLicenseBalance(sessionLicenseBalance);
-      setCoinPackages(packages);
-      setComboPackages(comboPackages);
+      
+      // Validate and set coin packages
+      const validCoinPackages = (packages || []).filter(validateCoinPackage);
+      setCoinPackages(validCoinPackages);
+      
+      // Validate and set combo packages
+      const validComboPackages = (comboPackages || [])
+        .filter(validateComboPackage)
+        .filter((comboPackage) => comboPackage.packageType === 'regular');
+      setComboPackages(validComboPackages);
+      
+      console.log('Valid coin packages:', validCoinPackages);
+      console.log('Valid combo packages:', validComboPackages);
     } catch (error) {
       console.error('Error loading coin data:', error);
       Alert.alert('Error', 'Failed to load coin data. Please try again.');
+      // Set empty arrays on error to prevent rendering issues
+      setCoinPackages([]);
+      setComboPackages([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -520,7 +552,7 @@ export default function CoinsScreen() {
                   <IconSymbol size={48} name="bitcoinsign.circle.fill" color="#F5A623" />
                 </View>
                 <ThemedText type="title" style={styles.balanceAmount}>
-                  {coinBalance?.coins.toLocaleString() || '0'}
+                  {String(coinBalance?.coins?.toLocaleString() || '0')}
                 </ThemedText>
                 <ThemedText style={styles.availableText}>Available Coins</ThemedText>
               </View>
@@ -548,7 +580,7 @@ export default function CoinsScreen() {
                   <IconSymbol size={48} name="video.circle.fill" color="#4A86E8" />
                 </View>
                 <ThemedText type="title" style={styles.balanceAmount}>
-                  {sessionLicenseBalance?.sessionLicenses?.toLocaleString() || '0'}
+                  {String(sessionLicenseBalance?.sessionLicenses?.toLocaleString() || '0')}
                 </ThemedText>
                 <ThemedText style={styles.availableText}>Available Sessions</ThemedText>
               </View>
@@ -622,18 +654,17 @@ export default function CoinsScreen() {
           </ThemedView>
           {/* <ScrollView style={styles.packageScrollView} showsVerticalScrollIndicator={false}> */}
             <View style={styles.packageContainer}>
-              {comboPackages.map((packageItem) => (
-                <View key={packageItem.id} style={styles.packageCard}>
+              {comboPackages && comboPackages.length > 0 ? comboPackages.map((packageItem) => (
+                <View key={packageItem.id || Math.random().toString()} style={styles.packageCard}>
                   <View style={styles.packageIcon}>
                     <IconSymbol size={24} name="gift.fill" color="#4A86E8" />
                   </View>
                   <View style={styles.packageInfo}>
-                   
                     <ThemedText type="defaultSemiBold" style={styles.packageCoins}>
-                      {packageItem.name}
+                      {String(packageItem.name || 'Package')}
                     </ThemedText>
                     <ThemedText type="subtitle" style={styles.packagePrice}>
-                      {packageItem.priceDisplay}
+                      {String(packageItem.priceDisplay || 'Price not available')}
                     </ThemedText>
                     {packageItem.bestValue && (
                       <View style={styles.bestValueBadge}>
@@ -656,7 +687,11 @@ export default function CoinsScreen() {
                     )}
                   </TouchableOpacity>
                 </View>
-              ))}
+              )) : (
+                <View style={styles.packageCard}>
+                  <ThemedText style={styles.packageCoins}>No combo packages available</ThemedText>
+                </View>
+              )}
             </View>
           {/* </ScrollView> */}
           {/* Payment Info */}
@@ -734,29 +769,29 @@ export default function CoinsScreen() {
             
             <ScrollView style={styles.packageScrollView} showsVerticalScrollIndicator={false}>
               <View style={styles.packageContainer}>
-                {coinPackages.map((packageItem) => (
-                  <View key={packageItem.id} style={styles.packageCard}>
+                {coinPackages && coinPackages.length > 0 ? coinPackages.map((packageItem) => (
+                  <View key={packageItem.id || Math.random().toString()} style={styles.packageCard}>
                     {/* Angled Percentage Sticker */}
-                    {packageItem.extraPercentage && (
+                    {/* {packageItem.extraPercentage && packageItem.extraPercentage > 0 && (
                       <View style={styles.percentageSticker}>
                         <ThemedText style={styles.percentageStickerText}>
-                          +{packageItem.extraPercentage}% Extra
+                          +{packageItem.extraPercentage || 0}% Extra
                         </ThemedText>
                       </View>
-                    )}
+                    )} */}
                     
                     <View style={styles.packageInfo}>
                       <ThemedText type="defaultSemiBold" style={styles.packageCoins}>
-                        {packageItem.coins} Coins
+                        {`${packageItem.coins || 0} Coins`}
                       </ThemedText>
                       <ThemedText type="subtitle" style={styles.packagePrice}>
-                        ₹{(packageItem.price/100).toFixed(2)}
+                        {String(packageItem.priceDisplay || `₹${((packageItem.price || 0)/100).toFixed(2)}`)}
                       </ThemedText>
-                      {packageItem.bestValue && (
+                      {/* {packageItem.bestValue && (
                         <View style={styles.bestValueBadge}>
                           <ThemedText style={styles.bestValueText}>Best Value</ThemedText>
                         </View>
-                      )}
+                      )} */}
                     </View>
                     <TouchableOpacity 
                       style={[
@@ -773,9 +808,11 @@ export default function CoinsScreen() {
                       )}
                     </TouchableOpacity>
                   </View>
-                ))}
-                
-                
+                )) : (
+                  <View style={styles.packageCard}>
+                    <ThemedText style={styles.packageCoins}>No coin packages available</ThemedText>
+                  </View>
+                )}
                 
                 <View style={styles.paymentInfo}>
                   <IconSymbol size={20} name="shield.checkered" color="#4A86E8" />

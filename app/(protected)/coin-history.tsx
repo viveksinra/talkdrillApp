@@ -173,7 +173,7 @@ export default function CoinHistoryScreen() {
           styles.transactionAmount,
           item.amount > 0 ? styles.positiveAmount : styles.negativeAmount
         ]}>
-          {item.amount > 0 ? '+' : ''}{Math.abs(item.amount)}
+          {item.amount > 0 ? '+' : ''}{item.type === 'purchased' || item.type === 'combo_purchased' ? ` ₹${Math.abs(item.amount/100).toFixed(2)}` : Math.abs(item.amount)}
         </ThemedText>
         <ThemedText style={styles.balanceText}>
           Balance: {item.balance}
