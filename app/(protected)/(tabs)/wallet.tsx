@@ -88,7 +88,6 @@ export default function CoinsScreen() {
       // Validate and set combo packages
       const validComboPackages = (comboPackages || [])
         .filter(validateComboPackage)
-        .filter((comboPackage) => comboPackage.packageType === 'regular');
       setComboPackages(validComboPackages);
       
       console.log('Valid coin packages:', validCoinPackages);
