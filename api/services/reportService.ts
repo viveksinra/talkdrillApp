@@ -1,17 +1,27 @@
 import { get, post, put } from '../config/axiosConfig';
 
-// Generate report for a session
-export const generateReport = async (sessionId: string) => {
+// ✅ UNIFIED REPORT GENERATION
+export const generateReportFromSession = async (sessionId: string) => {
   try {
-    const response = await post(`/api/v1/report/generate/${sessionId}`);
+    const response = await post(`/api/v1/report/generate/session/${sessionId}`);
     return response.data;
   } catch (error) {
-    console.error('Error generating report:', error);
+    console.error('Error generating report from session:', error);
     throw error;
   }
 };
 
-// Get detailed report by ID
+export const generateReportFromConversation = async (conversationId: string) => {
+  try {
+    const response = await post(`/api/v1/report/generate/conversation/${conversationId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error generating report from conversation:', error);
+    throw error;
+  }
+};
+
+// ✅ UNIFIED REPORT RETRIEVAL
 export const getReportById = async (reportId: string) => {
   try {
     const response = await get(`/api/v1/report/${reportId}`);
@@ -93,17 +103,6 @@ export const scheduleFollowUp = async (reportId: string, followUpData: {
     return response.data;
   } catch (error) {
     console.error('Error scheduling follow-up:', error);
-    throw error;
-  }
-};
-
-// Generate report from AI conversation
-export const generateReportFromConversation = async (conversationId: string) => {
-  try {
-    const response = await post(`/api/v1/report/conversation/${conversationId}`);
-    return response.data;
-  } catch (error) {
-    console.error('Error generating report from conversation:', error);
     throw error;
   }
 }; 

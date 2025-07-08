@@ -33,6 +33,8 @@ import {
   StreamVideoClient
 } from '@stream-io/video-react-native-sdk';
 
+import { useToast } from '@/hooks/useToast';
+
 export default function ProfessionalSessionCallScreen() {
   const router = useRouter();
   const { 
@@ -75,6 +77,13 @@ export default function ProfessionalSessionCallScreen() {
   useKeepAwake();
 
   const parsedDurationInMinutes = parseInt(durationInMinutes as string, 10) || 60;
+
+  // Add state for transcription
+  const [transcriptionStarted, setTranscriptionStarted] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  // Add toast hook
+  const { showReportGenerationToast } = useToast();
 
   // Get lobby details first
   useEffect(() => {
@@ -133,6 +142,9 @@ export default function ProfessionalSessionCallScreen() {
       // Join the professional session
       const joinResponse = await professionalSessionService.joinSessionCall(bookingId as string);
       
+      // Store session ID for transcription control
+      setCurrentSessionId(joinResponse.sessionId);
+      
       setConnectionStatus('Getting authentication token...');
       const client = await streamService.ensureInitialized(
         user?.id || '',
@@ -169,6 +181,10 @@ export default function ProfessionalSessionCallScreen() {
       setLobbyState('joined');
       setIsLoading(false);
       setConnectionStatus('Connected');
+
+      // Start transcription after successful join
+      await startTranscription(joinResponse.sessionId);
+      
     } catch (error: any) {
       console.error('Error joining professional session call:', error);
       Alert.alert(
@@ -184,10 +200,42 @@ export default function ProfessionalSessionCallScreen() {
     }
   };
 
+  // Add function to start transcription
+  const startTranscription = async (sessionId: string) => {
+    try {
+      console.log('Starting transcription for session:', sessionId);
+      await professionalSessionService.startTranscription(sessionId);
+      setTranscriptionStarted(true);
+      console.log('Transcription started successfully');
+    } catch (error) {
+      console.error('Error starting transcription:', error);
+      // Don't show error to user as transcription is background process
+    }
+  };
+
+  // Add function to stop transcription
+  const stopTranscription = async () => {
+    if (!currentSessionId || !transcriptionStarted) return;
+    
+    try {
+      console.log('Stopping transcription for session:', currentSessionId);
+      await professionalSessionService.stopTranscription(currentSessionId);
+      setTranscriptionStarted(false);
+      console.log('Transcription stopped successfully');
+    } catch (error) {
+      console.error('Error stopping transcription:', error);
+      // Don't show error to user as transcription is background process
+    }
+  };
+
   // Set up GetStream event listeners
   const setupCallEventListeners = (call: Call) => {
     call.on('call.ended', (event: any) => {
       console.log('Professional session call ended:', event);
+      
+      // Stop transcription when call ends
+      stopTranscription();
+      
       handleCallEnd(event.user ? event.user.name || event.user.id : 'system');
     });
 
@@ -335,15 +383,19 @@ export default function ProfessionalSessionCallScreen() {
       pathname: '/session-review/[bookingId]',
       params: {
         bookingId: bookingId as string,
-        sessionId: sessionId as string,
+        sessionId: currentSessionId as string,
         professionalId: professionalId as string,
-        professionalName: professionalName as string
+        professionalName: professionalName as string,
+        showReportToast: 'true' // Flag to show report generation toast
       }
     });
   };
 
   const endSessionCall = async (endReason: string = 'ended_by_student') => {
     try {
+      // Stop transcription first
+      await stopTranscription();
+      
       const call = streamService.getCall();
       if (call) {
         await call.endCall();
@@ -790,5 +842,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     textAlign: 'center'
+  },
+  transcriptionIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4
+  },
+  transcriptionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4CAF50'
+  },
+  transcriptionText: {
+    fontSize: 10,
+    color: Colors.light.background,
+    opacity: 0.8
   }
 }); 

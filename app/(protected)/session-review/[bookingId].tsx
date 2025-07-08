@@ -6,11 +6,13 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Text
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import moment from 'moment';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -18,6 +20,9 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import reviewService, { ReviewSubmissionData } from '@/api/services/reviewService';
 import professionalSessionService from '@/api/services/professionalSessionService';
+import { useToast } from '@/hooks/useToast';
+import { privateAxiosInstance } from '../config/privateAxiosInstance';
+import streamService from '@/api/services/streamService';
 
 const AVAILABLE_TAGS = [
   { id: 'helpful', label: '🙋‍♀️ Helpful', color: Colors.light.success },
@@ -33,7 +38,7 @@ const AVAILABLE_TAGS = [
 
 export default function SessionReviewScreen() {
   const router = useRouter();
-  const { bookingId, sessionId, professionalId, professionalName } = useLocalSearchParams();
+  const { bookingId, sessionId, professionalId, professionalName, showReportToast } = useLocalSearchParams();
   const { user } = useAuth();
 
   const [overallRating, setOverallRating] = useState(0);
@@ -48,10 +53,26 @@ export default function SessionReviewScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
 
+  // Add state for transcription
+  const [transcriptionStarted, setTranscriptionStarted] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  // Add toast hook
+  const { showReportGenerationToast } = useToast();
+
   useEffect(() => {
     // Mark that session has been completed for review collection
     setSessionCompleted(true);
   }, []);
+
+  useEffect(() => {
+    if (showReportToast === 'true') {
+      // Show toast after a brief delay
+      setTimeout(() => {
+        showReportGenerationToast();
+      }, 1000);
+    }
+  }, [showReportToast, showReportGenerationToast]);
 
   const renderStarRating = (
     rating: number, 
@@ -148,6 +169,92 @@ export default function SessionReviewScreen() {
       ]
     );
   };
+
+  // Add function to start transcription
+  const startTranscription = async (sessionId: string) => {
+    try {
+      console.log('Starting transcription for session:', sessionId);
+      await professionalSessionService.startTranscription(sessionId);
+      setTranscriptionStarted(true);
+      console.log('Transcription started successfully');
+    } catch (error) {
+      console.error('Error starting transcription:', error);
+      // Don't show error to user as transcription is background process
+    }
+  };
+
+  // Add function to stop transcription
+  const stopTranscription = async () => {
+    if (!currentSessionId || !transcriptionStarted) return;
+    
+    try {
+      console.log('Stopping transcription for session:', currentSessionId);
+      await professionalSessionService.stopTranscription(currentSessionId);
+      setTranscriptionStarted(false);
+      console.log('Transcription stopped successfully');
+    } catch (error) {
+      console.error('Error stopping transcription:', error);
+      // Don't show error to user as transcription is background process
+    }
+  };
+
+  // Update the endSessionCall function to stop transcription and show toast
+  const endSessionCall = async (endReason: string = 'ended_by_student') => {
+    try {
+      // Stop transcription first
+      await stopTranscription();
+      
+      const call = streamService.getCall();
+      if (call) {
+        await call.endCall();
+      }
+      
+      // End session on backend
+      await professionalSessionService.endSession(bookingId as string, endReason);
+      
+      // Navigate to review screen
+      navigateToReviewScreen();
+    } catch (error) {
+      console.error('Error ending session call:', error);
+      // Navigate to review screen anyway
+      navigateToReviewScreen();
+    }
+  };
+
+  // Update the navigateToReviewScreen function to handle report generation toast
+  const navigateToReviewScreen = () => {
+    router.replace({
+      pathname: '/session-review/[bookingId]',
+      params: {
+        bookingId: bookingId as string,
+        sessionId: currentSessionId as string,
+        professionalId: professionalId as string,
+        professionalName: professionalName as string,
+        showReportToast: 'true' // Flag to show report generation toast
+      }
+    });
+  };
+
+  // Add these styles
+  const transcriptionStyles = StyleSheet.create({
+    transcriptionIndicator: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 4
+    },
+    transcriptionDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: '#4CAF50'
+    },
+    transcriptionText: {
+      fontSize: 10,
+      color: Colors.light.background,
+      opacity: 0.8
+    }
+  });
 
   return (
     <ThemedView style={styles.container}>
@@ -320,6 +427,10 @@ export default function SessionReviewScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Add transcription status indicator to the UI (optional) */}
+      {/* You can add this to the call controls or header */}
+      <TranscriptionIndicator />
     </ThemedView>
   );
 }
