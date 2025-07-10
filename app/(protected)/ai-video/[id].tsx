@@ -195,6 +195,11 @@ export default function AIVideoCallScreen() {
       const transcript = event.results[0]?.transcript || "";
       transcriptRef.current = transcript;
       console.log("[SPEECH] Transcript:", transcript);
+      
+      // Reset silence timeout on each result
+      if (isRecording) {
+        resetSilenceTimeout();
+      }
     }
   });
 
@@ -610,6 +615,14 @@ export default function AIVideoCallScreen() {
   };
 
   // Recording functions
+  const toggleRecording = async () => {
+    if (isRecording) {
+      await stopRecording();
+    } else {
+      await startRecording();
+    }
+  };
+
   const startRecording = async () => {
     try {
       console.log("[SPEECH] Starting speech recognition...");
@@ -649,12 +662,13 @@ export default function AIVideoCallScreen() {
       };
 
       console.log("[SPEECH] Starting with options:", options);
-
       ExpoSpeechRecognitionModule.start(options);
+      
+      // Set silence timeout for auto-stop (3 seconds of silence)
+      resetSilenceTimeout();
     } catch (error) {
       console.error("[SPEECH] Error starting speech recognition:", error);
       setIsRecording(false);
-      // Alert.alert("Error", "Failed to start speech recognition. Please try again.");
     }
   };
 
@@ -673,6 +687,20 @@ export default function AIVideoCallScreen() {
       console.error("[SPEECH] Error stopping speech recognition:", error);
       setIsRecording(false);
     }
+  };
+
+  // New function to handle auto-stop on silence
+  const resetSilenceTimeout = () => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+    }
+    
+    silenceTimeoutRef.current = setTimeout(() => {
+      console.log("[SPEECH] Silence detected, auto-stopping recording");
+      if (isRecording && transcriptRef.current.trim()) {
+        stopRecording();
+      }
+    }, 3000); // 3 seconds of silence
   };
 
   const scrollToBottom = () => {
@@ -967,8 +995,7 @@ export default function AIVideoCallScreen() {
           setTextMessage={setTextMessage}
           sendTextMessage={sendTextMessage}
           isRecording={isRecording}
-          startRecording={startRecording}
-          stopRecording={stopRecording}
+          toggleRecording={toggleRecording}
           isConnected={isConnected}
           isProcessingVoice={isProcessingVoice}
           isGeneratingText={isGeneratingText}

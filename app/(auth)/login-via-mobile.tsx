@@ -62,15 +62,14 @@ export default function LoginViaMobileScreen() {
   // Phone number validation
   const isValidPhoneNumber = () => {
     const cleanedNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
-    return cleanedNumber.length === 10;
+    const regex = /^\d{6,14}$/; // only digits, length 6 to 14
+    return regex.test(cleanedNumber);
   };
   
   const handlePhoneNumberChange = (text: string) => {
-    // Only allow digits and limit to 10 characters
+    // Only allow digits
     const cleanedText = text.replace(/\D/g, '');
-    if (cleanedText.length <= 10) {
-      setPhoneNumber(cleanedText);
-    }
+    setPhoneNumber(cleanedText);
   };
   
   const handleContinue = () => {
@@ -117,13 +116,15 @@ export default function LoginViaMobileScreen() {
           <TextInput
             style={[
               styles.input,
-              phoneNumber.length > 0 && !isValidPhoneNumber() && styles.inputError
+              (phoneNumber.length <6 || phoneNumber.length > 14) 
+              && !isValidPhoneNumber() 
+              && styles.inputError
             ]}
             placeholder="Mobile number"
             keyboardType="phone-pad"
             value={phoneNumber}
             onChangeText={handlePhoneNumberChange}
-            maxLength={10}
+            maxLength={14}
           />
         </View>
         
@@ -156,7 +157,7 @@ export default function LoginViaMobileScreen() {
         {/* Validation message */}
         {phoneNumber.length > 0 && !isValidPhoneNumber() && (
           <ThemedText style={styles.errorText}>
-            Please enter a valid 10-digit mobile number
+            Please enter a mobile number between 6 and 14 digits
           </ThemedText>
         )}
         

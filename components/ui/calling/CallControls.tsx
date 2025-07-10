@@ -11,8 +11,7 @@ interface CallControlsProps {
   setTextMessage: (text: string) => void;
   sendTextMessage: () => void;
   isRecording: boolean;
-  startRecording: () => void;
-  stopRecording: () => void;
+  toggleRecording: () => void;
   isConnected: boolean;
   isProcessingVoice: boolean;
   isGeneratingText: boolean;
@@ -26,35 +25,28 @@ export const CallControls: React.FC<CallControlsProps> = ({
   setTextMessage,
   sendTextMessage,
   isRecording,
-  startRecording,
-  stopRecording,
+  toggleRecording,
   isConnected,
   isProcessingVoice,
   isGeneratingText,
   handleEndCall
 }) => {
-  // Animation for the pulsing effect
+  // Animation for the pulsing effect - only for shadow
   const pulseAnimation = useRef(new Animated.Value(1)).current;
   
-  // Tooltip state
-  const [showTooltip, setShowTooltip] = useState(false);
-  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const pressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const tooltipAnimation = useRef(new Animated.Value(0)).current;
-
   // Start pulse animation when recording
   useEffect(() => {
     if (isRecording) {
       const pulse = () => {
         Animated.sequence([
           Animated.timing(pulseAnimation, {
-            toValue: 1.2,
-            duration: 600,
+            toValue: 1.4,
+            duration: 800,
             useNativeDriver: true,
           }),
           Animated.timing(pulseAnimation, {
             toValue: 1,
-            duration: 600,
+            duration: 800,
             useNativeDriver: true,
           }),
         ]).start(() => {
@@ -68,75 +60,6 @@ export const CallControls: React.FC<CallControlsProps> = ({
       pulseAnimation.setValue(1);
     }
   }, [isRecording, pulseAnimation]);
-
-  // Tooltip animation
-  useEffect(() => {
-    if (showTooltip) {
-      Animated.timing(tooltipAnimation, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(tooltipAnimation, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [showTooltip, tooltipAnimation]);
-
-  const handlePressIn = () => {
-    // Clear any existing timeouts
-    if (pressTimeoutRef.current) {
-      clearTimeout(pressTimeoutRef.current);
-    }
-    if (tooltipTimeoutRef.current) {
-      clearTimeout(tooltipTimeoutRef.current);
-    }
-
-    // Set a timeout to distinguish between tap and hold
-    pressTimeoutRef.current = setTimeout(() => {
-      // This is a long press, start recording
-      startRecording();
-    }, 150); // 150ms delay to distinguish tap from hold
-  };
-
-  const handlePressOut = () => {
-    if (pressTimeoutRef.current) {
-      clearTimeout(pressTimeoutRef.current);
-      pressTimeoutRef.current = null;
-    }
-
-    if (isRecording) {
-      // If recording, stop it
-      stopRecording();
-    } else {
-      // This was a quick tap, show tooltip
-      showTooltipBriefly();
-    }
-  };
-
-  const showTooltipBriefly = () => {
-    if (!isConnected) return;
-    
-    setShowTooltip(true);
-    tooltipTimeoutRef.current = setTimeout(() => {
-      setShowTooltip(false);
-    }, 2000); // Show for 2 seconds
-  };
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (pressTimeoutRef.current) {
-        clearTimeout(pressTimeoutRef.current);
-      }
-      if (tooltipTimeoutRef.current) {
-        clearTimeout(tooltipTimeoutRef.current);
-      }
-    };
-  }, []);
 
   return (
     <View style={[
@@ -169,32 +92,7 @@ export const CallControls: React.FC<CallControlsProps> = ({
       )}
       
       <View style={styles.recordButtonContainer}>
-        {/* Tooltip */}
-        {showTooltip && (
-          <Animated.View
-            style={[
-              styles.tooltip,
-              {
-                opacity: tooltipAnimation,
-                transform: [
-                  {
-                    translateY: tooltipAnimation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [10, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Text style={styles.tooltipText}>
-              Press and hold the microphone button to record your voice. Your recording will be sent automatically upon release.
-            </Text>
-            <View style={styles.tooltipArrow} />
-          </Animated.View>
-        )}
-
-        {/* Animated shadow for recording state */}
+        {/* Animated shadow for recording state - positioned absolutely */}
         {isRecording && (
           <Animated.View
             style={[
@@ -206,40 +104,35 @@ export const CallControls: React.FC<CallControlsProps> = ({
           />
         )}
         
-        <Pressable
+        {/* Record button - fixed position */}
+        <TouchableOpacity
           style={[
             styles.recordButton,
             isRecording && styles.recordingButton,
             !isConnected && styles.disabledButton,
           ]}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
+          onPress={toggleRecording}
           disabled={!isConnected}
         >
           <Ionicons 
-            name={isRecording ? "stop" : "mic"} 
+            name={isRecording ? "pause" : "mic"} 
             size={24} 
             color="white" 
           />
-        </Pressable>
+        </TouchableOpacity>
         
         {/* Status text with dots animation for voice processing */}
-        {isProcessingVoice && (
+        {/* {isProcessingVoice && (
           <View style={styles.processingVoiceContainer}>
             <LoadingDots />
           </View>
-        )}
-        {isGeneratingText && (
-          <Text style={styles.recordingStatusText}>Generating response...</Text>
-        )}
+        )} */}
         
-        {/* Hold to record instruction */}
-        {!isRecording && !isProcessingVoice && !isGeneratingText && (
-          <Text style={styles.holdToRecordText}>Hold to record</Text>
-        )}
-        {isRecording && (
-          <Text style={styles.recordingText}>Release to send</Text>
-        )}
+        
+        {/* Status text based on recording state - removed recording text */}
+        {/* {!isRecording && !isProcessingVoice && !isGeneratingText && (
+          <Text style={styles.tapToRecordText}>Tap to record</Text>
+        )} */}
       </View>
 
       {!isFullScreen && (
@@ -247,7 +140,7 @@ export const CallControls: React.FC<CallControlsProps> = ({
           <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
             <Ionicons name="call" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.holdToRecordText}></Text>
+          {/* <Text style={styles.tapToRecordText}></Text> */}
         </View>
       )}
     </View>
@@ -259,11 +152,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     gap: 10,
-    alignItems: "flex-end",
+    alignItems: "center", // Changed from "flex-end" to "center"
     paddingHorizontal: 10,
     paddingVertical: 10,
     backgroundColor: Colors.light.surface,
-    minHeight: 60,
+    minHeight: 50, // Reduced from 60 to 50 to match button heights
     position: "relative",
   },
   fullScreenControls: {
@@ -320,51 +213,17 @@ const styles = StyleSheet.create({
   },
   recordButtonContainer: {
     alignItems: "center",
+    justifyContent: "center",
     position: "relative",
     flex: 0,
     zIndex: 1000,
-  },
-  tooltip: {
-    position: "absolute",
-    bottom: 80,
-    alignSelf: "center",
-    backgroundColor: "white",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    width: 240,
-    zIndex: 2000,
-  },
-  tooltipText: {
-    fontSize: 12,
-    color: "#333",
-    textAlign: "center",
-    lineHeight: 16,
-  },
-  tooltipArrow: {
-    position: "absolute",
-    bottom: -6,
-    left: "50%",
-    transform: [{ translateX: -6 }],
-    width: 0,
-    height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 6,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
-    borderTopColor: "white",
+    width: 50,
+    height: 50,
   },
   recordButtonShadow: {
     position: "absolute",
+    top: -10,
+    left: -10,
     width: 70,
     height: 70,
     borderRadius: 35,
@@ -395,28 +254,26 @@ const styles = StyleSheet.create({
     color: Colors.light.primary,
     textAlign: "center",
   },
-  holdToRecordText: {
+  tapToRecordText: {
     marginTop: 8,
     fontSize: 12,
     color: "#666",
     textAlign: "center",
   },
-  recordingText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#4CAF50",
-    textAlign: "center",
-    fontWeight: "600",
-  },
   endCallContainer: {
     alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
     flex: 0,
+    zIndex: 1000,
+    width: 50,
+    height: 50,
   },
   endCallButton: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: "#F44336",
+    backgroundColor: Colors.light.error,
     justifyContent: "center",
     alignItems: "center",
   },
