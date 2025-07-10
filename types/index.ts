@@ -13,18 +13,38 @@ export interface User {
 }
 
 // Session types
-export type SessionType = 'ai-chat' | 'ai-call' | 'peer-chat' | 'peer-call';
+export type SessionType = 'ai-chat' | 'ai-call' | 'peer-chat' | 'peer-call' | 'professional_session';
 
 export interface Session {
   id: string;
-  type: SessionType;
+  user: string; // User ID
+  sessionType: SessionType;
+  partner?: string; // For AI sessions
+  peerUser?: string; // For peer sessions
+  professional?: string; // For professional sessions
+  booking?: string; // For professional sessions
+  topic?: string;
+  duration: number; // Duration in seconds
+  messages?: Array<{
+    sender: string;
+    content: string;
+    timestamp: Date;
+  }>;
+  audioUrl?: string;
+  transcript?: string;
+  hasReport: boolean;
+  startTime: Date;
+  endTime?: Date;
+  status: 'active' | 'completed' | 'terminated';
+  coinsSpent: number;
+  professionalEarning?: number; // For professional sessions
+  sessionRating?: number; // 1-5
+  sessionFeedback?: string;
+  // Legacy fields for backward compatibility
+  type?: SessionType;
   partnerId?: string;
   partnerName?: string;
   partnerAvatar?: string;
-  startTime: Date;
-  endTime?: Date;
-  duration?: number; // in seconds
-  hasReport: boolean;
   reportId?: string;
 }
 
@@ -312,3 +332,177 @@ export interface PeerFilters {
   isCertifiedTeacher?: boolean;
   randomMatch: boolean;
 } 
+
+export interface Booking {
+  _id: string;
+  student: string; // User ID
+  professional: {
+    _id: string;
+    name: string;
+    profileImage?: string;
+    averageRating: number;
+    specializations: string[];
+  };
+  scheduledDate: string; // ISO date string or Date
+  scheduledTime: string; // Format: "09:00"
+  endTime: string; // Format: "10:00"
+  duration: number; // Duration in minutes, default 30
+  sessionType: string; // Default "professional_session"
+  topic?: string;
+  studentNotes?: string;
+  status: 'booked' | 'confirmed' | 'in_progress' | 'completed' | 
+          'cancelled_by_student' | 'cancelled_by_professional' | 
+          'no_show_student' | 'no_show_professional';
+  amount: number; // Session cost in INR
+  coinsDeducted: number;
+  usedSessionLicense: boolean;
+  professionalEarning: number;
+  sessionId?: string;
+  bookingSessionStatus: 'scheduled' | 'in_progress' | 'completed';
+  streamCallId?: string;
+  // Cancellation details
+  cancellationReason?: string;
+  cancelledBy?: 'student' | 'professional' | 'system';
+  cancelledAt?: Date;
+  // Reminder notifications
+  remindersSent: {
+    fifteenMinutes: boolean;
+    oneHour: boolean;
+    oneDay: boolean;
+  };
+  bookingSource: 'app' | 'web' | 'admin';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TransformedBooking {
+  _id: string; // Converted from ObjectId to string
+  student: string; // ObjectId as string
+  professional: {
+    _id: string; // Converted from ObjectId to string
+    name: string;
+    profileImage?: string;
+    averageRating: number; // Guaranteed to be present (defaults to 4.5)
+    specializations: string[]; // Guaranteed to be an array (defaults to [])
+  };
+  scheduledDate: string; // Converted to YYYY-MM-DD format using toISOString().split('T')[0]
+  scheduledTime: string; // Format: "09:00"
+  endTime: string; // Format: "10:00"
+  duration: number; // Duration in minutes, default 30
+  sessionType: string; // Default "professional_session"
+  topic?: string;
+  studentNotes?: string;
+  status: 'booked' | 'confirmed' | 'in_progress' | 'completed' | 
+          'cancelled_by_student' | 'cancelled_by_professional' | 
+          'no_show_student' | 'no_show_professional';
+  amount: number; // Session cost in INR
+  coinsDeducted: number;
+  usedSessionLicense: boolean;
+  professionalEarning: number;
+  sessionId?: string; // ObjectId as string if present
+  bookingSessionStatus: 'scheduled' | 'in_progress' | 'completed';
+  streamCallId?: string;
+  // Cancellation details
+  cancellationReason?: string;
+  cancelledBy?: 'student' | 'professional' | 'system';
+  cancelledAt?: Date;
+  // Reminder notifications
+  remindersSent: {
+    fifteenMinutes: boolean;
+    oneHour: boolean;
+    oneDay: boolean;
+  };
+  bookingSource: 'app' | 'web' | 'admin';
+  createdAt: Date;
+  updatedAt: Date;
+  // Note: __v fields are explicitly removed
+};
+
+export interface Professional {
+  _id: string;
+  name: string;
+  email?: string;
+  phoneNumber: string;
+  isPhoneVerified: boolean;
+  profileImage?: string;
+  bio?: string;
+  experience: number; // years of experience
+  education?: string;
+  certifications: Array<{
+    name: string;
+    issuer: string;
+    year: number;
+  }>;
+  specializations: Array<
+    'business_english' | 'conversation' | 'grammar' | 'pronunciation' |
+    'interview_preparation' | 'academic_english' | 'ielts_preparation' |
+    'toefl_preparation' | 'writing_skills' | 'presentation_skills'
+  >;
+  languages: Array<{
+    language: 'english' | 'hindi' | 'spanish' | 'french' | 'german' | 'chinese' |
+             'japanese' | 'korean' | 'arabic' | 'portuguese' | 'russian' | 'italian';
+    proficiency: 'native' | 'fluent' | 'intermediate' | 'basic';
+  }>;
+  hourlyRate: number; // minimum 50 INR per session
+  totalSessions: number;
+  completedSessions: number;
+  averageRating: number; // 0-5
+  totalRatings: number;
+  totalReviews: number;
+  isVerified: boolean;
+  kycVerified: boolean;
+  kycDocuments: {
+    governmentId?: string; // URL
+    selfie?: string; // URL
+    resume?: string; // URL
+  };
+  offerFirstSessionFree: boolean;
+  kycSubmissionDate?: Date;
+  kycStatus: 'pending' | 'under_review' | 'approved' | 'rejected';
+  isActive: boolean;
+  isAvailableForBooking: boolean;
+  totalEarnings: number;
+  pendingPayouts: number;
+  lastPayoutDate?: Date;
+  // Device tokens for push notifications
+  deviceTokens: Array<{
+    token: string;
+    platform: 'ios' | 'android' | 'web';
+    deviceId: string;
+    isActive: boolean;
+    lastUsed: Date;
+  }>;
+  // Notification settings
+  settings: {
+    pushNotifications: boolean;
+    emailNotifications: boolean;
+    notificationCategories: {
+      professional_booking: boolean;
+      professional_session: boolean;
+      professional_payout: boolean;
+      professional_review: boolean;
+      system: boolean;
+    };
+  };
+  // Authentication fields
+  otp?: string;
+  otpExpires?: Date;
+  otpAttempts: number;
+  dateJoined: Date;
+  lastLoginDate?: Date;
+  // Payout settings
+  payoutSettings: {
+    method: 'bank_transfer' | 'upi';
+    frequency: 'weekly' | 'monthly';
+    bankAccount?: {
+      accountNumber: string;
+      ifscCode: string;
+      accountHolderName: string;
+      bankName: string;
+    };
+    upi?: {
+      upiId: string;
+    };
+    lastUpdated?: Date;
+  };
+}

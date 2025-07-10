@@ -8,9 +8,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { Booking } from '@/api/services/public/professionalService';
+import { TransformedBooking } from '@/types';
 
 interface BookingCardProps {
-  booking: Booking;
+  booking: TransformedBooking;
   onPress?: () => void;
   onCancel?: () => void;
   style?: any;

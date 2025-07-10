@@ -17,7 +17,6 @@ import { ThemedView } from '@/components/ThemedView';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import reviewService, { ReviewSubmissionData } from '@/api/services/reviewService';
-import professionalSessionService from '@/api/services/professionalSessionService';
 
 const AVAILABLE_TAGS = [
   { id: 'helpful', label: '🙋‍♀️ Helpful', color: Colors.light.success },

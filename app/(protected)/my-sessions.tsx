@@ -21,23 +21,14 @@ import { useSocket } from '@/contexts/SocketContext';
 import { BookingCard } from '@/components/shared/BookingCard';
 import { Booking } from '@/api/services/public/professionalService';
 import { get } from '@/api/config/axiosConfig';
-
-interface BookingWithProfessional extends Booking {
-  professional: {
-    _id: string;
-    name: string;
-    profileImage?: string;
-    specializations: string[];
-    averageRating: number;
-  };
-}
+import { TransformedBooking } from '@/types';
 
 export default function MySessionsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { socket, isConnected } = useSocket();
   
-  const [bookings, setBookings] = useState<BookingWithProfessional[]>([]);
+  const [bookings, setBookings] = useState<TransformedBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -128,25 +119,22 @@ export default function MySessionsScreen() {
     }
   };
 
-  const canJoinWaitingRoom = (booking: BookingWithProfessional) => {
+  const canJoinSession = (booking: TransformedBooking) => {
     const sessionTime = moment(`${booking.scheduledDate} ${booking.scheduledTime}`);
     const now = moment();
     const diffMinutes = sessionTime.diff(now, 'minutes');
     
     return (
-      (booking.sessionState === 'waiting_room_available' || booking.status === 'in_progress') &&
-      diffMinutes <= 5 && diffMinutes >= -60 // 5 minutes before to 60 minutes after
+      diffMinutes <= 5 && diffMinutes >= -30 // 5 minutes before to 60 minutes after
     );
   };
 
-  const handleJoinWaitingRoom = (booking: BookingWithProfessional) => {
-    router.push({
-      pathname: '/session-waiting-room/[bookingId]',
-      params: { bookingId: booking._id }
-    });
-  };
+  const handleJoinSession =(booking:TransformedBooking) =>{
+    // :TODO call api to join the video call
+  }
 
-  const handleCancelBooking = async (booking: BookingWithProfessional) => {
+
+  const handleCancelBooking = async (booking: TransformedBooking) => {
     Alert.alert(
       'Cancel Session',
       'Are you sure you want to cancel this session? Your coins will be refunded.',
@@ -167,12 +155,12 @@ export default function MySessionsScreen() {
     );
   };
 
-  const renderBookingItem = ({ item }: { item: BookingWithProfessional }) => {
+  const renderBookingItem = ({ item }: { item: TransformedBooking }) => {
     const sessionTime = moment(`${item.scheduledDate} ${item.scheduledTime}`);
     const now = moment();
     const isUpcoming = sessionTime.isAfter(now);
     const minutesUntil = sessionTime.diff(now, 'minutes');
-    const canJoin = canJoinWaitingRoom(item);
+    const canJoin = canJoinSession(item);
 
     return (
       <View style={styles.bookingContainer}>
@@ -186,10 +174,10 @@ export default function MySessionsScreen() {
           />
           <View style={styles.professionalInfo}>
             <Text style={styles.professionalName}>{item.professional.name}</Text>
-            <View style={styles.ratingContainer}>
+            {/* <View style={styles.ratingContainer}>
               <Ionicons name="star" size={14} color={Colors.light.warning} />
               <Text style={styles.rating}>{item.professional.averageRating.toFixed(1)}</Text>
-            </View>
+            </View> */}
           </View>
         </View>
 
@@ -206,7 +194,7 @@ export default function MySessionsScreen() {
         <View style={styles.actionsContainer}>
           {isUpcoming && minutesUntil <= 15 && minutesUntil > 0 && (
             <View style={styles.reminderContainer}>
-              <Ionicons name="time" size={16} color={Colors.light.warning} />
+              <Ionicons name="time" size={16} color={Colors.light.secondaryDark} />
               <Text style={styles.reminderText}>
                 Session starts in {minutesUntil} minutes
               </Text>
@@ -216,22 +204,13 @@ export default function MySessionsScreen() {
           {canJoin && (
             <TouchableOpacity
               style={styles.joinButton}
-              onPress={() => handleJoinWaitingRoom(item)}
+              onPress={() => handleJoinSession(item)}
             >
               <Ionicons name="videocam" size={20} color={Colors.light.background} />
               <Text style={styles.joinButtonText}>
-                {item.status === 'in_progress' ? 'Rejoin Session' : 'Join Waiting Room'}
+                {'Join Session'}
               </Text>
             </TouchableOpacity>
-          )}
-
-          {item.sessionState === 'waiting_room_available' && !canJoin && (
-            <View style={styles.waitingInfoContainer}>
-              <Ionicons name="information-circle" size={16} color={Colors.light.info} />
-              <Text style={styles.waitingInfoText}>
-                Waiting room available - Join when ready
-              </Text>
-            </View>
           )}
         </View>
       </View>
@@ -246,7 +225,7 @@ export default function MySessionsScreen() {
         <Text style={styles.title}>My Sessions</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => router.push('/(protected)/(tabs)/professionals')}
+          onPress={() => router.push('/(protected)/(tabs)/professionals' as any)}
         >
           <Ionicons name="add" size={24} color={Colors.light.primary} />
         </TouchableOpacity>
@@ -279,7 +258,7 @@ export default function MySessionsScreen() {
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color={Colors.light.error} />
+          <Ionicons name="alert-circle-outline" size={48} color={Colors.light.secondaryDark} />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadBookings}>
             <Text style={styles.retryButtonText}>Try Again</Text>
@@ -314,7 +293,7 @@ export default function MySessionsScreen() {
               {activeTab === 'upcoming' && (
                 <TouchableOpacity
                   style={styles.bookSessionButton}
-                  onPress={() => router.push('/(protected)/(tabs)/professionals')}
+                  onPress={() => router.push('/(protected)/(tabs)/professionals' as any)}
                 >
                   <Text style={styles.bookSessionButtonText}>Book a Session</Text>
                 </TouchableOpacity>
@@ -367,7 +346,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 16,
-    color: Colors.light.textSecondary,
+    color: Colors.light.secondary,
   },
   activeTabText: {
     color: Colors.light.primary,
@@ -381,7 +360,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: Colors.light.textSecondary,
+    color: Colors.light.secondaryLight,
   },
   errorContainer: {
     flex: 1,
@@ -392,7 +371,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: Colors.light.error,
+    color: Colors.light.secondaryDark,
     textAlign: 'center',
   },
   retryButton: {
@@ -440,7 +419,7 @@ const styles = StyleSheet.create({
   },
   rating: {
     fontSize: 14,
-    color: Colors.light.textSecondary,
+    color: Colors.light.secondaryLight,
   },
   actionsContainer: {
     marginTop: 8,
@@ -452,12 +431,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: Colors.light.warningLight,
+    backgroundColor: Colors.light.secondaryLight,
     borderRadius: 8,
   },
   reminderText: {
     fontSize: 14,
-    color: Colors.light.warning,
+    color: Colors.light.secondaryLight,
     fontWeight: '500',
   },
   joinButton: {
@@ -474,19 +453,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.background,
   },
-  waitingInfoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.light.infoLight,
-    borderRadius: 8,
-  },
-  waitingInfoText: {
-    fontSize: 14,
-    color: Colors.light.info,
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -496,7 +462,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: Colors.light.textSecondary,
+    color: Colors.light.secondaryLight,
     textAlign: 'center',
   },
   bookSessionButton: {
