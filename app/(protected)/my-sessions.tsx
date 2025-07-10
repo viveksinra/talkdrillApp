@@ -10,18 +10,18 @@ import {
   Alert,
   Image
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import moment from 'moment';
+import { useRouter, Stack } from 'expo-router';
+// Removed moment - using native Date APIs
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { BookingCard } from '@/components/shared/BookingCard';
-import { Booking } from '@/api/services/public/professionalService';
+import { Booking, cancelBooking } from '@/api/services/public/professionalService';
 import { get } from '@/api/config/axiosConfig';
 import { TransformedBooking } from '@/types';
+
 
 export default function MySessionsScreen() {
   const router = useRouter();
@@ -32,24 +32,31 @@ export default function MySessionsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [joiningSession, setJoiningSession] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
+  const [joiningSession, setJoiningSession] = useState<string | null>(null);
 
   const loadBookings = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
+      console.log('🔄 Loading bookings...');
       // Fetch user's bookings from backend
       const response = await get('/api/v1/bookings/my-bookings');
+      console.log('📡 API Response:', response.data);
+      
       if (response.data.variant === 'success') {
-        setBookings(response.data.myData.bookings || []);
+        const bookingsData = response.data.myData.bookings || [];
+        console.log('📅 Bookings data:', bookingsData);
+        console.log('📊 Total bookings:', bookingsData.length);
+        setBookings(bookingsData);
       } else {
         throw new Error(response.data.message || 'Failed to load bookings');
       }
     } catch (err: any) {
+      console.error('❌ Error loading bookings:', err);
+      console.error('❌ Error details:', err.response?.data);
       setError(err.message || 'Failed to load sessions. Please try again.');
-      console.error('Error loading bookings:', err);
     } finally {
       setLoading(false);
     }
@@ -69,17 +76,18 @@ export default function MySessionsScreen() {
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    const handleSessionStartingSoon = (data: any) => {
-      // Refresh bookings to get updated state
-      loadBookings();
+    const handleSessionReminder = (data: any) => {
+      console.log('📢 Session reminder:', data);
+      loadBookings(); // Refresh bookings when session state changes
     };
 
-    const handleWaitingRoomAvailable = (data: any) => {
-      // Refresh bookings to show waiting room availability
-      loadBookings();
+    const handleLobbyAvailable = (data: any) => {
+      console.log('🚪 Lobby available:', data);
+      loadBookings(); // Refresh bookings
     };
 
     const handleSessionStateChanged = (data: any) => {
+      console.log('🔄 Session state changed:', data);
       // Update booking state in real-time
       setBookings(prev => prev.map(booking => 
         booking._id === data.bookingId 
@@ -88,13 +96,13 @@ export default function MySessionsScreen() {
       ));
     };
 
-    socket.on('session_starting_soon', handleSessionStartingSoon);
-    socket.on('session_waiting_room_available', handleWaitingRoomAvailable);
+    socket.on('session_reminder', handleSessionReminder);
+    socket.on('lobby_available', handleLobbyAvailable);
     socket.on('session_state_changed', handleSessionStateChanged);
 
     return () => {
-      socket.off('session_starting_soon', handleSessionStartingSoon);
-      socket.off('session_waiting_room_available', handleWaitingRoomAvailable);
+      socket.off('session_reminder', handleSessionReminder);
+      socket.off('lobby_available', handleLobbyAvailable);
       socket.off('session_state_changed', handleSessionStateChanged);
     };
   }, [socket, isConnected, loadBookings]);
@@ -142,14 +150,24 @@ export default function MySessionsScreen() {
     }
   };
 
-  const canJoinSession = (booking: TransformedBooking) => {
-    const sessionTime = moment(`${booking.scheduledDate} ${booking.scheduledTime}`);
-    const now = moment();
-    const diffMinutes = sessionTime.diff(now, 'minutes');
+  const canJoinLobby = (booking: TransformedBooking) => {
+    const sessionDateTime = new Date(`${booking.scheduledDate}T${booking.scheduledTime}`);
+    const now = new Date();
     
-    return (
-      diffMinutes <= 5 && diffMinutes >= -30 // 5 minutes before to 60 minutes after
-    );
+    // Calculate session end time = start time + duration (in minutes)
+    const sessionEndTime = new Date(sessionDateTime.getTime() + (booking.duration * 60 * 1000));
+    
+    // Calculate 5 minutes before session start
+    const fiveMinutesBeforeStart = new Date(sessionDateTime.getTime() - (5 * 60 * 1000));
+    
+    // Show join button if current time is between:
+    // 5 minutes before session start AND session end time
+    const canJoin = now >= fiveMinutesBeforeStart && now <= sessionEndTime;
+    
+    // Only show for non-cancelled sessions
+    const isValidSession = !['cancelled_by_student', 'cancelled_by_professional', 'completed'].includes(booking.status);
+    
+    return canJoin && isValidSession;
   };
 
   const handleJoinSession = async (booking: TransformedBooking) => {
@@ -162,7 +180,7 @@ export default function MySessionsScreen() {
       
       // Navigate directly to session call screen
       router.push({
-        pathname: '/(protected)/professional-session-call' as any,
+        pathname: '/professional-session-call',
         params: {
           sessionId: booking.sessionId || 'new',
           bookingId: booking._id,
@@ -180,8 +198,28 @@ export default function MySessionsScreen() {
     }
   };
 
-
   const handleCancelBooking = async (booking: TransformedBooking) => {
+    // Parse the scheduled date and time
+    const scheduledDate = new Date(booking.scheduledDate);
+    const [hours, minutes] = booking.scheduledTime.split(':').map(Number);
+    
+    // Create session start time by combining date and time
+    const sessionStartTime = new Date(scheduledDate);
+    sessionStartTime.setHours(hours, minutes, 0, 0);
+    
+    const now = new Date();
+    const timeDiff = sessionStartTime.getTime() - now.getTime();
+    const minutesDiff = timeDiff / (1000 * 60);
+
+    if (minutesDiff < 10) {
+      Alert.alert(
+        'Cannot Cancel',
+        'Sessions can only be cancelled at least 10 minutes before the scheduled time.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     Alert.alert(
       'Cancel Session',
       'Are you sure you want to cancel this session? Your coins will be refunded.',
@@ -192,9 +230,20 @@ export default function MySessionsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Implement cancellation API call
-            } catch (error) {
-              Alert.alert('Error', 'Failed to cancel session. Please try again.');
+              console.log('🚫 Cancelling booking:', booking._id);
+              await cancelBooking(booking._id, 'Cancelled by student');
+              
+              // Update the booking status locally
+              setBookings(prev => prev.map(b => 
+                b._id === booking._id 
+                  ? { ...b, status: 'cancelled_by_student' }
+                  : b
+              ));
+              
+              Alert.alert('Success', 'Session cancelled successfully. Your coins have been refunded.');
+            } catch (error: any) {
+              console.error('Error cancelling booking:', error);
+              Alert.alert('Error', error.message || 'Failed to cancel session. Please try again.');
             }
           }
         }
@@ -202,110 +251,91 @@ export default function MySessionsScreen() {
     );
   };
 
-  
   const renderBookingItem = ({ item }: { item: TransformedBooking }) => {
-    const sessionDateTime = new Date(`${item.scheduledDate}T${item.scheduledTime}`);
-    const sessionEndTime = new Date(sessionDateTime.getTime() + (item.duration * 60 * 1000));
-    const now = new Date();
-    const minutesUntilStart = Math.floor((sessionDateTime.getTime() - now.getTime()) / (1000 * 60));
-    const minutesUntilEnd = Math.floor((sessionEndTime.getTime() - now.getTime()) / (1000 * 60));
-    const canJoin = canJoinSession(item);
-    const isJoining = joiningSession === item._id;
-
+    // Calculate session info for completed sessions
     const sessionInfo = item.status === 'completed' ? {
       actualStartTime: item.scheduledTime,
       actualEndTime: item.endTime,
       sessionStatus: 'Completed'
     } : undefined;
 
+    // Check if booking can be cancelled (at least 10 minutes before)
+    const canCancelBooking = () => {
+      try {
+        // Handle different date formats
+        let sessionStartTime;
+        
+        if (item.scheduledDate.includes('T')) {
+          // ISO format: "2025-07-05T00:00:00.000+00:00"
+          const dateOnly = item.scheduledDate.split('T')[0]; // Get "2025-07-05"
+          sessionStartTime = new Date(`${dateOnly}T${item.scheduledTime}:00`);
+        } else {
+          // Date only format: "2025-07-05"
+          sessionStartTime = new Date(`${item.scheduledDate}T${item.scheduledTime}:00`);
+        }
+
+        const now = new Date();
+        
+        // Calculate time difference
+        const timeDiff = sessionStartTime.getTime() - now.getTime();
+        const minutesDiff = timeDiff / (1000 * 60);
+        
+        // Check conditions
+        const isBeforeSession = now < sessionStartTime;
+        const hasEnoughTimeToCancel = minutesDiff >= 10; // 10 minutes before session
+        const isValidStatus = ['booked', 'confirmed'].includes(item.status);
+        
+        console.log(`📅 Cancellation check for booking ${item._id}:`, {
+          scheduledDate: item.scheduledDate,
+          scheduledTime: item.scheduledTime,
+          sessionStartTime: sessionStartTime.toISOString(),
+          currentTime: now.toISOString(),
+          minutesDiff: minutesDiff.toFixed(2),
+          isBeforeSession,
+          hasEnoughTimeToCancel,
+          isValidStatus,
+          canCancel: isBeforeSession && hasEnoughTimeToCancel && isValidStatus
+        });
+        
+        return isBeforeSession && hasEnoughTimeToCancel && isValidStatus;
+        
+      } catch (error) {
+        console.error(`❌ Error in canCancelBooking for ${item._id}:`, error);
+        return false;
+      }
+    };
+
     return (
-      <View>
-        <BookingCard
-          booking={item}
-          sessionInfo={sessionInfo}
-        />
-
-        {/* Session Status & Actions */}
-        <View style={styles.actionsContainer}>
-          {/* Show different timing info based on session state */}
-          {minutesUntilStart > 5 && (
-            <View style={styles.infoContainer}>
-              <Ionicons name="time-outline" size={16} color={Colors.light.icon} />
-              <Text style={styles.infoText}>
-                Available to join in {minutesUntilStart - 5} minutes
-              </Text>
-            </View>
-          )}
-
-          {minutesUntilStart <= 5 && minutesUntilStart > 0 && (
-            <View style={styles.readyContainer}>
-              <Ionicons name="radio-button-on" size={16} color={Colors.light.success} />
-              <Text style={styles.readyText}>
-                Session starts in {minutesUntilStart} minutes - Ready to join!
-              </Text>
-            </View>
-          )}
-
-          {minutesUntilStart <= 0 && minutesUntilEnd > 0 && (
-            <View style={styles.activeContainer}>
-              <Ionicons name="videocam" size={16} color={Colors.light.primary} />
-              <Text style={styles.activeText}>
-                Session is active - {minutesUntilEnd} minutes remaining
-              </Text>
-            </View>
-          )}
-
-          {minutesUntilEnd <= 0 && (
-            <View style={styles.expiredContainer}>
-              <Ionicons name="time-outline" size={16} color={Colors.light.error} />
-              <Text style={styles.expiredText}>
-                Session time has ended
-              </Text>
-            </View>
-          )}
-
-          {/* Join button - show only during valid time window */}
-          {canJoin && (
-            <TouchableOpacity
-              style={[
-                styles.joinButton,
-                isJoining && styles.joinButtonLoading
-              ]}
-              onPress={() => handleJoinSession(item)}
-              disabled={isJoining}
-            >
-              {isJoining ? (
-                <>
-                  <ActivityIndicator size="small" color={Colors.light.background} />
-                  <Text style={styles.joinButtonText}>Joining...</Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="videocam" size={20} color={Colors.light.background} />
-                  <Text style={styles.joinButtonText}>Join Session</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
-
-        </View>
-      </View>
+      <BookingCard
+        booking={item}
+        sessionInfo={sessionInfo}
+        onCancel={() => handleCancelBooking(item)}
+        onJoin={() => handleJoinSession(item)}
+        canCancel={canCancelBooking()}
+        canJoin={canJoinLobby(item)}
+        isJoining={joiningSession === item._id}
+      />
     );
   };
 
   const filteredBookings = getFilteredBookings();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Sessions</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push('/(protected)/(tabs)/professionals' as any)}
-        >
-          <Ionicons name="add" size={24} color={Colors.light.primary} />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'My Sessions',
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/(protected)/professionals')}
+              style={{ marginRight: 16 }}
+            >
+              <Ionicons name="add" size={24} color={Colors.light.primary} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
@@ -335,7 +365,7 @@ export default function MySessionsScreen() {
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color={Colors.light.secondaryDark} />
+          <Ionicons name="alert-circle-outline" size={48} color={Colors.light.error} />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadBookings}>
             <Text style={styles.retryButtonText}>Try Again</Text>
@@ -371,7 +401,7 @@ export default function MySessionsScreen() {
               {activeTab === 'upcoming' && (
                 <TouchableOpacity
                   style={styles.bookSessionButton}
-                  onPress={() => router.push('/(protected)/(tabs)/professionals' as any)}
+                  onPress={() => router.push('/(protected)/professionals')}
                 >
                   <Text style={styles.bookSessionButtonText}>Book a Session</Text>
                 </TouchableOpacity>
@@ -380,7 +410,7 @@ export default function MySessionsScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -400,60 +430,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  infoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    color: Colors.light.secondaryLight,
-  },
-  readyContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  readyText: {
-    fontSize: 14,
-    color: Colors.light.secondaryLight,
-  },
-  activeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  joinButtonLoading: {
-    opacity: 0.7,
-  },
-  activeText: {
-    fontSize: 14,
-    color: Colors.light.secondaryLight,
-  },
-  expiredContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  expiredText: {
-    fontSize: 14,
-    color: Colors.light.secondaryDark,
-  },
   activeTab: {
     borderBottomWidth: 2,
     borderBottomColor: Colors.light.primary,
   },
   tabText: {
     fontSize: 16,
-    color: Colors.light.secondary,
+    color: Colors.light.icon,
   },
   activeTabText: {
     color: Colors.light.primary,
@@ -467,7 +450,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: Colors.light.secondaryLight,
+    color: Colors.light.icon,
   },
   errorContainer: {
     flex: 1,
@@ -478,7 +461,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: Colors.light.secondaryDark,
+    color: Colors.light.error,
     textAlign: 'center',
   },
   retryButton: {
@@ -495,70 +478,10 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
   },
-  bookingContainer: {
-    marginBottom: 20,
-  },
-  professionalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  professionalImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  professionalInfo: {
-    flex: 1,
-  },
-  professionalName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 2,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  rating: {
-    fontSize: 14,
-    color: Colors.light.secondaryLight,
-  },
-  actionsContainer: {
-    marginTop: 8,
-    gap: 8,
-  },
-  reminderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.light.secondaryLight,
-    borderRadius: 8,
-  },
-  reminderText: {
-    fontSize: 14,
-    color: Colors.light.secondaryLight,
-    fontWeight: '500',
-  },
-  joinButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  joinButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.background,
+  separator: {
+    height: 1,
+    backgroundColor: '#E8E8E8',
+    marginVertical: 8,
   },
   emptyContainer: {
     flex: 1,
@@ -569,7 +492,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: Colors.light.secondaryLight,
+    color: Colors.light.icon,
     textAlign: 'center',
   },
   bookSessionButton: {
