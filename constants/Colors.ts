@@ -24,6 +24,12 @@ export const Colors = {
     icon: '#687076',
     tabIconDefault: '#687076',
     tabIconSelected: primary,
+    // Additional colors for session screens
+    error: '#F44336',
+    success: '#4CAF50',
+    info: '#2196F3',
+    warning: '#FF9800',
+    inactive: '#BDBDBD',
   },
   dark: {
     text: '#ECEDEE',
@@ -38,5 +44,11 @@ export const Colors = {
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',
     tabIconSelected: primaryLight,
+    // Additional colors for session screens
+    error: '#EF5350',
+    success: '#66BB6A',
+    info: '#42A5F5',
+    warning: '#FFA726',
+    inactive: '#757575',
   },
 };

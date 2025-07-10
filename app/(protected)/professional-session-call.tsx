@@ -11,6 +11,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useKeepAwake } from 'expo-keep-awake';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import moment from 'moment';
 
 import { ThemedText } from '@/components/ThemedText';
@@ -302,7 +303,7 @@ export default function ProfessionalSessionCallScreen() {
 
   const navigateToReviewScreen = () => {
     router.replace({
-      pathname: '/session-review/[bookingId]',
+      pathname: '(protected)/session-review/[bookingId] as any',
       params: {
         bookingId: bookingId as string,
         sessionId: sessionId as string,
@@ -454,27 +455,29 @@ export default function ProfessionalSessionCallScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="dark" />
-      <StreamVideo client={callState.client}>
-        <StreamCall call={callState.call}>
-          <View style={styles.callContainer}>
-            <CallContent 
-              onHangupCallHandler={handleEndCall}
-              CallControls={CustomCallControls}
-            />
-            {professionalDisconnected && (
-              <View style={styles.reconnectingOverlay}>
-                <View style={styles.reconnectingContainer}>
-                  <ActivityIndicator size="large" color={Colors.light.primary} />
-                  <Text style={styles.reconnectingText}>Waiting for professional to reconnect...</Text>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={styles.container}>
+        <StatusBar style="dark" />
+        <StreamVideo client={callState.client}>
+          <StreamCall call={callState.call}>
+            <View style={styles.callContainer}>
+              <CallContent 
+                onHangupCallHandler={handleEndCall}
+                CallControls={CustomCallControls}
+              />
+              {professionalDisconnected && (
+                <View style={styles.reconnectingOverlay}>
+                  <View style={styles.reconnectingContainer}>
+                    <ActivityIndicator size="large" color={Colors.light.primary} />
+                    <Text style={styles.reconnectingText}>Waiting for professional to reconnect...</Text>
+                  </View>
                 </View>
-              </View>
-            )}
-          </View>
-        </StreamCall>
-      </StreamVideo>
-    </View>
+              )}
+            </View>
+          </StreamCall>
+        </StreamVideo>
+      </View>
+    </GestureHandlerRootView>
   );
 }
 

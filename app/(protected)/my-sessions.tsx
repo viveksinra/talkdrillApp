@@ -32,6 +32,7 @@ export default function MySessionsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [joiningSession, setJoiningSession] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
 
   const loadBookings = useCallback(async () => {
@@ -99,23 +100,45 @@ export default function MySessionsScreen() {
   }, [socket, isConnected, loadBookings]);
 
   const getFilteredBookings = () => {
-    const now = moment();
+    const now = new Date();
+    console.log('🔍 Filtering bookings. Total bookings:', bookings.length);
+    console.log('📋 All bookings:', bookings);
+    console.log('🏷️ Active tab:', activeTab);
     
     if (activeTab === 'upcoming') {
-      return bookings.filter(booking => 
-        ['booked', 'confirmed', 'waiting_room_available', 'in_progress'].includes(booking.status) &&
-        moment(`${booking.scheduledDate} ${booking.scheduledTime}`).isAfter(now.subtract(2, 'hours'))
-      ).sort((a, b) => 
-        moment(`${a.scheduledDate} ${a.scheduledTime}`).valueOf() - 
-        moment(`${b.scheduledDate} ${b.scheduledTime}`).valueOf()
-      );
+      const upcomingBookings = bookings.filter(booking => {
+        const sessionDateTime = new Date(`${booking.scheduledDate}T${booking.scheduledTime}`);
+        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        
+        console.log(`📅 Booking ${booking._id}:`, {
+          status: booking.status,
+          sessionDateTime: sessionDateTime.toISOString(),
+          twoHoursAgo: twoHoursAgo.toISOString(),
+          isAfterTwoHoursAgo: sessionDateTime > twoHoursAgo,
+          statusMatches: ['booked', 'confirmed', 'lobby_active', 'in_progress'].includes(booking.status)
+        });
+        
+        return ['booked', 'confirmed', 'lobby_active', 'in_progress'].includes(booking.status) &&
+               sessionDateTime > twoHoursAgo;
+      }).sort((a, b) => {
+        const dateA = new Date(`${a.scheduledDate}T${a.scheduledTime}`);
+        const dateB = new Date(`${b.scheduledDate}T${b.scheduledTime}`);
+        return dateA.getTime() - dateB.getTime();
+      });
+      
+      console.log('⏰ Upcoming bookings:', upcomingBookings.length);
+      return upcomingBookings;
     } else {
-      return bookings.filter(booking => 
+      const completedBookings = bookings.filter(booking => 
         ['completed', 'cancelled_by_student', 'cancelled_by_professional'].includes(booking.status)
-      ).sort((a, b) => 
-        moment(`${b.scheduledDate} ${b.scheduledTime}`).valueOf() - 
-        moment(`${a.scheduledDate} ${a.scheduledTime}`).valueOf()
-      );
+      ).sort((a, b) => {
+        const dateA = new Date(`${a.scheduledDate}T${a.scheduledTime}`);
+        const dateB = new Date(`${b.scheduledDate}T${b.scheduledTime}`);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      console.log('✅ Completed bookings:', completedBookings.length);
+      return completedBookings;
     }
   };
 
@@ -129,9 +152,33 @@ export default function MySessionsScreen() {
     );
   };
 
-  const handleJoinSession =(booking:TransformedBooking) =>{
-    // :TODO call api to join the video call
-  }
+  const handleJoinSession = async (booking: TransformedBooking) => {
+    // Prevent multiple clicks
+    if (joiningSession === booking._id) return;
+    
+    try {
+      setJoiningSession(booking._id);
+      console.log('🚀 Attempting to join session:', booking._id);
+      
+      // Navigate directly to session call screen
+      router.push({
+        pathname: '/(protected)/professional-session-call' as any,
+        params: {
+          sessionId: booking.sessionId || 'new',
+          bookingId: booking._id,
+          professionalId: booking.professional._id,
+          professionalName: booking.professional.name,
+          durationInMinutes: booking.duration.toString()
+        }
+      });
+    } catch (error: any) {
+      console.error('Error joining session:', error);
+      Alert.alert('Error', error.message || 'Failed to join session. Please try again.');
+    } finally {
+      // Reset loading state after navigation
+      setTimeout(() => setJoiningSession(null), 2000);
+    }
+  };
 
 
   const handleCancelBooking = async (booking: TransformedBooking) => {
@@ -155,12 +202,15 @@ export default function MySessionsScreen() {
     );
   };
 
+  
   const renderBookingItem = ({ item }: { item: TransformedBooking }) => {
-    const sessionTime = moment(`${item.scheduledDate} ${item.scheduledTime}`);
-    const now = moment();
-    const isUpcoming = sessionTime.isAfter(now);
-    const minutesUntil = sessionTime.diff(now, 'minutes');
+    const sessionDateTime = new Date(`${item.scheduledDate}T${item.scheduledTime}`);
+    const sessionEndTime = new Date(sessionDateTime.getTime() + (item.duration * 60 * 1000));
+    const now = new Date();
+    const minutesUntilStart = Math.floor((sessionDateTime.getTime() - now.getTime()) / (1000 * 60));
+    const minutesUntilEnd = Math.floor((sessionEndTime.getTime() - now.getTime()) / (1000 * 60));
     const canJoin = canJoinSession(item);
+    const isJoining = joiningSession === item._id;
 
     return (
       <View style={styles.bookingContainer}>
@@ -174,16 +224,16 @@ export default function MySessionsScreen() {
           />
           <View style={styles.professionalInfo}>
             <Text style={styles.professionalName}>{item.professional.name}</Text>
-            {/* <View style={styles.ratingContainer}>
+            <View style={styles.ratingContainer}>
               <Ionicons name="star" size={14} color={Colors.light.warning} />
               <Text style={styles.rating}>{item.professional.averageRating.toFixed(1)}</Text>
-            </View> */}
+            </View>
           </View>
         </View>
 
         {/* Booking Card */}
         <BookingCard
-          booking={item}
+          booking={item as any}
           onPress={() => {
             // Navigate to booking details if needed
           }}
@@ -192,26 +242,67 @@ export default function MySessionsScreen() {
 
         {/* Session Status & Actions */}
         <View style={styles.actionsContainer}>
-          {isUpcoming && minutesUntil <= 15 && minutesUntil > 0 && (
-            <View style={styles.reminderContainer}>
-              <Ionicons name="time" size={16} color={Colors.light.secondaryDark} />
-              <Text style={styles.reminderText}>
-                Session starts in {minutesUntil} minutes
+          {/* Show different timing info based on session state */}
+          {minutesUntilStart > 5 && (
+            <View style={styles.infoContainer}>
+              <Ionicons name="time-outline" size={16} color={Colors.light.icon} />
+              <Text style={styles.infoText}>
+                Available to join in {minutesUntilStart - 5} minutes
               </Text>
             </View>
           )}
 
+          {minutesUntilStart <= 5 && minutesUntilStart > 0 && (
+            <View style={styles.readyContainer}>
+              <Ionicons name="radio-button-on" size={16} color={Colors.light.success} />
+              <Text style={styles.readyText}>
+                Session starts in {minutesUntilStart} minutes - Ready to join!
+              </Text>
+            </View>
+          )}
+
+          {minutesUntilStart <= 0 && minutesUntilEnd > 0 && (
+            <View style={styles.activeContainer}>
+              <Ionicons name="videocam" size={16} color={Colors.light.primary} />
+              <Text style={styles.activeText}>
+                Session is active - {minutesUntilEnd} minutes remaining
+              </Text>
+            </View>
+          )}
+
+          {minutesUntilEnd <= 0 && (
+            <View style={styles.expiredContainer}>
+              <Ionicons name="time-outline" size={16} color={Colors.light.error} />
+              <Text style={styles.expiredText}>
+                Session time has ended
+              </Text>
+            </View>
+          )}
+
+          {/* Join button - show only during valid time window */}
           {canJoin && (
             <TouchableOpacity
-              style={styles.joinButton}
+              style={[
+                styles.joinButton,
+                isJoining && styles.joinButtonLoading
+              ]}
               onPress={() => handleJoinSession(item)}
+              disabled={isJoining}
             >
-              <Ionicons name="videocam" size={20} color={Colors.light.background} />
-              <Text style={styles.joinButtonText}>
-                {'Join Session'}
-              </Text>
+              {isJoining ? (
+                <>
+                  <ActivityIndicator size="small" color={Colors.light.background} />
+                  <Text style={styles.joinButtonText}>Joining...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="videocam" size={20} color={Colors.light.background} />
+                  <Text style={styles.joinButtonText}>Join Session</Text>
+                </>
+              )}
             </TouchableOpacity>
           )}
+
         </View>
       </View>
     );
@@ -339,6 +430,53 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
+  },
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: Colors.light.secondaryLight,
+  },
+  readyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  readyText: {
+    fontSize: 14,
+    color: Colors.light.secondaryLight,
+  },
+  activeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  joinButtonLoading: {
+    opacity: 0.7,
+  },
+  activeText: {
+    fontSize: 14,
+    color: Colors.light.secondaryLight,
+  },
+  expiredContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  expiredText: {
+    fontSize: 14,
+    color: Colors.light.secondaryDark,
   },
   activeTab: {
     borderBottomWidth: 2,

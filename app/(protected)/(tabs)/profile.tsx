@@ -85,6 +85,17 @@ export default function ProfileScreen() {
           </ThemedView> */}
           
           <ThemedView style={styles.menuContainer}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(protected)/my-sessions' as any)}>
+              <View style={styles.menuIcon}>
+                <IconSymbol size={24} name="calendar" color="#4A86E8" />
+              </View>
+              <View style={styles.menuContent}>
+                <ThemedText style={styles.menuTitle}>My Sessions</ThemedText>
+                <ThemedText style={styles.menuDescription}>View all your scheduled and past sessions</ThemedText>
+              </View>
+              <IconSymbol size={20} name="chevron.right" color="#888" />
+            </TouchableOpacity>
+            
              <TouchableOpacity style={styles.menuItem} onPress={handleViewSavedReports}>
               <View style={styles.menuIcon}>
                 <IconSymbol size={24} name="doc.text.fill" color="#4A86E8" />
