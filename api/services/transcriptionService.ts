@@ -1,4 +1,4 @@
-import { privateAxiosInstance } from '../config/privateAxiosInstance';
+import { get, post} from '@/api/config/axiosConfig'
 
 interface TranscriptionStatus {
   transcriptionStatus: 'pending' | 'processing' | 'completed' | 'failed';
@@ -20,7 +20,7 @@ class TranscriptionService {
    */
   async getTranscriptionStatus(sessionId: string): Promise<TranscriptionStatus> {
     try {
-      const response = await privateAxiosInstance.get(`/transcription/status/${sessionId}`);
+      const response = await get(`/transcription/status/${sessionId}`);
       return response.data.myData;
     } catch (error) {
       console.error('Error getting transcription status:', error);
@@ -33,7 +33,7 @@ class TranscriptionService {
    */
   async getReportStatus(sessionId: string): Promise<ReportStatus> {
     try {
-      const response = await privateAxiosInstance.get(`/transcription/report-status/${sessionId}`);
+      const response = await get(`/transcription/report-status/${sessionId}`);
       return response.data.myData;
     } catch (error) {
       console.error('Error getting report status:', error);
@@ -46,7 +46,7 @@ class TranscriptionService {
    */
   async generateReport(sessionId: string): Promise<{ success: boolean; reportId: string; sessionId: string }> {
     try {
-      const response = await privateAxiosInstance.post(`/transcription/generate-report/${sessionId}`);
+      const response = await post(`/transcription/generate-report/${sessionId}`);
       return response.data.myData;
     } catch (error) {
       console.error('Error generating report:', error);

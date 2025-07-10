@@ -21,7 +21,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import reviewService, { ReviewSubmissionData } from '@/api/services/reviewService';
 import professionalSessionService from '@/api/services/professionalSessionService';
 import { useToast } from '@/hooks/useToast';
-import { privateAxiosInstance } from '../config/privateAxiosInstance';
 import streamService from '@/api/services/streamService';
 
 const AVAILABLE_TAGS = [
