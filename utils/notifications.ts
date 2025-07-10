@@ -152,3 +152,31 @@ export function getPriorityColor(priority: string): string {
       return '#007AFF';
   }
 }
+
+// ✅ NEW: Handle report ready notifications
+export const handleReportReadyNotification = (notification: any) => {
+  const { reportId, sessionId, sessionType, partnerName, overallScore } = notification.data;
+  
+  // Show local notification
+  showLocalNotification({
+    title: '📊 Your Report is Ready!',
+    body: `Your ${sessionType} session report with ${partnerName} is now available. Overall Score: ${overallScore}/10`,
+    data: {
+      screen: 'report-details',
+      reportId: reportId,
+      sessionId: sessionId
+    }
+  });
+  
+  // Navigate to report if app is open
+  if (notification.actionUrl) {
+    // Handle navigation to report details
+    navigationRef.current?.navigate('report-details', { reportId });
+  }
+};
+
+// ✅ NEW: Add to notification type handlers
+export const notificationHandlers = {
+  'report_ready': handleReportReadyNotification,
+  // ... existing handlers ...
+};
