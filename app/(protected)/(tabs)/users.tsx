@@ -11,6 +11,7 @@ import { getUsersList } from '@/api/services/userService';
 import streamService from '@/api/services/streamService';
 import { FilterDialog, FilterOptions } from '@/components/FilterDialog';
 import { DEFAULT_CALL_LIMIT } from '@/api/config/axiosConfig';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface User {
   id: string;
@@ -236,6 +237,14 @@ export default function OnlineUsersScreen() {
   );
   
   return (
+    <SafeAreaView style={{flex:1}}>
+      {/* <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Peers',
+          headerLeft: () => null, // Disable back button to prevent going back to the loading screen
+        }}
+      /> */}
     <ThemedView style={styles.container}>
         <View style={styles.header}>
         <ThemedText style={styles.headerTitle}>Peers</ThemedText>
@@ -273,6 +282,7 @@ export default function OnlineUsersScreen() {
         headerSubtitle="Find users that match your preferences"
       />
     </ThemedView>
+    </SafeAreaView>
   );
 }
 

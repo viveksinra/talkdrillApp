@@ -29,7 +29,7 @@ export default function ReportDetailedScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [report, setReport] = useState<DetailedReport | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {

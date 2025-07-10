@@ -510,7 +510,7 @@ export default function CoinsScreen() {
         <Stack.Screen
           options={{
             headerShown: true,
-            title: 'Coins',
+            title: 'Wallet',
             headerTitleAlign: 'center',
           }}
         />

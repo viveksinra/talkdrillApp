@@ -20,7 +20,7 @@ import { Colors } from '../../constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import streamService from '@/api/services/streamService';
-import professionalSessionService from '@/api/services/professionalSessionService';
+import {joinProfessionalSessionCall, endProfessionalSessionCall} from '@/api/services/callService';
 
 // Import Stream components
 import { 
@@ -31,6 +31,7 @@ import {
   Call,
   StreamVideoClient
 } from '@stream-io/video-react-native-sdk';
+import callService from '@/api/services/callService';
 
 export default function ProfessionalSessionCallScreen() {
   const router = useRouter();
@@ -84,7 +85,7 @@ export default function ProfessionalSessionCallScreen() {
         setConnectionStatus('Joining professional session...');
 
         // Join the professional session
-        const joinResponse = await professionalSessionService.joinSessionCall(bookingId as string);
+        const joinResponse = await joinProfessionalSessionCall(bookingId as string);
         
         setConnectionStatus('Getting authentication token...');
         const client = await streamService.ensureInitialized(
@@ -321,7 +322,7 @@ export default function ProfessionalSessionCallScreen() {
       }
       
       // End session on backend
-      await professionalSessionService.endSession(bookingId as string, endReason);
+      await endProfessionalSessionCall(bookingId as string);
       
       // Navigate to review screen
       navigateToReviewScreen();
@@ -345,14 +346,6 @@ export default function ProfessionalSessionCallScreen() {
         }
       ]
     );
-  };
-
-  const handleDisconnection = async () => {
-    try {
-      await professionalSessionService.handleDisconnection(bookingId as string, 'connection_lost');
-    } catch (error) {
-      console.error('Error handling disconnection:', error);
-    }
   };
 
   const CustomCallControls = () => {

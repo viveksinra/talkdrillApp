@@ -44,6 +44,26 @@ export const getCallHistory = async () => {
   }
 };
 
+export const joinProfessionalSessionCall = async (bookingId: string) => {
+  try {
+    const response = await post(`/api/v1/call/professional-session/${bookingId}/join`, {});
+    return response.data;
+  } catch (error) {
+    console.error('Error joining professional session call:', error);
+    throw error;
+  }
+};
+
+export const endProfessionalSessionCall = async (bookingId: string) => {
+  try {
+    const response = await post(`/api/v1/call/professional-session/${bookingId}/end`, {});
+    return response.data;
+  } catch (error) {
+    console.error('Error ending professional session call:', error);
+    throw error;
+  }
+};
+
 export interface StartCallWithDurationRequest {
   receiverId: string;
   durationInMinutes: number;

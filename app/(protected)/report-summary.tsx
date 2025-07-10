@@ -55,8 +55,8 @@ export default function ReportSummaryScreen() {
   
   const handleViewDetailed = () => {
     router.push({
-      pathname: '/report-detailed',
-      params: { reportId }
+      pathname: '/(protected)/report-detailed',
+      params: { id: reportId as string }
     });
   };
   

@@ -26,6 +26,8 @@ import {
 // Import SessionTimer and ExtendCallButton components
 import { SessionTimer } from '@/components/SessionTimer';
 import { ExtendCallButton } from '@/components/ExtendCallButton';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Helper function to format time display
 const formatTime = (seconds: number) => {
@@ -366,7 +368,7 @@ export default function PeerCallScreen() {
     return (
       <ThemedView style={styles.topBar}>
         <TouchableOpacity onPress={handleEndCall}>
-          <IconSymbol size={24} name="chevron.down" color="#FFF" />
+          <IconSymbol size={24} name="xmark" color="#FFF" />
         </TouchableOpacity>
         <ThemedText style={styles.callStatusText}>On call</ThemedText>
         <SessionTimer durationMinutes={parsedDurationInMinutes} />
@@ -450,11 +452,13 @@ export default function PeerCallScreen() {
   
   return (
     <>
+    <SafeAreaView style={{flex:1}}>
       <Stack.Screen
         options={{
           headerShown: false,
         }}
       />
+      <GestureHandlerRootView>
       <StreamVideo client={callState.client}>
         <StreamCall call={callState.call}>
           <ThemedView style={styles.container}>
@@ -468,6 +472,8 @@ export default function PeerCallScreen() {
           </ThemedView>
         </StreamCall>
       </StreamVideo>
+      </GestureHandlerRootView>
+    </SafeAreaView>
     </>
   );
 }
