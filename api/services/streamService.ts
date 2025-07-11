@@ -420,6 +420,50 @@ class StreamService {
   }
 
   /**
+   * Initialize client with provided token (for cases where we already have the token)
+   */
+  async ensureInitializedWithToken(userId: string, userName: string, userImage: string, token: string, apiKey: string) {
+    // Return existing client if already set up for this user
+    if (this.client && this.currentUser?.id === userId) {
+      return this.client;
+    }
+
+    // Don't duplicate initialization
+    if (this.isInitializing) {
+      return this.initPromise;
+    }
+
+    try {
+      this.isInitializing = true;
+      
+      // Create user object with profile data
+      const user: User = {
+        id: userId,
+        name: userName || userId,
+        image: userImage
+      };
+      
+      // Initialize client with provided token
+      this.apiKey = apiKey;
+      this.client = new StreamVideoClient({
+        apiKey,
+        user,
+        token
+      });
+      
+      this.currentUser = user;
+      
+      return this.client;
+    } catch (error) {
+      console.error('Error initializing Stream client with token:', error);
+      throw error;
+    } finally {
+      this.isInitializing = false;
+      this.initPromise = null;
+    }
+  }
+
+  /**
    * Get a call duration manager for the current call
    */
   createDurationManager(callId: string, callbacks?: {

@@ -39,6 +39,8 @@ export default function ProfessionalSessionCallScreen() {
     sessionId,
     bookingId,
     streamCallId,
+    streamToken,
+    streamApiKey,
     professionalId,
     professionalName,
     durationInMinutes = '60'
@@ -84,44 +86,87 @@ export default function ProfessionalSessionCallScreen() {
         setIsLoading(true);
         setConnectionStatus('Joining professional session...');
 
-        // Join the professional session
-        const joinResponse = await joinProfessionalSessionCall(bookingId as string);
-        
-        setConnectionStatus('Getting authentication token...');
-        const client = await streamService.ensureInitialized(
-          user?.id || '',
-          user?.name,
-          user?.profileImage
-        );
+        // Check if we have all required params to avoid API call
+        if (streamCallId && streamToken && streamApiKey) {
+          // Use params directly - no need for API call
+          setConnectionStatus('Initializing video service...');
+          
+          const client = await streamService.ensureInitializedWithToken(
+            user?.id || '',
+            user?.name || '',
+            user?.profileImage || '',
+            streamToken as string,
+            streamApiKey as string
+          );
 
-        setConnectionStatus('Connecting to session...');
-        const call = await streamService.joinCall(joinResponse.streamCallId);
+          setConnectionStatus('Connecting to session...');
+          const call = await streamService.joinCall(streamCallId as string);
 
-        // Set session end time
-        const endTime = moment().add(parsedDurationInMinutes, 'minutes');
-        setSessionEndTime(endTime);
+          // Set session end time
+          const endTime = moment().add(parsedDurationInMinutes, 'minutes');
+          setSessionEndTime(endTime);
 
-        // Set up call event listeners
-        setupCallEventListeners(call);
+          // Set up call event listeners
+          setupCallEventListeners(call);
 
-        // Set up socket listeners for session events
-        setupSocketListeners();
+          // Set up socket listeners for session events
+          setupSocketListeners();
 
-        // Set default media state (camera on, microphone on for student)
-        try {
-          await call.camera.enable();
-          await call.microphone.enable();
-        } catch (mediaError) {
-          console.warn('Error setting default media state:', mediaError);
+          // Set default media state (camera on, microphone on for student)
+          try {
+            await call.camera.enable();
+            await call.microphone.enable();
+          } catch (mediaError) {
+            console.warn('Error setting default media state:', mediaError);
+          }
+
+          setCallState({
+            client,
+            call
+          });
+
+          setIsLoading(false);
+          setConnectionStatus('Connected');
+        } else {
+          // Fallback to API call if params are missing
+          const joinResponse = await joinProfessionalSessionCall(bookingId as string);
+          
+          setConnectionStatus('Getting authentication token...');
+          const client = await streamService.ensureInitialized(
+            user?.id || '',
+            user?.name,
+            user?.profileImage
+          );
+
+          setConnectionStatus('Connecting to session...');
+          const call = await streamService.joinCall(joinResponse.streamCallId);
+
+          // Set session end time
+          const endTime = moment().add(parsedDurationInMinutes, 'minutes');
+          setSessionEndTime(endTime);
+
+          // Set up call event listeners
+          setupCallEventListeners(call);
+
+          // Set up socket listeners for session events
+          setupSocketListeners();
+
+          // Set default media state (camera on, microphone on for student)
+          try {
+            await call.camera.enable();
+            await call.microphone.enable();
+          } catch (mediaError) {
+            console.warn('Error setting default media state:', mediaError);
+          }
+
+          setCallState({
+            client,
+            call
+          });
+
+          setIsLoading(false);
+          setConnectionStatus('Connected');
         }
-
-        setCallState({
-          client,
-          call
-        });
-
-        setIsLoading(false);
-        setConnectionStatus('Connected');
       } catch (error: any) {
         console.error('Error setting up professional session call:', error);
         Alert.alert(
@@ -139,6 +184,7 @@ export default function ProfessionalSessionCallScreen() {
 
     initializeCall();
 
+    // Updated dependencies to include new params
     return () => {
       isInitializing.current = false;
       if (callDurationTimer.current) clearInterval(callDurationTimer.current);
@@ -154,7 +200,7 @@ export default function ProfessionalSessionCallScreen() {
       }
       streamService.cleanup();
     };
-  }, [bookingId, streamCallId, user?.id, parsedDurationInMinutes]);
+  }, [bookingId, streamCallId, streamToken, streamApiKey, user?.id, parsedDurationInMinutes]);
 
   // Set up GetStream event listeners
   const setupCallEventListeners = (call: Call) => {
@@ -304,7 +350,7 @@ export default function ProfessionalSessionCallScreen() {
 
   const navigateToReviewScreen = () => {
     router.replace({
-      pathname: '(protected)/session-review/[bookingId] as any',
+      pathname: '(protected)/session-review/[bookingId]' as any,
       params: {
         bookingId: bookingId as string,
         sessionId: sessionId as string,

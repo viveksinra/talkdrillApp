@@ -237,7 +237,7 @@ export function FilterDialog({
                 <ThemedText style={styles.costValue}>
                   {context === 'peer-practice' 
                     ? `${coinCost} coins per 5 minutes`
-                    : 'Free for all filters'
+                    : context === 'ai-call' ? '1 coin per minute' : 'Free for all filters'
                   }
                 </ThemedText>
               </View>

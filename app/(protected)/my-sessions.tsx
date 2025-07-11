@@ -21,6 +21,7 @@ import { BookingCard } from '@/components/shared/BookingCard';
 import { Booking, cancelBooking } from '@/api/services/public/professionalService';
 import { get } from '@/api/config/axiosConfig';
 import { TransformedBooking } from '@/types';
+import { joinProfessionalSessionCall } from '@/api/services/callService';
 
 
 export default function MySessionsScreen() {
@@ -179,12 +180,19 @@ export default function MySessionsScreen() {
       setJoiningSession(booking._id);
       console.log('🚀 Attempting to join session:', booking._id);
       
-      // Navigate directly to session call screen
+      // First, join the session via API to get all required data
+      const joinResponse = await joinProfessionalSessionCall(booking._id);
+      console.log('📡 Join response:', joinResponse);
+      
+      // Navigate to session call screen with all required parameters
       router.push({
         pathname: '/professional-session-call',
         params: {
-          sessionId: booking.sessionId || 'new',
-          bookingId: booking._id,
+          sessionId: joinResponse.sessionId || booking.sessionId || 'new',
+          bookingId: joinResponse.bookingId || booking._id,
+          streamCallId: joinResponse.streamCallId,
+          streamToken: joinResponse.streamToken,
+          streamApiKey: joinResponse.streamApiKey,
           professionalId: booking.professional._id,
           professionalName: booking.professional.name,
           durationInMinutes: booking.duration.toString()

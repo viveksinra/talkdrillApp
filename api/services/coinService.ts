@@ -13,9 +13,11 @@ export interface SessionLicenseBalance {
 export interface CoinTransaction {
   id: string;
   amount: number;
-  type: 'earned' | 'spent' | 'purchased' | 'refunded' | 'combo_purchased';
+  type: 'earned' | 'spent' | 'purchased' | 'refunded' | 'combo_purchased' | 'license_used' | 'license_refunded';
   description: string;
   balance: number;
+  sessionLicenses: number;
+  sessionLicenseBalance: number;
   timestamp: string;
   session?: {
     id: string;

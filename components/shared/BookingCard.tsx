@@ -141,7 +141,7 @@ export const BookingCard: React.FC<BookingCardProps> = ({
         {/* Cost */}
         <View style={styles.costRow}>
           <Ionicons name="wallet-outline" size={16} color={Colors.light.secondary} />
-          <Text style={styles.costText}>₹{booking.amount} ({booking.coinsDeducted} coins)</Text>
+          <Text style={styles.costText}>1 License</Text>
         </View>
       </View>
 
