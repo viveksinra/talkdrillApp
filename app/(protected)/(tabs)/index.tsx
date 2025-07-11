@@ -50,6 +50,7 @@ export default function HomeScreen() {
   );
   const [isFindAIAssistant, setIsFindAIAssistant] = useState(false);
   const [allCharacters, setAllCharacters] = useState<AICharacter[]>([]);
+  const [filterDialogContext, setFilterDialogContext] = useState<"ai-call" | "peer-practice">("ai-call");
 
   // Fetch popular AI characters and professionals on component mount
   useEffect(() => {
@@ -387,6 +388,7 @@ export default function HomeScreen() {
                       setFilterDialogHeaderSubtitle(
                         "Customize your conversation AI assistant"
                       );
+                      setFilterDialogContext("ai-call");
                     }}
                   >
                     <ThemedText style={styles.actionButtonText}>
@@ -487,6 +489,7 @@ export default function HomeScreen() {
             visible={filterDialogVisible}
             onClose={() => setFilterDialogVisible(false)}
             onApply={handleStartMatching}
+            context={filterDialogContext}
           />
         </View>
       </SafeAreaView>

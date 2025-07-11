@@ -72,10 +72,11 @@ const CircularProgress = ({ size = 200 }) => {
 export default function MatchMakingScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { userGender, partnerGender, languageProficiency } = useLocalSearchParams<{
+  const { userGender, partnerGender, languageProficiency, coinCostPer5Min } = useLocalSearchParams<{
     userGender: string;
     partnerGender: string;
     languageProficiency: string;
+    coinCostPer5Min: string; // Add coin cost parameter
   }>();
   
   const [status, setStatus] = useState<MatchingStatus>(MatchingStatus.INITIALIZING);
@@ -416,8 +417,7 @@ export default function MatchMakingScreen() {
       }
       
       // Wait a moment to allow both users to see the match info
-      // This helps synchronize both users joining close to the same time
-      const waitTime = 3000; // Increased from 2000ms to 3000ms
+      const waitTime = 3000;
       console.log(`Waiting ${waitTime}ms before auto-joining call...`);
       
       // Update UI first
@@ -439,7 +439,6 @@ export default function MatchMakingScreen() {
         });
       }, 1000);
       
-      // Use a longer timeout before redirecting
       setTimeout(() => {
         clearInterval(intervalId);
         
@@ -450,7 +449,7 @@ export default function MatchMakingScreen() {
           streamCallId: data.streamCallId
         });
         
-        // Navigate to call screen
+        // Navigate to call screen with coin cost
         router.replace({
           pathname: '/peer-call',
           params: {
@@ -459,7 +458,8 @@ export default function MatchMakingScreen() {
             callId: data.callId,
             streamCallId: data.streamCallId,
             isIncoming: 'false',
-            autoJoin: 'true'
+            autoJoin: 'true',
+            coinCostPer5Min: coinCostPer5Min || '5' // Pass coin cost
           }
         });
       }, waitTime);

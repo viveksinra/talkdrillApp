@@ -26,7 +26,7 @@ export default function PeerPracticeScreen() {
    
   };
 
-  async function handleStartMatching(filters: FilterOptions) {
+  async function handleStartMatching(filters: FilterOptions, coinCost: number) {
      const userGender = user?.gender || "male"; // Default to male if not set'
     router.push({
         pathname: "/match-making",
@@ -34,6 +34,7 @@ export default function PeerPracticeScreen() {
           userGender: userGender,
           partnerGender: filters.gender,
           languageProficiency: filters.englishLevel,
+          coinCostPer5Min: coinCost.toString(), // Pass calculated cost
         },
       });
   }
@@ -209,6 +210,7 @@ export default function PeerPracticeScreen() {
         visible={filterDialogVisible}
         onClose={() => setFilterDialogVisible(false)}
         onApply={handleStartMatching}
+        context="peer-practice" // Add context
       />
     </SafeAreaView>
   );

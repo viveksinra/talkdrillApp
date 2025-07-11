@@ -119,7 +119,7 @@ export default function ProfessionalProfileScreen() {
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (error: any) {
-      console.error('Error booking session:', error);
+      // console.error('Error booking session:', error);
       Alert.alert('Error', error.message || 'Failed to book session');
     } finally {
       setBookingLoading(false);

@@ -47,7 +47,11 @@ export const getCallHistory = async () => {
 export const joinProfessionalSessionCall = async (bookingId: string) => {
   try {
     const response = await post(`/api/v1/call/professional-session/${bookingId}/join`, {});
-    return response.data;
+    // Return the myData field to match the new backend response format
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to join professional session call');
   } catch (error) {
     console.error('Error joining professional session call:', error);
     throw error;
@@ -57,7 +61,11 @@ export const joinProfessionalSessionCall = async (bookingId: string) => {
 export const endProfessionalSessionCall = async (bookingId: string) => {
   try {
     const response = await post(`/api/v1/call/professional-session/${bookingId}/end`, {});
-    return response.data;
+    // Return the myData field to match the new backend response format
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to end professional session call');
   } catch (error) {
     console.error('Error ending professional session call:', error);
     throw error;

@@ -171,12 +171,20 @@ export default function CoinHistoryScreen() {
       <View style={styles.transactionAmountContainer}>
         <ThemedText style={[
           styles.transactionAmount,
-          item.amount > 0 ? styles.positiveAmount : styles.negativeAmount
+          item.type === 'license_used' 
+            ? (item.sessionLicenses > 0 ? styles.positiveAmount : styles.negativeAmount)
+            : (item.amount > 0 ? styles.positiveAmount : styles.negativeAmount)
         ]}>
-          {item.amount > 0 ? '+' : ''}{item.type === 'purchased' || item.type === 'combo_purchased' ? ` ₹${Math.abs(item.amount/100).toFixed(2)}` : Math.abs(item.amount)}
+          {item.type === 'license_used' 
+            ? `${item.sessionLicenses > 0 ? '+' : ''}${item.sessionLicenses}`
+            : `${item.amount > 0 ? '+' : '-'}${item.type === 'purchased' || item.type === 'combo_purchased' ? ` ₹${Math.abs(item.amount/100).toFixed(2)}` : Math.abs(item.amount)}`
+          }
         </ThemedText>
         <ThemedText style={styles.balanceText}>
-          Balance: {item.balance}
+          {item.type === 'license_used' 
+            ? `Session Balance: ${item.sessionLicenseBalance}`
+            : `Balance: ${item.balance}`
+          }
         </ThemedText>
       </View>
     </View>

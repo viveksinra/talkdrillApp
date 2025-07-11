@@ -137,7 +137,7 @@ export const bookProfessionalSession = async (bookingData: {
     }
     throw new Error(response.data.message || 'Failed to book session');
   } catch (error) {
-    console.error('Error booking session:', error);
+    // console.error('Error booking session:', error);
     throw error;
   }
 };

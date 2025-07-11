@@ -13,9 +13,11 @@ export interface SessionLicenseBalance {
 export interface CoinTransaction {
   id: string;
   amount: number;
-  type: 'earned' | 'spent' | 'purchased' | 'refunded' | 'combo_purchased';
+  type: 'earned' | 'spent' | 'purchased' | 'refunded' | 'combo_purchased' | 'license_used' | 'license_refunded';
   description: string;
   balance: number;
+  sessionLicenses: number;
+  sessionLicenseBalance: number;
   timestamp: string;
   session?: {
     id: string;
@@ -240,3 +242,51 @@ export const canAfford = async (requiredCoins: number): Promise<boolean> => {
     return false;
   }
 }; 
+
+export const deductCoins = async (amount: number) => {
+  try {
+    const response = await post('/api/v1/coin/deduct-coins', { amount });
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to deduct coins');
+  } catch (error) {
+    console.error('Error deducting coins:', error);
+    throw error;
+  }
+};
+
+// Create final AI call transaction record
+export const createAICallTransaction = async (conversationId: string, totalCoinsSpent: number) => {
+  try {
+    const response = await post('/api/v1/coin/ai-call-transaction', { 
+      conversationId, 
+      totalCoinsSpent 
+    });
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to create AI call transaction');
+  } catch (error) {
+    console.error('Error creating AI call transaction:', error);
+    throw error;
+  }
+};
+
+// Create final peer call transaction record
+export const createPeerCallTransaction = async (callId: string, totalCoinsSpent: number, coinCostPer5Min: number) => {
+  try {
+    const response = await post('/api/v1/coin/peer-call-transaction', { 
+      callId, 
+      totalCoinsSpent,
+      coinCostPer5Min
+    });
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to create peer call transaction');
+  } catch (error) {
+    console.error('Error creating peer call transaction:', error);
+    throw error;
+  }
+};
