@@ -31,6 +31,7 @@ import { useSocket } from "../../../contexts/SocketContext";
 import { useAuth } from "../../../contexts/AuthContext";
 import { AudioBufferManager } from "../../../utils/AudioBufferManager";
 import { useHeaderHeight } from '@react-navigation/elements';
+import { deductCoins, createAICallTransaction } from "../../../api/services/coinService";
 
 // Import new components
 import { CallHeader } from "@/components/ui/calling/CallHeader";
@@ -131,6 +132,11 @@ export default function AIVideoCallScreen() {
 
   // Add this ref after other refs
   const hasTriggeredInitialConversationRef = useRef<boolean>(false);
+
+  // Coin timer state and refs
+  const [coinsSpentThisCall, setCoinsSpentThisCall] = useState(0);
+  const minuteTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const callStartTimeRef = useRef<Date | null>(null);
 
   // Stable callback functions to prevent infinite loops
   const handleVideoLoadStart = useCallback(() => {
@@ -474,12 +480,73 @@ export default function AIVideoCallScreen() {
       renderMode
     });
     
+    // Start coin timer when AI conversation begins
+    startCoinTimer();
+    
     sendRealtimeText(`Hello, first please introduce yourself and behave like a human being. 
       This is a conversation triggered by a user. so As AI please act like AI is starting the conversation mention user name(${user?.name}) 
       while greeting/initiate the conversation. please exclude any special characters and symbols.
       keep the conversation going by asking questions and if user is proactive enough then you can just help them talking and practicing.
       `);
   }
+
+  // Coin timer functions
+  const startCoinTimer = () => {
+    console.log('[COIN-TIMER] Starting coin timer');
+    callStartTimeRef.current = new Date();
+    
+    // Start minute timer for coin deduction
+    minuteTimerRef.current = setInterval(async () => {
+      try {
+        console.log('[COIN-TIMER] Deducting 1 coin for minute usage');
+        await deductCoins(1);
+        setCoinsSpentThisCall(prev => prev + 1);
+        console.log('[COIN-TIMER] Coin deducted successfully');
+      } catch (error: any) {
+        console.error('[COIN-TIMER] Error deducting coin:', error);
+        
+        // Check if it's insufficient balance error
+        if (error.message && error.message.includes('Insufficient coins')) {
+          // Stop the timer immediately to prevent further deductions
+          stopCoinTimer();
+          Alert.alert(
+            "Insufficient Coins",
+            "You have insufficient coins to continue the AI call",
+            [{ text: "OK", onPress: () => handleEndCall() }]
+          );
+          return;
+        }
+        
+        // For other errors, continue but log
+        console.warn('[COIN-TIMER] Continuing call despite coin deduction error');
+      }
+    }, 60000); // Every minute (60 seconds)
+  };
+
+  const stopCoinTimer = () => {
+    console.log('[COIN-TIMER] Stopping coin timer');
+    if (minuteTimerRef.current) {
+      clearInterval(minuteTimerRef.current);
+      minuteTimerRef.current = null;
+    }
+  };
+
+  const createFinalTransaction = async () => {
+    if (coinsSpentThisCall > 0 && conversation?._id) {
+      try {
+        console.log('[COIN-TIMER] Creating final transaction for', coinsSpentThisCall, 'coins');
+        await createAICallTransaction(conversation._id, coinsSpentThisCall);
+        console.log('[COIN-TIMER] Final transaction created successfully');
+      } catch (error) {
+        console.error('[COIN-TIMER] Error creating final transaction:', error);
+        // Don't block call end for transaction creation errors
+        // But log the error for debugging
+        console.warn('[COIN-TIMER] Call ended without recording final transaction');
+      }
+    } else {
+      console.log('[COIN-TIMER] No coins spent or conversation missing, skipping final transaction');
+    }
+  };
 
   const handleTextDelta = (data: { delta: string; itemId: string }) => {
     console.log("Text delta:", data.delta);
@@ -716,6 +783,8 @@ export default function AIVideoCallScreen() {
       console.log("Ending realtime session");
       endRealtimeSession();
       await audioBufferManager.current.cleanup();
+      stopCoinTimer(); // Stop coin timer on call end
+      await createFinalTransaction(); // Create final transaction on call end
 
       if (conversation) {
         await endConversation(conversation._id);
@@ -751,6 +820,7 @@ export default function AIVideoCallScreen() {
     removeSocketListeners();
     endRealtimeSession();
     await audioBufferManager.current.cleanup();
+    stopCoinTimer(); // Ensure coin timer is stopped on cleanup
 
     if (isRecording) {
       try {

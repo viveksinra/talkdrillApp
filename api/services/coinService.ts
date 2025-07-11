@@ -240,3 +240,33 @@ export const canAfford = async (requiredCoins: number): Promise<boolean> => {
     return false;
   }
 }; 
+
+export const deductCoins = async (amount: number) => {
+  try {
+    const response = await post('/api/v1/coin/deduct-coins', { amount });
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to deduct coins');
+  } catch (error) {
+    console.error('Error deducting coins:', error);
+    throw error;
+  }
+};
+
+// Create final AI call transaction record
+export const createAICallTransaction = async (conversationId: string, totalCoinsSpent: number) => {
+  try {
+    const response = await post('/api/v1/coin/ai-call-transaction', { 
+      conversationId, 
+      totalCoinsSpent 
+    });
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to create AI call transaction');
+  } catch (error) {
+    console.error('Error creating AI call transaction:', error);
+    throw error;
+  }
+};
