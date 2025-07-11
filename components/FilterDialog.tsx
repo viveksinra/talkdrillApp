@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Modal, 
   View, 
@@ -25,8 +25,9 @@ interface FilterDialogProps {
   headerSubtitle: string;
   visible: boolean;
   onClose: () => void;
-  onApply: (filters: FilterOptions) => Promise<void>;
+  onApply: (filters: FilterOptions, coinCost: number) => Promise<void>;
   initialFilters?: Partial<FilterOptions>;
+  context?: 'peer-practice' | 'ai-call'; // Add context prop
 }
 
 export function FilterDialog({ 
@@ -35,7 +36,8 @@ export function FilterDialog({
   visible, 
   onClose, 
   onApply,
-  initialFilters 
+  initialFilters,
+  context = 'ai-call' // Default to ai-call for backward compatibility
 }: FilterDialogProps) {
   const [filters, setFilters] = useState<FilterOptions>({
     gender: initialFilters?.gender || 'any',
@@ -44,9 +46,20 @@ export function FilterDialog({
   });
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Calculate coin cost based on context and filters
+  const coinCost = useMemo(() => {
+    if (context === 'peer-practice') {
+      // For peer practice: 5 coins if all filters are 'any', otherwise 10 coins
+      const allFiltersAny = filters.gender === 'any' && filters.englishLevel === 'any';
+      return allFiltersAny ? 5 : 10;
+    }
+    // For AI calls, return 0 (free) - maintain existing behavior
+    return 0;
+  }, [filters, context]);
+
   const handleApply = async () => {
     setIsProcessing(true);
-    await onApply(filters);
+    await onApply(filters, coinCost);
     setIsProcessing(false);
     onClose();
   };
@@ -58,12 +71,9 @@ export function FilterDialog({
       visible={visible}
       onRequestClose={onClose}
     >
-     
-
-      
-        <Pressable style={styles.overlay} onPress={onClose}>
-          <Pressable style={styles.container} onPress={e => e.stopPropagation()}>
-            <ScrollView>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.container} onPress={e => e.stopPropagation()}>
+          <ScrollView>
             <View style={styles.header}>
               <ThemedText type="subtitle" style={styles.title}>{headerTitle}</ThemedText>
               <TouchableOpacity style={styles.closeButton} onPress={onClose}>
@@ -75,7 +85,9 @@ export function FilterDialog({
             
             {/* gender */}
             <View style={styles.section}>
-              <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Assistant Gender</ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>
+                {context === 'peer-practice' ? 'Partner Gender' : 'Assistant Gender'}
+              </ThemedText>
               
               <View style={styles.options}>
                 <TouchableOpacity 
@@ -115,50 +127,52 @@ export function FilterDialog({
               </View>
             </View>
 
-            {/* accent */}
-            <View style={styles.section}>
-              <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Accent</ThemedText>
-              <View style={styles.options}>
-                <TouchableOpacity 
-                  style={[
-                    styles.option, 
-                    filters.accent === 'indian' && styles.selectedOption
-                  ]}
-                  onPress={() => setFilters({...filters, accent: 'indian'})}
-                >
-                  <ThemedText style={styles.optionText}>Indian</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.option, 
-                    filters.accent === 'american' && styles.selectedOption
-                  ]}
-                  onPress={() => setFilters({...filters, accent: 'american'})}
-                >
-                  <ThemedText style={styles.optionText}>American</ThemedText>
-                </TouchableOpacity>
+            {/* Only show accent for AI calls */}
+            {context === 'ai-call' && (
+              <View style={styles.section}>
+                <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Accent</ThemedText>
+                <View style={styles.options}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.option, 
+                      filters.accent === 'indian' && styles.selectedOption
+                    ]}
+                    onPress={() => setFilters({...filters, accent: 'indian'})}
+                  >
+                    <ThemedText style={styles.optionText}>Indian</ThemedText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.option, 
+                      filters.accent === 'american' && styles.selectedOption
+                    ]}
+                    onPress={() => setFilters({...filters, accent: 'american'})}
+                  >
+                    <ThemedText style={styles.optionText}>American</ThemedText>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.options}>
+                  <TouchableOpacity
+                    style={[
+                      styles.option, 
+                      filters.accent === 'british' && styles.selectedOption
+                    ]}
+                    onPress={() => setFilters({...filters, accent: 'british'})}
+                  >
+                    <ThemedText style={styles.optionText}>British</ThemedText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.option, 
+                      filters.accent === 'australian' && styles.selectedOption
+                    ]}
+                    onPress={() => setFilters({...filters, accent: 'australian'})}
+                  >
+                    <ThemedText style={styles.optionText}>Australian</ThemedText>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.options}>
-                <TouchableOpacity
-                  style={[
-                    styles.option, 
-                    filters.accent === 'british' && styles.selectedOption
-                  ]}
-                  onPress={() => setFilters({...filters, accent: 'british'})}
-                >
-                  <ThemedText style={styles.optionText}>British</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.option, 
-                    filters.accent === 'australian' && styles.selectedOption
-                  ]}
-                  onPress={() => setFilters({...filters, accent: 'australian'})}
-                >
-                  <ThemedText style={styles.optionText}>Australian</ThemedText>
-                </TouchableOpacity>
-              </View>
-            </View>
+            )}
             
             {/* language level */}
             <View style={styles.section}>
@@ -221,7 +235,10 @@ export function FilterDialog({
               <View>
                 <ThemedText style={styles.costLabel}>Cost per filter:</ThemedText>
                 <ThemedText style={styles.costValue}>
-                  Free for all filters
+                  {context === 'peer-practice' 
+                    ? `${coinCost} coins per 5 minutes`
+                    : 'Free for all filters'
+                  }
                 </ThemedText>
               </View>
             </View>
@@ -236,10 +253,9 @@ export function FilterDialog({
               </ThemedText>
               )}
             </TouchableOpacity>
-            </ScrollView>
-          </Pressable>
+          </ScrollView>
         </Pressable>
-       
+      </Pressable>
     </Modal>
   );
 }

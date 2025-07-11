@@ -270,3 +270,21 @@ export const createAICallTransaction = async (conversationId: string, totalCoins
     throw error;
   }
 };
+
+// Create final peer call transaction record
+export const createPeerCallTransaction = async (callId: string, totalCoinsSpent: number, coinCostPer5Min: number) => {
+  try {
+    const response = await post('/api/v1/coin/peer-call-transaction', { 
+      callId, 
+      totalCoinsSpent,
+      coinCostPer5Min
+    });
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to create peer call transaction');
+  } catch (error) {
+    console.error('Error creating peer call transaction:', error);
+    throw error;
+  }
+};

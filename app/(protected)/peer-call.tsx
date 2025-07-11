@@ -28,6 +28,18 @@ import { SessionTimer } from '@/components/SessionTimer';
 import { ExtendCallButton } from '@/components/ExtendCallButton';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ToastAndroid, Platform } from 'react-native';
+import { deductCoins, createPeerCallTransaction } from '@/api/services/coinService';
+
+// Add toast utility function
+const showToast = (message: string) => {
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(message, ToastAndroid.LONG);
+  } else {
+    // For iOS, you might want to use a toast library or alert as fallback
+    Alert.alert('Info', message);
+  }
+};
 
 // Helper function to format time display
 const formatTime = (seconds: number) => {
@@ -45,7 +57,8 @@ export default function PeerCallScreen() {
     streamCallId,
     isIncoming = 'false',
     autoJoin = 'false',
-    durationInMinutes = DEFAULT_CALL_LIMIT.toString()
+    durationInMinutes = DEFAULT_CALL_LIMIT.toString(),
+    coinCostPer5Min = '5' // Add coin cost parameter
   } = useLocalSearchParams();
   const { user } = useAuth();
   
@@ -60,11 +73,21 @@ export default function PeerCallScreen() {
     call: null
   });
   
+  const [coinsSpentThisCall, setCoinsSpentThisCall] = useState(0);
+  const callStartTimeRef = useRef<Date | null>(null);
+  const minuteTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Parse durationInMinutes to ensure it's a number and apply default if needed
   const parsedDurationInMinutes = useMemo(() => {
     const parsed = parseInt(durationInMinutes as string, 10);
     return isNaN(parsed) ? DEFAULT_CALL_LIMIT : parsed;
   }, [durationInMinutes]);
+  
+  // Parse coinCostPer5Min to ensure it's a number
+  const parsedCoinCostPer5Min = useMemo(() => {
+    const parsed = parseInt(coinCostPer5Min as string, 10);
+    return isNaN(parsed) ? 5 : parsed;
+  }, [coinCostPer5Min]);
   
   // Use Expo's KeepAwake hook to prevent the screen from sleeping
   useKeepAwake();
@@ -181,6 +204,9 @@ export default function PeerCallScreen() {
           call
         });
         
+        // Start coin timer after successful call setup
+        startCoinTimer();
+        
         setIsLoading(false);
       } catch (error: any) {
         console.error('Error setting up call:', error);
@@ -229,6 +255,7 @@ export default function PeerCallScreen() {
       
       // Clean up stream service
       streamService.cleanup();
+      stopCoinTimer(); // Ensure coin timer is stopped
     };
   }, [streamCallId, autoJoin, user?.id, user?.name, user?.profileImage]);
   
@@ -304,6 +331,26 @@ export default function PeerCallScreen() {
   
   const endCallImmediately = async () => {
     try {
+      // Handle early termination (< 5 minutes)
+      if (callStartTimeRef.current) {
+        const callDuration = Date.now() - callStartTimeRef.current.getTime();
+        const fiveMinutesInMs = 5 * 60 * 1000;
+        
+        // If call lasted less than 5 minutes and no coins deducted yet
+        if (callDuration < fiveMinutesInMs && coinsSpentThisCall === 0) {
+          try {
+            console.log('[PEER-COIN-TIMER] Early termination, deducting minimum coins');
+            await deductCoins(parsedCoinCostPer5Min);
+            setCoinsSpentThisCall(parsedCoinCostPer5Min);
+          } catch (error) {
+            console.warn('Could not deduct minimum coins on early end:', error);
+          }
+        }
+      }
+      
+      stopCoinTimer(); // Stop coin timer on call end
+      await createFinalTransaction(); // Create final transaction on call end
+
       const call = streamService.getCall();
       if (call) {
         // Disable camera and microphone before ending
@@ -315,7 +362,6 @@ export default function PeerCallScreen() {
         }
         
         // Use GetStream's built-in endCall() method
-        // This automatically sends call.ended events to all participants
         await call.endCall();
         
         // Update call status in backend
@@ -334,6 +380,60 @@ export default function PeerCallScreen() {
     } catch (error) {
       console.error('Error ending call:', error);
       router.replace('/(protected)/(tabs)');
+    }
+  };
+
+  // Coin timer functions
+  const startCoinTimer = () => {
+    console.log(`[PEER-COIN-TIMER] Starting coin timer: ${parsedCoinCostPer5Min} coins per 5min`);
+    callStartTimeRef.current = new Date();
+    
+    // Start 5-minute timer for coin deduction
+    minuteTimerRef.current = setInterval(async () => {
+      try {
+        console.log(`[PEER-COIN-TIMER] Deducting ${parsedCoinCostPer5Min} coins for 5-minute usage`);
+        await deductCoins(parsedCoinCostPer5Min);
+        setCoinsSpentThisCall(prev => prev + parsedCoinCostPer5Min);
+        console.log('[PEER-COIN-TIMER] Coins deducted successfully');
+      } catch (error: any) {
+        console.error('[PEER-COIN-TIMER] Error deducting coins:', error);
+        
+        // Check if it's insufficient balance error
+        if (error.message && error.message.includes('Insufficient coins')) {
+          // Stop the timer immediately to prevent further deductions
+          stopCoinTimer();
+          showToast("Insufficient coins to continue the peer call");
+          setTimeout(() => handleEndCall(), 2000); // Give time for toast to show
+          return;
+        }
+        
+        // For other errors, continue but log
+        console.warn('[PEER-COIN-TIMER] Continuing call despite coin deduction error');
+      }
+    }, 300000); // Every 5 minutes (300000ms)
+  };
+
+  const stopCoinTimer = () => {
+    console.log('[PEER-COIN-TIMER] Stopping coin timer');
+    if (minuteTimerRef.current) {
+      clearInterval(minuteTimerRef.current);
+      minuteTimerRef.current = null;
+    }
+  };
+
+  const createFinalTransaction = async () => {
+    if (coinsSpentThisCall > 0 && callId) {
+      try {
+        console.log('[PEER-COIN-TIMER] Creating final transaction for', coinsSpentThisCall, 'coins');
+        await createPeerCallTransaction(callId as string, coinsSpentThisCall, parsedCoinCostPer5Min);
+        console.log('[PEER-COIN-TIMER] Final transaction created successfully');
+      } catch (error) {
+        console.error('[PEER-COIN-TIMER] Error creating final transaction:', error);
+        // Don't block call end for transaction creation errors
+        console.warn('[PEER-COIN-TIMER] Call ended without recording final transaction');
+      }
+    } else {
+      console.log('[PEER-COIN-TIMER] No coins spent or call ID missing, skipping final transaction');
     }
   };
   
@@ -374,6 +474,9 @@ export default function PeerCallScreen() {
         <SessionTimer durationMinutes={parsedDurationInMinutes} />
         <ThemedText style={styles.durationInfo}>
           Limit: {parsedDurationInMinutes}min
+        </ThemedText>
+        <ThemedText style={styles.coinInfo}>
+          {parsedCoinCostPer5Min} coins/5min
         </ThemedText>
         {/* <ThemedText style={styles.participantCount}>
           Participants: {participantCount}
@@ -545,5 +648,12 @@ const styles = StyleSheet.create({
     bottom: 120,
     right: 16,
     zIndex: 1000,
+  },
+  coinInfo: {
+    color: 'white',
+    fontSize: 10,
+    marginRight: 8,
+    marginLeft: 8,
+    opacity: 0.8,
   },
 }); 
