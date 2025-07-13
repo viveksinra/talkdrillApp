@@ -58,6 +58,19 @@ export const joinProfessionalSessionCall = async (bookingId: string) => {
   }
 };
 
+export const startProfessionalSessionRecording = async (bookingId: string) => {
+  try {
+    const response = await post(`/api/v1/call/professional-session/${bookingId}/start-recording`, {});
+    if (response.data.variant === 'success') {
+      return response.data.myData;
+    }
+    throw new Error(response.data.message || 'Failed to start recording/transcription');
+  } catch (error) {
+    console.error('Error starting recording/transcription:', error);
+    throw error;
+  }
+};
+
 export const endProfessionalSessionCall = async (bookingId: string) => {
   try {
     const response = await post(`/api/v1/call/professional-session/${bookingId}/end`, {});

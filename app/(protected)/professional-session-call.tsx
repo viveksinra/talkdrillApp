@@ -211,7 +211,8 @@ export default function ProfessionalSessionCallScreen() {
 
     call.on('call.session_participant_left', (event: any) => {
       console.log('Professional left session:', event);
-      if (event.user.id !== user?.id) {
+      // ✅ Check if event.user exists before accessing id
+      if (event.user && event.user.id !== user?.id) {
         setProfessionalDisconnected(true);
         Alert.alert(
           'Professional Disconnected',
@@ -221,9 +222,10 @@ export default function ProfessionalSessionCallScreen() {
       }
     });
 
-    call.on('call.session_participant_joined', (event: any) => {
+    call.on('call.session_participant_joined', async (event: any) => {
       console.log('Professional rejoined session:', event);
-      if (event.user.id !== user?.id) {
+      // ✅ Check if event.user exists before accessing id
+      if (event.user && event.user.id !== user?.id) {
         setProfessionalDisconnected(false);
         Alert.alert(
           'Professional Reconnected',
@@ -231,9 +233,12 @@ export default function ProfessionalSessionCallScreen() {
           [{ text: 'OK' }]
         );
       }
+
+      // ✅ REMOVED: No recording/transcription logic in student app
+      // Professional app handles all recording/transcription
     });
 
-    // Recording event listeners
+    // Recording event listeners - just listen for events
     call.on('call.recording_started', () => {
       console.log('Recording started');
       setIsRecording(true);
