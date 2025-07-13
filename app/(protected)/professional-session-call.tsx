@@ -5,7 +5,8 @@ import {
   View, 
   Alert,
   ActivityIndicator,
-  Text
+  Text,
+  Animated
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -31,7 +32,6 @@ import {
   Call,
   StreamVideoClient
 } from '@stream-io/video-react-native-sdk';
-import callService from '@/api/services/callService';
 
 export default function ProfessionalSessionCallScreen() {
   const router = useRouter();
@@ -70,6 +70,7 @@ export default function ProfessionalSessionCallScreen() {
   const isInitializing = useRef(false);
   const callDurationTimer = useRef<NodeJS.Timeout | null>(null);
   const sessionEndTimer = useRef<NodeJS.Timeout | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   
   // Use Expo's KeepAwake hook to prevent the screen from sleeping
   useKeepAwake();
@@ -184,7 +185,6 @@ export default function ProfessionalSessionCallScreen() {
 
     initializeCall();
 
-    // Updated dependencies to include new params
     return () => {
       isInitializing.current = false;
       if (callDurationTimer.current) clearInterval(callDurationTimer.current);
@@ -233,11 +233,14 @@ export default function ProfessionalSessionCallScreen() {
       }
     });
 
+    // Recording event listeners
     call.on('call.recording_started', () => {
+      console.log('Recording started');
       setIsRecording(true);
     });
 
     call.on('call.recording_stopped', () => {
+      console.log('Recording stopped');
       setIsRecording(false);
     });
   };
@@ -323,6 +326,28 @@ export default function ProfessionalSessionCallScreen() {
     }
   }, [isLoading, callState.call, sessionEndTime, showEndWarning]);
 
+  // Use effect for pulse animation
+  useEffect(() => {
+    if (isRecording) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.3,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [isRecording, pulseAnim]);
+
   const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -406,12 +431,6 @@ export default function ProfessionalSessionCallScreen() {
           <Text style={styles.callDuration}>{formatDuration(callDuration)}</Text>
           <Text style={styles.timeRemaining}>Remaining: {timeRemaining}</Text>
           <Text style={styles.professionalName}>with {professionalName}</Text>
-          {isRecording && (
-            <View style={styles.recordingIndicator}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>Recording</Text>
-            </View>
-          )}
         </View>
 
         <View style={styles.controlsContainer}>
@@ -466,6 +485,23 @@ export default function ProfessionalSessionCallScreen() {
     );
   };
 
+  // Simple animated recording indicator component
+  const RecordingIndicator = () => {
+    if (!isRecording) return null;
+
+    return (
+      <View style={styles.recordingIndicator}>
+        <Animated.View 
+          style={[
+            styles.recordingDot, 
+            { transform: [{ scale: pulseAnim }] }
+          ]} 
+        />
+        <ThemedText style={styles.recordingText}>Recording</ThemedText>
+      </View>
+    );
+  };
+
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
@@ -495,8 +531,8 @@ export default function ProfessionalSessionCallScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.container}>
-        <StatusBar style="dark" />
+      <StatusBar style="light" />
+      <ThemedView style={styles.container}>
         <StreamVideo client={callState.client}>
           <StreamCall call={callState.call}>
             <View style={styles.callContainer}>
@@ -515,7 +551,9 @@ export default function ProfessionalSessionCallScreen() {
             </View>
           </StreamCall>
         </StreamVideo>
-      </View>
+        {/* Add recording indicator */}
+        <RecordingIndicator />
+      </ThemedView>
     </GestureHandlerRootView>
   );
 }
@@ -593,21 +631,28 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   recordingIndicator: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    zIndex: 1000,
   },
   recordingDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.light.error
+    backgroundColor: '#ff4444',
+    marginRight: 6,
   },
   recordingText: {
+    color: '#fff',
     fontSize: 12,
-    color: Colors.light.background,
-    opacity: 0.8
+    fontWeight: '600',
   },
   controlsContainer: {
     flexDirection: 'row',
