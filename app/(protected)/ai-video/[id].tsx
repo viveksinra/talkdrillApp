@@ -767,7 +767,7 @@ export default function AIVideoCallScreen() {
       if (isRecording && transcriptRef.current.trim()) {
         stopRecording();
       }
-    }, 3000); // 3 seconds of silence
+    }, 500); // 0.5 seconds of silence
   };
 
   const scrollToBottom = () => {
