@@ -30,11 +30,11 @@ export default function AccountSetupScreen() {
   const [gender, setGender] = useState("");
   const [languageProficiency, setLanguageProficiency] = useState("");
   const [allAvatars] = useState([
-    require("@/assets/images/default-avatar-1.jpg"),
-    require("@/assets/images/default-avatar-2.jpg"),
-    require("@/assets/images/default-avatar-3.jpg"),
-    require("@/assets/images/default-avatar-4.jpg"),
-    require("@/assets/images/default-avatar-5.jpg"),
+    "https://talkdrill.s3.eu-west-2.amazonaws.com/manual/characterImage/char1.jpg",
+    "https://talkdrill.s3.eu-west-2.amazonaws.com/manual/characterImage/char2.jpg",
+    "https://talkdrill.s3.eu-west-2.amazonaws.com/manual/characterImage/char3.jpg",
+    "https://talkdrill.s3.eu-west-2.amazonaws.com/manual/characterImage/char4.jpg",
+    "https://talkdrill.s3.eu-west-2.amazonaws.com/manual/characterImage/char5.jpg",
   ]);
   const [selectedAvatar, setSelectedAvatar] = useState(allAvatars[0]);
   const [customImage, setCustomImage] = useState<string | null>(null);
@@ -69,7 +69,7 @@ export default function AccountSetupScreen() {
         setCustomImage(result.assets[0].uri);
         setImageFile(result.assets[0]);
         // Clear selected avatar when custom image is selected
-        setSelectedAvatar(null);
+        setSelectedAvatar('');
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -136,8 +136,7 @@ export default function AccountSetupScreen() {
           languageProficiency,
           // If custom image was uploaded, use its URL
           // Otherwise, store the avatar number (1-5) based on index
-          profileImage: profileImageUrl || 
-            (selectedAvatar ? `default-avatar-${allAvatars.indexOf(selectedAvatar) + 1}` : null),
+          profileImage: profileImageUrl ?? selectedAvatar
         };
 
        
@@ -377,7 +376,7 @@ export default function AccountSetupScreen() {
                 ) : (
                   <View style={[styles.avatar, { backgroundColor: "#f0f0f0" }]}>
                     <Image 
-                      source={selectedAvatar} 
+                      source={{uri: selectedAvatar}} 
                       style={styles.avatarImage} 
                     />
                   </View>
@@ -402,7 +401,7 @@ export default function AccountSetupScreen() {
                   }}
                 >
                   <View style={styles.avatarImagePlaceholder}>
-                    <Image source={avatar} style={styles.avatarImage} />
+                    <Image source={{uri: avatar}} style={styles.avatarImage} />
                   </View>
                 </TouchableOpacity>
               ))}

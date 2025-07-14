@@ -162,31 +162,6 @@ export default function OnlineUsersScreen() {
       Alert.alert('Error', 'Could not start call. Please try again.');
     }
   };
-
-  const getImageSource = (imagePath: string) => {
-    if (!imagePath) {
-      return require('@/assets/images/default-avatar-1.jpg');
-    }
-    // If it's a remote URL
-    if (imagePath.startsWith('http')) {
-      return { uri: imagePath };
-    }
-    // If it's a local path
-    if (imagePath.includes('default-avatar')) {
-      // Extract the avatar number and use require
-      const avatarNumber = imagePath.match(/default-avatar-(\d+)/)?.[1] || '1';
-      switch (avatarNumber) {
-        case '1': return require('@/assets/images/default-avatar-1.jpg');
-        case '2': return require('@/assets/images/default-avatar-2.jpg');
-        case '3': return require('@/assets/images/default-avatar-3.jpg');
-        case '4': return require('@/assets/images/default-avatar-4.jpg');
-        case '5': return require('@/assets/images/default-avatar-5.jpg');
-        default: return require('@/assets/images/default-avatar-1.jpg');
-      }
-    }
-    // Fallback to default avatar if path is invalid
-    return require('@/assets/images/default-avatar-1.jpg');
-  };
   
   const renderUserItem = ({ item }: { item: User }) => (
     <View style={styles.userItem}>
@@ -194,7 +169,7 @@ export default function OnlineUsersScreen() {
         <View style={styles.avatarContainer}>
           {item.profileImage ? (
             <Image 
-              source={getImageSource(item.profileImage)} 
+              source={{uri: item.profileImage}} 
               style={styles.avatar} 
             />
           ) : (
