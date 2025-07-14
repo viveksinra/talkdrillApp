@@ -660,14 +660,26 @@ export default function CoinsScreen() {
                   </View>
                   <View style={styles.packageInfo}>
                     <ThemedText type="defaultSemiBold" style={styles.packageCoins}>
-                      {String(packageItem.name || 'Package')}
+                      {String(packageItem.name || 'Package')} {packageItem.name === 'Expert' && '(Most Popular)'}
                     </ThemedText>
                     <ThemedText type="subtitle" style={styles.packagePrice}>
                       {String(packageItem.priceDisplay || 'Price not available')}
                     </ThemedText>
+                    <View style={styles.packageInfoRow}>
+                      <IconSymbol size={24} name="bitcoinsign.circle.fill" color="#F5A623" />
+                      <ThemedText type="subtitle" style={styles.packagePrice}>
+                        {String(packageItem.coins || '0')} Coins
+                      </ThemedText>
+                    </View>
+                    <View style={styles.packageInfoRow}>
+                      <IconSymbol size={24} name="person.2.fill" color="#4A86E8" />
+                      <ThemedText type="subtitle" style={styles.packagePrice}>
+                        {String(packageItem.sessionLicenses || '0')} Sessions
+                      </ThemedText>
+                    </View>
                     {packageItem.bestValue && (
                       <View style={styles.bestValueBadge}>
-                        <ThemedText style={styles.bestValueText}>Best Value</ThemedText>
+                        <ThemedText style={styles.bestValueText}>Most Popular</ThemedText>
                       </View>
                     )}
                   </View>
@@ -829,6 +841,11 @@ export default function CoinsScreen() {
 }
 
 const styles = StyleSheet.create({
+  packageInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   container: {
     flex: 1,
     padding: 16,
