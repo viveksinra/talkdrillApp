@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 // TODO: Change to api.talkdrill.com when ready
-const baseUrl = "https://85a286e8f134.ngrok-free.app";
+const baseUrl = "https://api.talkdrill.com";
 
 // Use ngrok URL for development, but be sure to update when URL changes
 export const API_BASE_URL = baseUrl;
