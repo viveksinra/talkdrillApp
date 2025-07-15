@@ -32,12 +32,22 @@ import {
   StreamVideoClient
 } from '@stream-io/video-react-native-sdk';
 import callService from '@/api/services/callService';
+import { PDFModal } from '@/components/PDFModal';
+
+// Add this interface near the top after existing interfaces
+interface PDFFile {
+  name: string;
+  url: string;
+  size?: string;
+  uploadDate: Date;
+}
 
 export default function ProfessionalSessionCallScreen() {
   const router = useRouter();
   const { 
     sessionId,
     bookingId,
+    attachments,
     streamCallId,
     streamToken,
     streamApiKey,
@@ -66,6 +76,10 @@ export default function ProfessionalSessionCallScreen() {
   const [showChat, setShowChat] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [professionalDisconnected, setProfessionalDisconnected] = useState(false);
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  
+  // Static PDF files for now - you can replace this with actual DB field
+  const [pdfFiles] = useState<PDFFile[]>(JSON.parse(attachments as string) as PDFFile[]);
   
   const isInitializing = useRef(false);
   const callDurationTimer = useRef<NodeJS.Timeout | null>(null);
@@ -438,6 +452,17 @@ export default function ProfessionalSessionCallScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.controlButton, { backgroundColor: showPDFModal ? Colors.light.primary : Colors.light.surface }]}
+            onPress={() => setShowPDFModal(true)}
+          >
+            <Ionicons 
+              name="document" 
+              size={24} 
+              color={showPDFModal ? Colors.light.background : Colors.light.text} 
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.controlButton, { backgroundColor: showChat ? Colors.light.primary : Colors.light.surface }]}
             onPress={() => setShowChat(!showChat)}
           >
@@ -515,6 +540,12 @@ export default function ProfessionalSessionCallScreen() {
             </View>
           </StreamCall>
         </StreamVideo>
+        
+        <PDFModal
+          visible={showPDFModal}
+          onClose={() => setShowPDFModal(false)}
+          pdfFiles={pdfFiles as unknown as PDFFile[]}
+        />
       </View>
     </GestureHandlerRootView>
   );

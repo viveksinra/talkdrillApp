@@ -402,6 +402,12 @@ export interface TransformedBooking {
   sessionId?: string; // ObjectId as string if present
   bookingSessionStatus: 'scheduled' | 'in_progress' | 'completed';
   streamCallId?: string;
+  attachments?: {
+    name: string;
+    url: string;
+    size?: string;
+    uploadDate?: Date | undefined;
+  }[];
   // Cancellation details
   cancellationReason?: string;
   cancelledBy?: 'student' | 'professional' | 'system';
