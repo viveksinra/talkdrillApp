@@ -48,7 +48,7 @@ export const CallHeader: React.FC<CallHeaderProps> = ({
         onError={(error) =>
           console.error("Header avatar loading error:", error.nativeEvent.error)
         }
-        defaultSource={require("@/assets/images/default-avatar-1.jpg")}
+        defaultSource={{uri: 'https://talkdrill.s3.eu-west-2.amazonaws.com/manual/characterImage/char1.jpg'}}
       />
       <View>
         <ThemedText style={styles.name}>

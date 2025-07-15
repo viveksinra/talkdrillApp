@@ -32,12 +32,33 @@ import {
   Call,
   StreamVideoClient
 } from '@stream-io/video-react-native-sdk';
+import callService from '@/api/services/callService';
+import { PDFModal } from '@/components/PDFModal';
+import { SessionChat } from '@/components/shared/SessionChat';
+
+// Add this interface near the top after existing interfaces
+interface PDFFile {
+  name: string;
+  url: string;
+  size?: string;
+  uploadDate: Date;
+}
+
+interface ChatMessage {
+  id: string;
+  text: string;
+  senderId: string;
+  senderName: string;
+  timestamp: Date;
+  isMe: boolean;
+}
 
 export default function ProfessionalSessionCallScreen() {
   const router = useRouter();
   const { 
     sessionId,
     bookingId,
+    attachments,
     streamCallId,
     streamToken,
     streamApiKey,
@@ -62,10 +83,14 @@ export default function ProfessionalSessionCallScreen() {
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [showEndWarning, setShowEndWarning] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [professionalDisconnected, setProfessionalDisconnected] = useState(false);
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  
+  // Static PDF files for now - you can replace this with actual DB field
+  const [pdfFiles] = useState<PDFFile[]>(JSON.parse(attachments as string) as PDFFile[]);
   
   const isInitializing = useRef(false);
   const callDurationTimer = useRef<NodeJS.Timeout | null>(null);
@@ -248,6 +273,24 @@ export default function ProfessionalSessionCallScreen() {
       console.log('Recording stopped');
       setIsRecording(false);
     });
+
+    // Listen for chat messages
+    call.on('custom', (event: any) => {
+      const { custom } = event;
+      console.log('Received custom event:', custom);
+      
+      if (custom.type === 'session_chat_message') {
+        const newMessage: ChatMessage = {
+          id: custom.messageId || Date.now().toString(),
+          text: custom.message,
+          senderId: custom.senderId,
+          senderName: custom.senderName,
+          timestamp: new Date(custom.timestamp),
+          isMe: custom.senderId === user?.id,
+        };
+        setChatMessages(prev => [...prev, newMessage]);
+      }
+    });
   };
 
   // Set up socket listeners for session events
@@ -409,6 +452,24 @@ export default function ProfessionalSessionCallScreen() {
     }
   };
 
+  const sendChatMessage = async (message: string) => {
+    try {
+      const call = streamService.getCall();
+      if (call && user) {
+       await call.sendCustomEvent({
+        type: 'session_chat_message',
+        messageId: Date.now().toString(),
+        message,
+        senderId: user.id,
+        senderName: user.name || 'Student',
+        timestamp: new Date().toISOString(),
+       });
+      }
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+    }
+  }
+
   const handleEndCall = () => {
     Alert.alert(
       'End Session',
@@ -451,6 +512,17 @@ export default function ProfessionalSessionCallScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.controlButton, { backgroundColor: Colors.light.surface }]}
+            onPress={() => camera.flip()}
+          >
+            <Ionicons 
+              name="camera-reverse" 
+              size={24} 
+              color={Colors.light.text} 
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.controlButton, { backgroundColor: micStatus === 'disabled' ? Colors.light.error : Colors.light.surface }]}
             onPress={() => microphone.toggle()}
           >
@@ -458,6 +530,17 @@ export default function ProfessionalSessionCallScreen() {
               name={micStatus === 'disabled' ? 'mic-off' : 'mic'} 
               size={24} 
               color={micStatus === 'disabled' ? Colors.light.background : Colors.light.text} 
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.controlButton, { backgroundColor: showPDFModal ? Colors.light.primary : Colors.light.surface }]}
+            onPress={() => setShowPDFModal(true)}
+          >
+            <Ionicons 
+              name="document" 
+              size={24} 
+              color={showPDFModal ? Colors.light.background : Colors.light.text} 
             />
           </TouchableOpacity>
 
@@ -556,6 +639,20 @@ export default function ProfessionalSessionCallScreen() {
             </View>
           </StreamCall>
         </StreamVideo>
+        
+        <PDFModal
+          visible={showPDFModal}
+          onClose={() => setShowPDFModal(false)}
+          pdfFiles={pdfFiles as unknown as PDFFile[]}
+        />
+        <SessionChat
+          visible={showChat}
+          onClose={() => setShowChat(false)}
+          messages={chatMessages}
+          onSendMessage={sendChatMessage}
+          currentUserId={user?.id || ''}
+          currentUserName={user?.name || 'Student'}
+        />
         {/* Add recording indicator */}
         <RecordingIndicator />
       </ThemedView>
@@ -661,6 +758,7 @@ const styles = StyleSheet.create({
   },
   controlsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 20

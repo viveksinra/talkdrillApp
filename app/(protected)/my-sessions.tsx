@@ -190,6 +190,7 @@ export default function MySessionsScreen() {
         params: {
           sessionId: joinResponse.sessionId || booking.sessionId || 'new',
           bookingId: joinResponse.bookingId || booking._id,
+          attachments: JSON.stringify(booking.attachments),
           streamCallId: joinResponse.streamCallId,
           streamToken: joinResponse.streamToken,
           streamApiKey: joinResponse.streamApiKey,

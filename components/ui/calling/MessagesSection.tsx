@@ -30,10 +30,10 @@ export const MessagesSection: React.FC<MessagesSectionProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.sectionHeader}>
+      {/* <View style={styles.sectionHeader}>
         <Ionicons name="book-outline" size={24} color="white" />
         <Text style={styles.sectionTitle}>Lecture Section</Text>
-      </View>
+      </View> */}
       
       {hasMessages ? (
         <ScrollView
@@ -62,6 +62,7 @@ export const MessagesSection: React.FC<MessagesSectionProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingBottom: 50,
   },
   sectionHeader: {
     flexDirection: "row",
