@@ -33,6 +33,7 @@ import {
 } from '@stream-io/video-react-native-sdk';
 import callService from '@/api/services/callService';
 import { PDFModal } from '@/components/PDFModal';
+import { SessionChat } from '@/components/shared/SessionChat';
 
 // Add this interface near the top after existing interfaces
 interface PDFFile {
@@ -40,6 +41,15 @@ interface PDFFile {
   url: string;
   size?: string;
   uploadDate: Date;
+}
+
+interface ChatMessage {
+  id: string;
+  text: string;
+  senderId: string;
+  senderName: string;
+  timestamp: Date;
+  isMe: boolean;
 }
 
 export default function ProfessionalSessionCallScreen() {
@@ -72,7 +82,7 @@ export default function ProfessionalSessionCallScreen() {
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [showEndWarning, setShowEndWarning] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [professionalDisconnected, setProfessionalDisconnected] = useState(false);
@@ -254,6 +264,24 @@ export default function ProfessionalSessionCallScreen() {
     call.on('call.recording_stopped', () => {
       setIsRecording(false);
     });
+
+    // Listen for chat messages
+    call.on('custom', (event: any) => {
+      const { custom } = event;
+      console.log('Received custom event:', custom);
+      
+      if (custom.type === 'session_chat_message') {
+        const newMessage: ChatMessage = {
+          id: custom.messageId || Date.now().toString(),
+          text: custom.message,
+          senderId: custom.senderId,
+          senderName: custom.senderName,
+          timestamp: new Date(custom.timestamp),
+          isMe: custom.senderId === user?.id,
+        };
+        setChatMessages(prev => [...prev, newMessage]);
+      }
+    });
   };
 
   // Set up socket listeners for session events
@@ -393,6 +421,24 @@ export default function ProfessionalSessionCallScreen() {
     }
   };
 
+  const sendChatMessage = async (message: string) => {
+    try {
+      const call = streamService.getCall();
+      if (call && user) {
+       await call.sendCustomEvent({
+        type: 'session_chat_message',
+        messageId: Date.now().toString(),
+        message,
+        senderId: user.id,
+        senderName: user.name || 'Student',
+        timestamp: new Date().toISOString(),
+       });
+      }
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+    }
+  }
+
   const handleEndCall = () => {
     Alert.alert(
       'End Session',
@@ -437,6 +483,17 @@ export default function ProfessionalSessionCallScreen() {
               name={isCameraMute ? 'videocam-off' : 'videocam'} 
               size={24} 
               color={isCameraMute ? Colors.light.background : Colors.light.text} 
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.controlButton, { backgroundColor: Colors.light.surface }]}
+            onPress={() => camera.flip()}
+          >
+            <Ionicons 
+              name="camera-reverse" 
+              size={24} 
+              color={Colors.light.text} 
             />
           </TouchableOpacity>
 
@@ -546,6 +603,14 @@ export default function ProfessionalSessionCallScreen() {
           onClose={() => setShowPDFModal(false)}
           pdfFiles={pdfFiles as unknown as PDFFile[]}
         />
+        <SessionChat
+          visible={showChat}
+          onClose={() => setShowChat(false)}
+          messages={chatMessages}
+          onSendMessage={sendChatMessage}
+          currentUserId={user?.id || ''}
+          currentUserName={user?.name || 'Student'}
+        />
       </View>
     </GestureHandlerRootView>
   );
@@ -642,6 +707,7 @@ const styles = StyleSheet.create({
   },
   controlsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 20
