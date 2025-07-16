@@ -30,6 +30,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ToastAndroid, Platform } from 'react-native';
 import { deductCoins, createPeerCallTransaction } from '@/api/services/coinService';
+import { CustomCallControls } from '@/components/ui/calling/CustomCallControlls';
 
 // Add toast utility function
 const showToast = (message: string) => {
@@ -568,6 +569,7 @@ export default function PeerCallScreen() {
             <CustomCallHeader />
             <CallContent
               onHangupCallHandler={handleEndCall}
+              CallControls={() => <CustomCallControls/>}
             />
             {/* <View style={styles.extendButtonContainer}>
               <ExtendCallButton durationMinutesToExtend={10} />
