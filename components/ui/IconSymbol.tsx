@@ -58,6 +58,14 @@ const MAPPING = {
   'shield.checkered': 'security',
   // Added for close/cancel actions
   'xmark': 'close',
+  // Added for external links/opening actions
+  'open-outline': 'open-in-new',
+  // Added for BookingCard component
+  'wallet-outline': 'account-balance-wallet',
+  'videocam': 'videocam',
+  'checkmark-circle': 'check-circle',
+  'close-circle-outline': 'cancel',
+  'star': 'star',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],

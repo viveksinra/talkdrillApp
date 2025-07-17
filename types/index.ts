@@ -408,6 +408,12 @@ export interface TransformedBooking {
     size?: string;
     uploadDate?: Date | undefined;
   }[];
+  recordingUrl?: string;
+  recordingFilename?: string;
+  recordingStatus?: 'pending' | 'ready' | 'failed';
+  transcriptionUrl?: string;
+  transcriptionFilename?: string;
+  transcriptionStatus?: 'pending' | 'ready' | 'failed';
   // Cancellation details
   cancellationReason?: string;
   cancelledBy?: 'student' | 'professional' | 'system';

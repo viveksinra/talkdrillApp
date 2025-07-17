@@ -6,6 +6,7 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
@@ -143,6 +144,20 @@ export const BookingCard: React.FC<BookingCardProps> = ({
           <Ionicons name="wallet-outline" size={16} color={Colors.light.secondary} />
           <Text style={styles.costText}>1 License</Text>
         </View>
+        {booking.recordingStatus === 'ready' && (
+          <View style={styles.recordingRow}>
+            <Ionicons name="videocam" size={16} color={Colors.light.secondary} />
+            <Text style={styles.recordingText}>Recording Available</Text>
+            <TouchableOpacity 
+              style={styles.recordingButton}
+              onPress={() => {
+                Linking.openURL(booking.recordingUrl || '');
+              }}
+            >
+              <Ionicons name="open-outline" size={16} color={Colors.light.background} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Session Information (for completed sessions) */}
@@ -418,5 +433,19 @@ const styles = StyleSheet.create({
   },
   joinButtonWithCancel: {
     flex: 2,
+  },
+  recordingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  recordingText: {
+    fontSize: 14,
+    color: Colors.light.secondary,
+  },
+  recordingButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.light.primary,
   },
 }); 
