@@ -7,7 +7,7 @@ import {
   Pressable,
   Image,
   ActivityIndicator,
-  ScrollView
+  ScrollView,Text
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from './ThemedText';
@@ -102,7 +102,7 @@ export function FilterDialog({
                       <Ionicons name="checkmark-circle" size={24} color="#fff" />
                     </View>
                   )}
-                  <ThemedText style={styles.optionText}>Any</ThemedText>
+                  <ThemedText style={[styles.optionText, filters.gender === 'any' && styles.selectedOptionText]}>Any</ThemedText>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -112,7 +112,12 @@ export function FilterDialog({
                   ]}
                   onPress={() => setFilters({...filters, gender: 'male'})}
                 >
-                  <ThemedText style={styles.optionText}>Male</ThemedText>
+                  {filters.gender === 'male' && (
+                    <View style={styles.checkIcon}>
+                      <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    </View>
+                  )}
+                  <ThemedText style={[styles.optionText, filters.gender === 'male' && styles.selectedOptionText]}>Male</ThemedText>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -122,7 +127,12 @@ export function FilterDialog({
                   ]}
                   onPress={() => setFilters({...filters, gender: 'female'})}
                 >
-                  <ThemedText style={styles.optionText}>Female</ThemedText>
+                  {filters.gender === 'female' && (
+                    <View style={styles.checkIcon}>
+                      <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    </View>
+                  )}
+                  <ThemedText style={[styles.optionText, filters.gender === 'female' && styles.selectedOptionText]}>Female</ThemedText>
                 </TouchableOpacity>
               </View>
             </View>
@@ -139,7 +149,12 @@ export function FilterDialog({
                     ]}
                     onPress={() => setFilters({...filters, accent: 'indian'})}
                   >
-                    <ThemedText style={styles.optionText}>Indian</ThemedText>
+                    {filters.accent === 'indian' && (
+                      <View style={styles.checkIcon}>
+                        <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                      </View>
+                    )}
+                    <ThemedText style={[styles.optionText, filters.accent === 'indian' && styles.selectedOptionText]}>Indian</ThemedText>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
@@ -148,7 +163,12 @@ export function FilterDialog({
                     ]}
                     onPress={() => setFilters({...filters, accent: 'american'})}
                   >
-                    <ThemedText style={styles.optionText}>American</ThemedText>
+                    {filters.accent === 'american' && (
+                      <View style={styles.checkIcon}>
+                        <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                      </View>
+                    )}
+                    <ThemedText style={[styles.optionText, filters.accent === 'american' && styles.selectedOptionText]}>American</ThemedText>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.options}>
@@ -159,7 +179,12 @@ export function FilterDialog({
                     ]}
                     onPress={() => setFilters({...filters, accent: 'british'})}
                   >
-                    <ThemedText style={styles.optionText}>British</ThemedText>
+                    {filters.accent === 'british' && (
+                      <View style={styles.checkIcon}>
+                        <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                      </View>
+                    )}
+                    <ThemedText style={[styles.optionText, filters.accent === 'british' && styles.selectedOptionText]}>British</ThemedText>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
@@ -168,7 +193,12 @@ export function FilterDialog({
                     ]}
                     onPress={() => setFilters({...filters, accent: 'australian'})}
                   >
-                    <ThemedText style={styles.optionText}>Australian</ThemedText>
+                    {filters.accent === 'australian' && (
+                      <View style={styles.checkIcon}>
+                        <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                      </View>
+                    )}
+                    <ThemedText style={[styles.optionText, filters.accent === 'australian' && styles.selectedOptionText]}>Australian</ThemedText>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -191,7 +221,7 @@ export function FilterDialog({
                       <Ionicons name="checkmark-circle" size={24} color="#fff" />
                     </View>
                   )}
-                  <ThemedText style={styles.optionText}>Any</ThemedText>
+                  <ThemedText style={[styles.optionText, filters.englishLevel === 'any' && styles.selectedOptionText]}>Any</ThemedText>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -201,7 +231,12 @@ export function FilterDialog({
                   ]}
                   onPress={() => setFilters({...filters, englishLevel: 'beginner'})}
                 >
-                  <ThemedText style={styles.optionText}>Beginner</ThemedText>
+                  {filters.englishLevel === 'beginner' && (
+                    <View style={styles.checkIcon}>
+                      <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    </View>
+                  )}
+                  <ThemedText style={[styles.optionText, filters.englishLevel === 'beginner' && styles.selectedOptionText]}>Beginner</ThemedText>
                 </TouchableOpacity>
               </View>
               
@@ -213,7 +248,12 @@ export function FilterDialog({
                   ]}
                   onPress={() => setFilters({...filters, englishLevel: 'intermediate'})}
                 >
-                  <ThemedText style={styles.optionText}>Intermediate</ThemedText>
+                  {filters.englishLevel === 'intermediate' && (
+                    <View style={styles.checkIcon}>
+                      <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    </View>
+                  )}
+                  <ThemedText style={[styles.optionText, filters.englishLevel === 'intermediate' && styles.selectedOptionText]}>Intermediate</ThemedText>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -223,7 +263,12 @@ export function FilterDialog({
                   ]}
                   onPress={() => setFilters({...filters, englishLevel: 'advanced'})}
                 >
-                  <ThemedText style={styles.optionText}>Advanced</ThemedText>
+                  {filters.englishLevel === 'advanced' && (
+                    <View style={styles.checkIcon}>
+                      <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    </View>
+                  )}
+                  <ThemedText style={[styles.optionText, filters.englishLevel === 'advanced' && styles.selectedOptionText]}>Advanced</ThemedText>
                 </TouchableOpacity>
               </View>
             </View>
@@ -247,10 +292,10 @@ export function FilterDialog({
               {isProcessing ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-              <ThemedText style={styles.applyButtonText}>
-                Apply Filters
-                <Ionicons name="arrow-forward" size={20} color="#fff" style={{marginLeft: 8, marginTop: 8}} />
-              </ThemedText>
+                <View style={styles.applyButtonContent}>
+                  <Text style={styles.applyButtonText}>Apply Filters</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.applyButtonIcon} />
+                </View>
               )}
             </TouchableOpacity>
           </ScrollView>
@@ -271,7 +316,7 @@ const styles = StyleSheet.create({
     width: '90%',
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 24,
+    padding: 18,
     maxHeight: '95%',
     height: 'auto',
   },
@@ -279,7 +324,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   title: {
     fontSize: 24,
@@ -290,7 +335,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     color: '#666',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   section: {
     marginBottom: 5,
@@ -302,11 +347,11 @@ const styles = StyleSheet.create({
   options: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   option: {
     flex: 1,
-    height: 56,
+    height: 40,
     backgroundColor: '#F0F0F0',
     borderRadius: 8,
     justifyContent: 'center',
@@ -325,9 +370,9 @@ const styles = StyleSheet.create({
   costSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 18,
     backgroundColor: '#FFF9E6',
-    padding: 12,
+    padding: 6,
     borderRadius: 8,
   },
   costIcon: {
@@ -346,17 +391,26 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
-  applyButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 18,
+  applyButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  applyButtonIcon: {
+    marginLeft: 8,
   },
   checkIcon: {
     position: 'absolute',
     top: -5,
     right: -5,
     zIndex: 1,
+  },
+  selectedOptionText: {
+    color: '#fff',
   },
 });

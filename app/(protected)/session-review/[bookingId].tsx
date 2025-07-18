@@ -8,7 +8,7 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -149,177 +149,183 @@ export default function SessionReviewScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <StatusBar style="light" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleSkipReview} style={styles.skipButton}>
-          <ThemedText style={styles.skipButtonText}>Skip</ThemedText>
-        </TouchableOpacity>
-        <ThemedText style={styles.headerTitle}>Rate Your Session</ThemedText>
-        <View style={styles.headerRight} />
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Professional Info */}
-        <View style={styles.professionalCard}>
-          <View style={styles.professionalInfo}>
-            <Ionicons name="person-circle" size={48} color={Colors.light.primary} />
-            <View style={styles.professionalDetails}>
-              <ThemedText style={styles.professionalName}>
-                {professionalName || 'Professional'}
-              </ThemedText>
-              <ThemedText style={styles.sessionCompleteText}>
-                Session completed! 🎉
-              </ThemedText>
-            </View>
-          </View>
+    <>
+      <Stack.Screen
+          options={{
+            headerShown: true,
+            title: 'Please Share Review.',
+          }}
+        />
+      <ThemedView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleSkipReview} style={styles.skipButton}>
+            <ThemedText style={styles.skipButtonText}>Skip</ThemedText>
+          </TouchableOpacity>
+          <ThemedText style={styles.headerTitle}>Rate Your Session</ThemedText>
+          <View style={styles.headerRight} />
         </View>
 
-        {/* Overall Rating */}
-        <View style={styles.ratingSection}>
-          <View style={styles.ratingHeader}>
-            <Ionicons name="star" size={24} color={Colors.light.warning} />
-            <ThemedText style={styles.ratingTitle}>Overall Rating</ThemedText>
-          </View>
-          <ThemedText style={styles.ratingDescription}>
-            How would you rate your overall experience?
-          </ThemedText>
-          {renderStarRating(overallRating, setOverallRating)}
-          {overallRating > 0 && (
-            <ThemedText style={styles.ratingValue}>
-              {overallRating} out of 5 stars
-            </ThemedText>
-          )}
-        </View>
-
-        {/* Detailed Ratings */}
-        <View style={styles.detailedRatingsSection}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="analytics" size={24} color={Colors.light.primary} />
-            <ThemedText style={styles.sectionTitle}>Detailed Ratings</ThemedText>
-          </View>
-          <ThemedText style={styles.sectionDescription}>
-            Rate specific aspects of your session (optional)
-          </ThemedText>
-
-          {Object.entries({
-            teaching: { label: 'Teaching Quality', icon: 'school' },
-            communication: { label: 'Communication', icon: 'chatbubbles' },
-            patience: { label: 'Patience', icon: 'heart' },
-            punctuality: { label: 'Punctuality', icon: 'time' }
-          }).map(([key, config]) => (
-            <View key={key} style={styles.detailedRatingItem}>
-              <View style={styles.detailedRatingHeader}>
-                <Ionicons name={config.icon as any} size={20} color={Colors.light.primary} />
-                <ThemedText style={styles.detailedRatingLabel}>
-                  {config.label}
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Professional Info */}
+          <View style={styles.professionalCard}>
+            <View style={styles.professionalInfo}>
+              <Ionicons name="person-circle" size={48} color={Colors.light.primary} />
+              <View style={styles.professionalDetails}>
+                <ThemedText style={styles.professionalName}>
+                  {professionalName || 'Professional'}
+                </ThemedText>
+                <ThemedText style={styles.sessionCompleteText}>
+                  Session completed! 🎉
                 </ThemedText>
               </View>
-              {renderStarRating(
-                detailedRatings[key as keyof typeof detailedRatings], 
-                (rating) => setDetailedRatings(prev => ({ ...prev, [key]: rating })),
-                'small'
-              )}
             </View>
-          ))}
-        </View>
-
-        {/* Tags */}
-        <View style={styles.tagsSection}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="pricetags" size={24} color={Colors.light.primary} />
-            <ThemedText style={styles.sectionTitle}>Highlight Strengths</ThemedText>
           </View>
-          <ThemedText style={styles.sectionDescription}>
-            What made this professional great? (Select all that apply)
-          </ThemedText>
-          
-          <View style={styles.tagsContainer}>
-            {AVAILABLE_TAGS.map((tag) => (
-              <TouchableOpacity
-                key={tag.id}
-                style={[
-                  styles.tagButton,
-                  {
-                    backgroundColor: selectedTags.includes(tag.id) 
-                      ? tag.color 
-                      : Colors.light.surface,
-                    borderColor: selectedTags.includes(tag.id) 
-                      ? tag.color 
-                      : Colors.light.border
-                  }
-                ]}
-                onPress={() => toggleTag(tag.id)}
-              >
-                <ThemedText
-                  style={[
-                    styles.tagText,
-                    {
-                      color: selectedTags.includes(tag.id) 
-                        ? Colors.light.background 
-                        : Colors.light.text
-                    }
-                  ]}
-                >
-                  {tag.label}
-                </ThemedText>
-              </TouchableOpacity>
+
+          {/* Overall Rating */}
+          <View style={styles.ratingSection}>
+            <View style={styles.ratingHeader}>
+              <Ionicons name="star" size={24} color={Colors.light.warning} />
+              <ThemedText style={styles.ratingTitle}>Overall Rating</ThemedText>
+            </View>
+            <ThemedText style={styles.ratingDescription}>
+              How would you rate your overall experience?
+            </ThemedText>
+            {renderStarRating(overallRating, setOverallRating)}
+            {overallRating > 0 && (
+              <ThemedText style={styles.ratingValue}>
+                {overallRating} out of 5 stars
+              </ThemedText>
+            )}
+          </View>
+
+          {/* Detailed Ratings */}
+          <View style={styles.detailedRatingsSection}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="analytics" size={24} color={Colors.light.primary} />
+              <ThemedText style={styles.sectionTitle}>Detailed Ratings</ThemedText>
+            </View>
+            <ThemedText style={styles.sectionDescription}>
+              Rate specific aspects of your session (optional)
+            </ThemedText>
+
+            {Object.entries({
+              teaching: { label: 'Teaching Quality', icon: 'school' },
+              communication: { label: 'Communication', icon: 'chatbubbles' },
+              patience: { label: 'Patience', icon: 'heart' },
+              punctuality: { label: 'Punctuality', icon: 'time' }
+            }).map(([key, config]) => (
+              <View key={key} style={styles.detailedRatingItem}>
+                <View style={styles.detailedRatingHeader}>
+                  <Ionicons name={config.icon as any} size={20} color={Colors.light.primary} />
+                  <ThemedText style={styles.detailedRatingLabel}>
+                    {config.label}
+                  </ThemedText>
+                </View>
+                {renderStarRating(
+                  detailedRatings[key as keyof typeof detailedRatings], 
+                  (rating) => setDetailedRatings(prev => ({ ...prev, [key]: rating })),
+                  'small'
+                )}
+              </View>
             ))}
           </View>
-        </View>
 
-        {/* Written Review */}
-        <View style={styles.reviewSection}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="create" size={24} color={Colors.light.primary} />
-            <ThemedText style={styles.sectionTitle}>Written Review</ThemedText>
+          {/* Tags */}
+          <View style={styles.tagsSection}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="pricetags" size={24} color={Colors.light.primary} />
+              <ThemedText style={styles.sectionTitle}>Highlight Strengths</ThemedText>
+            </View>
+            <ThemedText style={styles.sectionDescription}>
+              What made this professional great? (Select all that apply)
+            </ThemedText>
+            
+            <View style={styles.tagsContainer}>
+              {AVAILABLE_TAGS.map((tag) => (
+                <TouchableOpacity
+                  key={tag.id}
+                  style={[
+                    styles.tagButton,
+                    {
+                      backgroundColor: selectedTags.includes(tag.id) 
+                        ? tag.color 
+                        : Colors.light.surface,
+                      borderColor: selectedTags.includes(tag.id) 
+                        ? tag.color 
+                        : Colors.light.primaryDark
+                    }
+                  ]}
+                  onPress={() => toggleTag(tag.id)}
+                >
+                  <ThemedText
+                    style={[
+                      styles.tagText,
+                      {
+                        color: selectedTags.includes(tag.id) 
+                          ? Colors.light.background 
+                          : Colors.light.text
+                      }
+                    ]}
+                  >
+                    {tag.label}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-          <ThemedText style={styles.sectionDescription}>
-            Share your experience to help other students (optional)
-          </ThemedText>
-          
-          <TextInput
-            style={styles.reviewInput}
-            placeholder="What did you like about this session? How can other students benefit from learning with this professional?"
-            placeholderTextColor={Colors.light.textSecondary}
-            multiline
-            numberOfLines={4}
-            value={reviewText}
-            onChangeText={setReviewText}
-            maxLength={1000}
-          />
-          <ThemedText style={styles.characterCount}>
-            {reviewText.length}/1000 characters
-          </ThemedText>
-        </View>
-      </ScrollView>
 
-      {/* Submit Button */}
-      <View style={styles.submitContainer}>
-        <TouchableOpacity
-          style={[
-            styles.submitButton,
-            { 
-              backgroundColor: overallRating > 0 ? Colors.light.primary : Colors.light.inactive,
-              opacity: overallRating > 0 ? 1 : 0.6
-            }
-          ]}
-          onPress={handleSubmitReview}
-          disabled={overallRating === 0 || isSubmitting}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator size="small" color={Colors.light.background} />
-          ) : (
-            <>
-              <Ionicons name="send" size={24} color={Colors.light.background} />
-              <ThemedText style={styles.submitButtonText}>Submit Review</ThemedText>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
-    </ThemedView>
+          {/* Written Review */}
+          <View style={styles.reviewSection}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="create" size={24} color={Colors.light.primary} />
+              <ThemedText style={styles.sectionTitle}>Written Review</ThemedText>
+            </View>
+            <ThemedText style={styles.sectionDescription}>
+              Share your experience to help other students (optional)
+            </ThemedText>
+            
+            <TextInput
+              style={styles.reviewInput}
+              placeholder="What did you like about this session? How can other students benefit from learning with this professional?"
+              placeholderTextColor={Colors.light.primaryLight}
+              multiline
+              numberOfLines={4}
+              value={reviewText}
+              onChangeText={setReviewText}
+              maxLength={1000}
+            />
+            <ThemedText style={styles.characterCount}>
+              {reviewText.length}/1000 characters
+            </ThemedText>
+          </View>
+        </ScrollView>
+
+        {/* Submit Button */}
+        <View style={styles.submitContainer}>
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              { 
+                backgroundColor: overallRating > 0 ? Colors.light.primary : Colors.light.inactive,
+                opacity: overallRating > 0 ? 1 : 0.6
+              }
+            ]}
+            onPress={handleSubmitReview}
+            disabled={overallRating === 0 || isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color={Colors.light.background} />
+            ) : (
+              <>
+                <Ionicons name="send" size={24} color={Colors.light.background} />
+                <ThemedText style={styles.submitButtonText}>Submit Review</ThemedText>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ThemedView>
+    </>
   );
 }
 
@@ -335,14 +341,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border
+    borderBottomColor: Colors.light.secondaryDark
   },
   skipButton: {
     padding: 8
   },
   skipButtonText: {
     fontSize: 16,
-    color: Colors.light.textSecondary
+    color: Colors.light.secondaryDark
   },
   headerTitle: {
     fontSize: 18,
@@ -362,7 +368,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: Colors.light.border
+    borderColor: Colors.light.secondaryDark
   },
   professionalInfo: {
     flexDirection: 'row',
@@ -388,7 +394,7 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: Colors.light.secondaryDark,
     alignItems: 'center'
   },
   ratingHeader: {
@@ -404,7 +410,7 @@ const styles = StyleSheet.create({
   },
   ratingDescription: {
     fontSize: 14,
-    color: Colors.light.textSecondary,
+    color: Colors.light.secondaryDark,
     textAlign: 'center',
     marginBottom: 16
   },
@@ -427,7 +433,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: Colors.light.border
+    borderColor: Colors.light.secondaryDark
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -442,7 +448,7 @@ const styles = StyleSheet.create({
   },
   sectionDescription: {
     fontSize: 14,
-    color: Colors.light.textSecondary,
+    color: Colors.light.secondaryDark,
     marginBottom: 16
   },
   detailedRatingItem: {
@@ -465,7 +471,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: Colors.light.border
+    borderColor: Colors.light.secondaryDark
   },
   tagsContainer: {
     flexDirection: 'row',
@@ -488,11 +494,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: Colors.light.border
+    borderColor: Colors.light.secondaryDark
   },
   reviewInput: {
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: Colors.light.secondaryDark,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
@@ -503,14 +509,14 @@ const styles = StyleSheet.create({
   },
   characterCount: {
     fontSize: 12,
-    color: Colors.light.textSecondary,
+    color: Colors.light.secondaryDark,
     textAlign: 'right',
     marginTop: 4
   },
   submitContainer: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: Colors.light.border
+    borderTopColor: Colors.light.secondaryDark
   },
   submitButton: {
     flexDirection: 'row',

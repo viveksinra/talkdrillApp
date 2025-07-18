@@ -66,13 +66,13 @@ export const CallHeader: React.FC<CallHeaderProps> = ({
               ? displayStatus.substring(0, 20) + "..."
               : displayStatus}
           </Text>
-          {(isAIResponding || (!systemReady && isConnected)) && (
+          {/* {(isAIResponding || (!systemReady && isConnected)) && (
             <ActivityIndicator
               size="small"
               color={Colors.light.primary}
               style={styles.processingIndicator}
             />
-          )}
+          )} */}
         </View>
       </View>
     </View>
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 8,
+    marginRight: 2,
   },
   statusText: {
     fontSize: 14,
@@ -113,6 +113,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   processingIndicator: {
-    marginLeft: 8,
+    marginLeft: 2,
   },
 });

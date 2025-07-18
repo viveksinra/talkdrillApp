@@ -981,7 +981,7 @@ export default function AIVideoCallScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <>
       <Stack.Screen
         options={{
           headerTitle: () => (
@@ -1017,62 +1017,63 @@ export default function AIVideoCallScreen() {
           headerShown: !isFullScreen,
         }}
       />
-
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={headerHeight}
-        enabled={renderMode === "chat" && !isFullScreen}
-      >
-        <View style={{ flex: 1 }}>
-          {/* Always render video section but conditionally show it */}
-          <View style={renderMode === "video" ? {} : { display: 'none' }}>
-            {conversation?.characterId && (
-              <VideoSection
-                character={conversation.characterId}
-                isAudioPlaying={isAudioPlaying}
-                videosReady={videosReady}
-                videosFailed={videosFailed}
-                isFullScreen={isFullScreen}
-                fullScreenAnimation={fullScreenAnimation}
-                toggleFullScreen={toggleFullScreen}
-                handleVideoLoadStart={handleVideoLoadStart}
-                handleVideoLoad={handleVideoLoad}
-                handleVideoError={handleVideoError}
-              />
+      <View style={styles.container}>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }}
+          behavior={renderMode === "chat" ? (Platform.OS === 'ios' ? 'padding' : 'height') : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+          enabled={renderMode === "chat" && !isFullScreen}
+        >
+          <View style={{ flex: 1}}>
+            {/* Always render video section but conditionally show it */}
+            <View style={renderMode === "video" ? {} : { display: 'none' }}>
+              {conversation?.characterId && (
+                <VideoSection
+                  character={conversation.characterId}
+                  isAudioPlaying={isAudioPlaying}
+                  videosReady={videosReady}
+                  videosFailed={videosFailed}
+                  isFullScreen={isFullScreen}
+                  fullScreenAnimation={fullScreenAnimation}
+                  toggleFullScreen={toggleFullScreen}
+                  handleVideoLoadStart={handleVideoLoadStart}
+                  handleVideoLoad={handleVideoLoad}
+                  handleVideoError={handleVideoError}
+                />
+              )}
+            </View>
+            
+            {/* Chat section - hide when in full screen */}
+            {!isFullScreen && (
+              <View style={{ 
+                height: renderMode === "video" ? CHAT_HEIGHT : undefined, 
+                flex: renderMode === "chat" ? 1 : undefined 
+              }}>
+                <MessagesSection
+                  messages={conversation?.messages || []}
+                  characterAvatar={conversation?.characterId.profileImage}
+                  scrollViewRef={scrollViewRef}
+                />
+              </View>
             )}
           </View>
-          
-          {/* Chat section - hide when in full screen */}
-          {!isFullScreen && (
-            <View style={{ 
-              height: renderMode === "video" ? CHAT_HEIGHT : undefined, 
-              flex: renderMode === "chat" ? 1 : undefined 
-            }}>
-              <MessagesSection
-                messages={conversation?.messages || []}
-                characterAvatar={conversation?.characterId.profileImage}
-                scrollViewRef={scrollViewRef}
-              />
-            </View>
-          )}
-        </View>
 
-        <CallControls
-          isFullScreen={isFullScreen}
-          renderMode={renderMode}
-          textMessage={textMessage}
-          setTextMessage={setTextMessage}
-          sendTextMessage={sendTextMessage}
-          isRecording={isRecording}
-          toggleRecording={toggleRecording}
-          isConnected={isConnected}
-          isProcessingVoice={isProcessingVoice}
-          isGeneratingText={isGeneratingText}
-          handleEndCall={handleEndCall}
-        />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <CallControls
+            isFullScreen={isFullScreen}
+            renderMode={renderMode}
+            textMessage={textMessage}
+            setTextMessage={setTextMessage}
+            sendTextMessage={sendTextMessage}
+            isRecording={isRecording}
+            toggleRecording={toggleRecording}
+            isConnected={isConnected}
+            isProcessingVoice={isProcessingVoice}
+            isGeneratingText={isGeneratingText}
+            handleEndCall={handleEndCall}
+          />
+        </KeyboardAvoidingView>
+      </View>
+    </>
   );
 }
 

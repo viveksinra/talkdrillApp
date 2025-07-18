@@ -8,7 +8,7 @@ import {
   Text,
   Animated
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useKeepAwake } from 'expo-keep-awake';
 import { Ionicons } from '@expo/vector-icons';
@@ -89,6 +89,7 @@ export default function ProfessionalSessionCallScreen() {
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [professionalDisconnected, setProfessionalDisconnected] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
   
   // Static PDF files for now - you can replace this with actual DB field
   const [pdfFiles] = useState<PDFFile[]>(JSON.parse(attachments as string) as PDFFile[]);
@@ -536,87 +537,107 @@ export default function ProfessionalSessionCallScreen() {
     const { microphone, status: micStatus } = useMicrophoneState();
 
     return (
-      <View style={styles.callControls}>
-        <View style={styles.callInfoContainer}>
-          {/* <Text style={styles.callDuration}>{formatDuration(callDuration)}</Text> */}
-          <Text style={styles.timeRemaining}>Remaining: {timeRemaining}</Text>
-          <Text style={styles.professionalName}>with {professionalName}</Text>
-        <View style={styles.recordingIndicatorContainer}>
-          <RecordingIndicator />
-        </View>
-        </View>
+      <>
+        {/* Collapsible Toggle Button - Always visible in bottom right */}
+        <TouchableOpacity 
+          style={[
+            styles.toggleButton,
+            { bottom: controlsVisible ? 280 : 40 } // Dynamic positioning
+          ]}
+          onPress={() => setControlsVisible(!controlsVisible)}
+        >
+          <Ionicons 
+            name={controlsVisible ? 'chevron-down' : 'chevron-up'} 
+            size={20} 
+            color={Colors.light.background} 
+          />
+        </TouchableOpacity>
 
-        <View style={styles.controlsContainer}>
-          <TouchableOpacity
-            style={[styles.controlButton, { backgroundColor: isCameraMute ? Colors.light.error : Colors.light.surface }]}
-            onPress={() => camera.toggle()}
-          >
-            <Ionicons 
-              name={isCameraMute ? 'videocam-off' : 'videocam'} 
-              size={24} 
-              color={isCameraMute ? Colors.light.background : Colors.light.text} 
-            />
-          </TouchableOpacity>
+        {/* Collapsible Controls */}
+        {controlsVisible && (
+          <View style={styles.callControls}>
+            <View style={styles.callInfoContainer}>
+              {/* <Text style={styles.callDuration}>{formatDuration(callDuration)}</Text> */}
+              <Text style={styles.timeRemaining}>Remaining: {timeRemaining}</Text>
+              <Text style={styles.professionalName}>with {professionalName}</Text>
+              <View style={styles.recordingIndicatorContainer}>
+                <RecordingIndicator />
+              </View>
+            </View>
 
-          <TouchableOpacity
-            style={[styles.controlButton, { backgroundColor: Colors.light.surface }]}
-            onPress={() => camera.flip()}
-          >
-            <Ionicons 
-              name="camera-reverse" 
-              size={24} 
-              color={Colors.light.text} 
-            />
-          </TouchableOpacity>
+            <View style={styles.controlsContainer}>
+              <TouchableOpacity
+                style={[styles.controlButton, { backgroundColor: isCameraMute ? Colors.light.error : Colors.light.surface }]}
+                onPress={() => camera.toggle()}
+              >
+                <Ionicons 
+                  name={isCameraMute ? 'videocam-off' : 'videocam'} 
+                  size={24} 
+                  color={isCameraMute ? Colors.light.background : Colors.light.text} 
+                />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.controlButton, { backgroundColor: micStatus === 'disabled' ? Colors.light.error : Colors.light.surface }]}
-            onPress={() => microphone.toggle()}
-          >
-            <Ionicons 
-              name={micStatus === 'disabled' ? 'mic-off' : 'mic'} 
-              size={24} 
-              color={micStatus === 'disabled' ? Colors.light.background : Colors.light.text} 
-            />
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.controlButton, { backgroundColor: Colors.light.surface }]}
+                onPress={() => camera.flip()}
+              >
+                <Ionicons 
+                  name="camera-reverse" 
+                  size={24} 
+                  color={Colors.light.text} 
+                />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.controlButton, { backgroundColor: showPDFModal ? Colors.light.primary : Colors.light.surface }]}
-            onPress={() => setShowPDFModal(true)}
-          >
-            <Ionicons 
-              name="document" 
-              size={24} 
-              color={showPDFModal ? Colors.light.background : Colors.light.text} 
-            />
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.controlButton, { backgroundColor: micStatus === 'disabled' ? Colors.light.error : Colors.light.surface }]}
+                onPress={() => microphone.toggle()}
+              >
+                <Ionicons 
+                  name={micStatus === 'disabled' ? 'mic-off' : 'mic'} 
+                  size={24} 
+                  color={micStatus === 'disabled' ? Colors.light.background : Colors.light.text} 
+                />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.controlButton, { backgroundColor: showChat ? Colors.light.primary : Colors.light.surface }]}
-            onPress={() => setShowChat(!showChat)}
-          >
-            <Ionicons 
-              name="chatbubble" 
-              size={24} 
-              color={showChat ? Colors.light.background : Colors.light.text} 
-            />
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.controlButton, { backgroundColor: showPDFModal ? Colors.light.primary : Colors.light.surface }]}
+                onPress={() => setShowPDFModal(true)}
+              >
+                <Ionicons 
+                  name="document" 
+                  size={24} 
+                  color={showPDFModal ? Colors.light.background : Colors.light.text} 
+                />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.controlButton, styles.endButton]}
-            onPress={handleEndCall}
-          >
-            <Ionicons name="call" size={24} color={Colors.light.background} />
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity
+                style={[styles.controlButton, { backgroundColor: showChat ? Colors.light.primary : Colors.light.surface }]}
+                onPress={() => setShowChat(!showChat)}
+              >
+                <Ionicons 
+                  name="chatbubble" 
+                  size={24} 
+                  color={showChat ? Colors.light.background : Colors.light.text} 
+                />
+              </TouchableOpacity>
 
-        {showEndWarning && (
-          <View style={styles.warningContainer}>
-            <Ionicons name="warning" size={20} color={Colors.light.warning} />
-            <Text style={styles.warningText}>{warningText}</Text>
+              <TouchableOpacity
+                style={[styles.controlButton, styles.endButton]}
+                onPress={handleEndCall}
+              >
+                <Ionicons name="call" size={24} color={Colors.light.background} />
+              </TouchableOpacity>
+            </View>
+
+            {showEndWarning && (
+              <View style={styles.warningContainer}>
+                <Ionicons name="warning" size={20} color={Colors.light.warning} />
+                <Text style={styles.warningText}>{warningText}</Text>
+              </View>
+            )}
           </View>
         )}
-      </View>
+      </>
     );
   };
 
@@ -640,7 +661,6 @@ export default function ProfessionalSessionCallScreen() {
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
-        <StatusBar style="dark" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
           <ThemedText style={styles.loadingText}>{connectionStatus}</ThemedText>
@@ -652,7 +672,6 @@ export default function ProfessionalSessionCallScreen() {
   if (!callState.call || !callState.client) {
     return (
       <ThemedView style={styles.container}>
-        <StatusBar style="dark" />
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={48} color={Colors.light.error} />
           <ThemedText style={styles.errorText}>Failed to connect to the session</ThemedText>
@@ -665,8 +684,14 @@ export default function ProfessionalSessionCallScreen() {
   }
 
   return (
+    <>
+    <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Professional Session',
+        }}
+      />
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="light" />
       <ThemedView style={styles.container}>
         <StreamVideo client={callState.client}>
           <StreamCall call={callState.call}>
@@ -704,6 +729,7 @@ export default function ProfessionalSessionCallScreen() {
        
       </ThemedView>
     </GestureHandlerRootView>
+    </>
   );
 }
 
@@ -860,5 +886,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.text,
     textAlign: 'center'
+  },
+  toggleButton: {
+    position: 'absolute',
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   }
 }); 

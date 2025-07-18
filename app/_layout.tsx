@@ -40,7 +40,7 @@ export default function RootLayout() {
               <Stack.Screen name="(protected)" options={{ headerShown: false }} />
               <Stack.Screen name="+not-found" />
             </Stack>
-            <StatusBar style="auto" />
+            <StatusBar style="dark" backgroundColor="#FFFFFF" />
           </NotificationProvider>
         </SocketProvider>
       </AuthProvider>
