@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,11 +8,14 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
-  Image
+  Image,
+  Modal,
+  Animated,
+  Easing,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
-// Removed moment - using native Date APIs
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +26,251 @@ import { get } from '@/api/config/axiosConfig';
 import { TransformedBooking } from '@/types';
 import { joinProfessionalSessionCall } from '@/api/services/callService';
 
+const { width, height } = Dimensions.get('window');
+
+// Session Lobby Component (inline for student app)
+interface SessionLobbyProps {
+  visible: boolean;
+  booking: TransformedBooking | null;
+  onClose: () => void;
+  onSessionStart: () => void;
+}
+
+const SessionLobby: React.FC<SessionLobbyProps> = ({
+  visible,
+  booking,
+  onClose,
+  onSessionStart,
+}) => {
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
+  const [isSessionTime, setIsSessionTime] = useState(false);
+  const heartbeatAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(0.8)).current;
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Heartbeat animation
+  useEffect(() => {
+    const createHeartbeat = () => {
+      return Animated.sequence([
+        Animated.timing(heartbeatAnim, {
+          toValue: 1.2,
+          duration: 200,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(heartbeatAnim, {
+          toValue: 1,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(heartbeatAnim, {
+          toValue: 1.1,
+          duration: 150,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(heartbeatAnim, {
+          toValue: 1,
+          duration: 150,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.delay(1000),
+      ]);
+    };
+
+    const heartbeatLoop = () => {
+      createHeartbeat().start(() => {
+        if (visible) {
+          heartbeatLoop();
+        }
+      });
+    };
+
+    if (visible) {
+      heartbeatLoop();
+    }
+
+    return () => {
+      heartbeatAnim.setValue(1);
+    };
+  }, [visible, heartbeatAnim]);
+
+  // Pulse animation
+  useEffect(() => {
+    const createPulse = () => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0.8,
+            duration: 1500,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    };
+
+    if (visible) {
+      createPulse().start();
+    }
+
+    return () => {
+      pulseAnim.setValue(0.8);
+    };
+  }, [visible, pulseAnim]);
+
+  // Time checking logic
+  useEffect(() => {
+    if (!visible || !booking) return;
+
+    const checkTime = () => {
+      // Use more precise time calculation with UTC
+      const now = new Date();
+      
+      // Parse the session start time more precisely
+      let sessionStart;
+      if (booking.scheduledDate.includes('T')) {
+        // ISO format: "2025-07-05T00:00:00.000+00:00"
+        const dateOnly = booking.scheduledDate.split('T')[0];
+        sessionStart = new Date(`${dateOnly}T${booking.scheduledTime}:00`);
+      } else {
+        // Date only format: "2025-07-05"
+        sessionStart = new Date(`${booking.scheduledDate}T${booking.scheduledTime}:00`);
+      }
+      
+      if (now >= sessionStart) {
+        setIsSessionTime(true);
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+        // Auto-start session after a brief delay
+        setTimeout(() => {
+          onSessionStart();
+        }, 1000);
+        return;
+      }
+
+      // Use millisecond precision for better synchronization
+      const timeDiff = sessionStart.getTime() - now.getTime();
+      const totalSeconds = Math.floor(timeDiff / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      
+      if (minutes > 0) {
+        setTimeRemaining(`${minutes}m ${seconds}s`);
+      } else {
+        setTimeRemaining(`${seconds}s`);
+      }
+    };
+
+    checkTime();
+    intervalRef.current = setInterval(checkTime, 1000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [visible, booking, onSessionStart]);
+
+  const formatTime = (time: string) => {
+    return new Date(`2024-01-01T${time}`).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (!visible || !booking) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={lobbyStyles.overlay}>
+        <View style={lobbyStyles.container}>
+          <TouchableOpacity style={lobbyStyles.closeButton} onPress={onClose}>
+            <Ionicons name="close" size={24} color="#666" />
+          </TouchableOpacity>
+
+          <View style={lobbyStyles.content}>
+            <Animated.View
+              style={[
+                lobbyStyles.heartContainer,
+                { transform: [{ scale: heartbeatAnim }] },
+              ]}
+            >
+              <Ionicons name="heart" size={60} color={Colors.light.primary} />
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                lobbyStyles.usersContainer,
+                { transform: [{ scale: pulseAnim }] },
+              ]}
+            >
+              <View style={lobbyStyles.usersRow}>
+                <View style={[lobbyStyles.userAvatar, lobbyStyles.student]}>
+                  <Ionicons name="person" size={24} color="#FFF" />
+                </View>
+                <View style={lobbyStyles.waitingDots}>
+                  <View style={[lobbyStyles.dot, lobbyStyles.dot1]} />
+                  <View style={[lobbyStyles.dot, lobbyStyles.dot2]} />
+                  <View style={[lobbyStyles.dot, lobbyStyles.dot3]} />
+                </View>
+                <View style={[lobbyStyles.userAvatar, lobbyStyles.professional]}>
+                  <Ionicons name="person" size={24} color="#FFF" />
+                </View>
+              </View>
+            </Animated.View>
+
+            <View style={lobbyStyles.sessionInfo}>
+              <Text style={lobbyStyles.sessionTitle}>
+                Session with {booking.professional.name}
+              </Text>
+              <Text style={lobbyStyles.sessionTopic}>
+                {booking.topic}
+              </Text>
+              <Text style={lobbyStyles.sessionTime}>
+                Scheduled: {formatTime(booking.scheduledTime)}
+              </Text>
+            </View>
+
+            <View style={lobbyStyles.statusContainer}>
+              {isSessionTime ? (
+                <>
+                  <ActivityIndicator size="large" color={Colors.light.primary} />
+                  <Text style={lobbyStyles.startingText}>
+                    Starting session...
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={lobbyStyles.waitingText}>
+                    Please wait here in lobby until session starts
+                  </Text>
+                  <Text style={lobbyStyles.countdownText}>
+                    Session starts in: {timeRemaining}
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 export default function MySessionsScreen() {
   const router = useRouter();
@@ -37,13 +285,16 @@ export default function MySessionsScreen() {
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
   const [joiningSession, setJoiningSession] = useState<string | null>(null);
 
+  // Lobby states
+  const [showLobby, setShowLobby] = useState(false);
+  const [lobbyBooking, setLobbyBooking] = useState<TransformedBooking | null>(null);
+
   const loadBookings = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
       console.log('🔄 Loading bookings...');
-      // Fetch user's bookings from backend
       const response = await get('/api/v1/bookings/my-bookings');
       console.log('📡 API Response:', response.data);
       
@@ -80,17 +331,16 @@ export default function MySessionsScreen() {
 
     const handleSessionReminder = (data: any) => {
       console.log('📢 Session reminder:', data);
-      loadBookings(); // Refresh bookings when session state changes
+      loadBookings();
     };
 
     const handleLobbyAvailable = (data: any) => {
       console.log('🚪 Lobby available:', data);
-      loadBookings(); // Refresh bookings
+      loadBookings();
     };
 
     const handleSessionStateChanged = (data: any) => {
       console.log('🔄 Session state changed:', data);
-      // Update booking state in real-time
       setBookings(prev => prev.map(booking => 
         booking._id === data.bookingId 
           ? { ...booking, sessionState: data.sessionState, status: data.status }
@@ -156,35 +406,52 @@ export default function MySessionsScreen() {
     const sessionDateTime = new Date(`${booking.scheduledDate}T${booking.scheduledTime}`);
     const now = new Date();
     
-    // Calculate session end time = start time + duration (in minutes)
     const sessionEndTime = new Date(sessionDateTime.getTime() + (booking.duration * 60 * 1000));
-    
-    // Calculate 5 minutes before session start
     const fiveMinutesBeforeStart = new Date(sessionDateTime.getTime() - (5 * 60 * 1000));
     
-    // Show join button if current time is between:
-    // 5 minutes before session start AND session end time
     const canJoin = now >= fiveMinutesBeforeStart && now <= sessionEndTime;
-    
-    // Only show for non-cancelled sessions
     const isValidSession = !['cancelled_by_student', 'cancelled_by_professional', 'completed'].includes(booking.status);
     
     return canJoin && isValidSession;
   };
 
+  const shouldStartSessionImmediately = (booking: TransformedBooking) => {
+    const now = new Date();
+    const sessionStart = new Date(`${booking.scheduledDate}T${booking.scheduledTime}`);
+    return now >= sessionStart;
+  };
+
   const handleJoinSession = async (booking: TransformedBooking) => {
-    // Prevent multiple clicks
     if (joiningSession === booking._id) return;
     
+    if (!canJoinLobby(booking)) {
+      Alert.alert(
+        'Session Not Available',
+        'You can only join the session 5 minutes before the scheduled time.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Check if session should start immediately
+    if (shouldStartSessionImmediately(booking)) {
+      // Start session immediately
+      await startSession(booking);
+    } else {
+      // Show lobby and wait
+      setLobbyBooking(booking);
+      setShowLobby(true);
+    }
+  };
+
+  const startSession = async (booking: TransformedBooking) => {
     try {
       setJoiningSession(booking._id);
       console.log('🚀 Attempting to join session:', booking._id);
       
-      // First, join the session via API to get all required data
       const joinResponse = await joinProfessionalSessionCall(booking._id);
       console.log('📡 Join response:', joinResponse);
       
-      // Navigate to session call screen with all required parameters
       router.push({
         pathname: '/professional-session-call',
         params: {
@@ -196,16 +463,28 @@ export default function MySessionsScreen() {
           streamApiKey: joinResponse.streamApiKey,
           professionalId: booking.professional._id,
           professionalName: booking.professional.name,
-          durationInMinutes: booking.duration.toString()
+          durationInMinutes: booking.duration.toString(),
+          endTime: booking.endTime
         }
       });
     } catch (error: any) {
       console.error('Error joining session:', error);
       Alert.alert('Error', error.message || 'Failed to join session. Please try again.');
     } finally {
-      // Reset loading state after navigation
       setTimeout(() => setJoiningSession(null), 2000);
     }
+  };
+
+  const handleLobbySessionStart = () => {
+    if (lobbyBooking) {
+      setShowLobby(false);
+      startSession(lobbyBooking);
+    }
+  };
+
+  const handleCloseLobby = () => {
+    setShowLobby(false);
+    setLobbyBooking(null);
   };
 
   const handleCancelBooking = async (booking: TransformedBooking) => {
@@ -427,9 +706,134 @@ export default function MySessionsScreen() {
           }
         />
       )}
+
+      {/* Session Lobby Modal */}
+      <SessionLobby
+        visible={showLobby}
+        booking={lobbyBooking}
+        onClose={handleCloseLobby}
+        onSessionStart={handleLobbySessionStart}
+      />
     </View>
   );
 }
+
+// Lobby styles
+const lobbyStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  container: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: width * 0.9,
+    maxWidth: 400,
+    paddingVertical: 40,
+    paddingHorizontal: 30,
+    alignItems: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    padding: 10,
+    zIndex: 1,
+  },
+  content: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  heartContainer: {
+    marginBottom: 30,
+  },
+  usersContainer: {
+    marginBottom: 30,
+  },
+  usersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  userAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  professional: {
+    backgroundColor: Colors.light.primary,
+  },
+  student: {
+    backgroundColor: '#FF6B6B',
+  },
+  waitingDots: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#DDD',
+  },
+  dot1: {
+    animationDelay: '0s',
+  },
+  dot2: {
+    animationDelay: '0.3s',
+  },
+  dot3: {
+    animationDelay: '0.6s',
+  },
+  sessionInfo: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  sessionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+    color: '#000',
+  },
+  sessionTopic: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  sessionTime: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
+  statusContainer: {
+    alignItems: 'center',
+    gap: 16,
+  },
+  waitingText: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#333',
+    fontWeight: '500',
+  },
+  countdownText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.light.primary,
+    textAlign: 'center',
+  },
+  startingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.primary,
+    marginTop: 10,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {

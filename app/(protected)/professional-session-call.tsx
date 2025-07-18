@@ -64,7 +64,7 @@ export default function ProfessionalSessionCallScreen() {
     streamApiKey,
     professionalId,
     professionalName,
-    durationInMinutes = '60'
+    endTime
   } = useLocalSearchParams();
   const { user } = useAuth();
   const { socket, isConnected } = useSocket();
@@ -82,6 +82,7 @@ export default function ProfessionalSessionCallScreen() {
   const [sessionEndTime, setSessionEndTime] = useState<moment.Moment | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [showEndWarning, setShowEndWarning] = useState(false);
+  const [warningText, setWarningText] = useState<string>(''); // Add this new state
   const [isRecording, setIsRecording] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [showChat, setShowChat] = useState(false);
@@ -99,8 +100,6 @@ export default function ProfessionalSessionCallScreen() {
   
   // Use Expo's KeepAwake hook to prevent the screen from sleeping
   useKeepAwake();
-
-  const parsedDurationInMinutes = parseInt(durationInMinutes as string, 10) || 60;
 
   // Initialize call
   useEffect(() => {
@@ -128,9 +127,18 @@ export default function ProfessionalSessionCallScreen() {
           setConnectionStatus('Connecting to session...');
           const call = await streamService.joinCall(streamCallId as string);
 
-          // Set session end time
-          const endTime = moment().add(parsedDurationInMinutes, 'minutes');
-          setSessionEndTime(endTime);
+          // Set session end time from endTime parameter
+          if (endTime) {
+            const [hours, minutes] = (endTime as string).split(':').map(Number);
+            const sessionEnd = moment().startOf('day').add(hours, 'hours').add(minutes, 'minutes');
+            
+            // If the end time is before current time, it's for the next day
+            if (sessionEnd.isBefore(moment())) {
+              sessionEnd.add(1, 'day');
+            }
+            
+            setSessionEndTime(sessionEnd);
+          }
 
           // Set up call event listeners
           setupCallEventListeners(call);
@@ -167,9 +175,18 @@ export default function ProfessionalSessionCallScreen() {
           setConnectionStatus('Connecting to session...');
           const call = await streamService.joinCall(joinResponse.streamCallId);
 
-          // Set session end time
-          const endTime = moment().add(parsedDurationInMinutes, 'minutes');
-          setSessionEndTime(endTime);
+          // Set session end time from endTime parameter
+          if (endTime) {
+            const [hours, minutes] = (endTime as string).split(':').map(Number);
+            const sessionEnd = moment().startOf('day').add(hours, 'hours').add(minutes, 'minutes');
+            
+            // If the end time is before current time, it's for the next day
+            if (sessionEnd.isBefore(moment())) {
+              sessionEnd.add(1, 'day');
+            }
+            
+            setSessionEndTime(sessionEnd);
+          }
 
           // Set up call event listeners
           setupCallEventListeners(call);
@@ -225,7 +242,7 @@ export default function ProfessionalSessionCallScreen() {
       }
       streamService.cleanup();
     };
-  }, [bookingId, streamCallId, streamToken, streamApiKey, user?.id, parsedDurationInMinutes]);
+  }, [bookingId, streamCallId, streamToken, streamApiKey, user?.id, endTime]);
 
   // Set up GetStream event listeners
   const setupCallEventListeners = (call: Call) => {
@@ -340,6 +357,27 @@ export default function ProfessionalSessionCallScreen() {
     };
   };
 
+  // Add this helper function to generate dynamic warning text
+  const getWarningText = (remaining: number) => {
+    const totalSeconds = Math.floor(remaining / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    
+    if (minutes >= 5) {
+      return `Session ends in ${minutes} minutes`;
+    } else if (minutes >= 1) {
+      return `Session ends in ${minutes} minute${minutes > 1 ? 's' : ''}`;
+    } else if (seconds >= 30) {
+      return 'Session ends in 30 seconds';
+    } else if (seconds >= 10) {
+      return `Session ends in ${seconds} seconds`;
+    } else if (seconds >= 5) {
+      return `Session ends in ${seconds} seconds`;
+    } else {
+      return 'Session ending now';
+    }
+  };
+
   // Timer for call duration and session end
   useEffect(() => {
     if (!isLoading && callState.call && sessionEndTime) {
@@ -348,21 +386,27 @@ export default function ProfessionalSessionCallScreen() {
       }, 1000);
 
       sessionEndTimer.current = setInterval(() => {
-        const now = moment();
-        const remaining = sessionEndTime.diff(now);
+        // Use more precise time calculation
+        const now = moment().utc();
+        const endTimeUtc = sessionEndTime.utc();
+        const remaining = endTimeUtc.diff(now);
         
         if (remaining <= 0) {
-          setTimeRemaining('00:00');
+          setTimeRemaining('0 min 0 sec');
+          setShowEndWarning(false);
           endSessionCall('session_time_up');
         } else {
           const duration = moment.duration(remaining);
           const minutes = Math.floor(duration.asMinutes());
           const seconds = duration.seconds();
-          setTimeRemaining(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+          setTimeRemaining(`${minutes} min ${seconds} sec`);
           
-          // Show warning at 5 minutes
-          if (remaining <= 5 * 60 * 1000 && !showEndWarning) {
+          // Show warning at 5 minutes and update text dynamically
+          if (remaining <= 5 * 60 * 1000) {
             setShowEndWarning(true);
+            setWarningText(getWarningText(remaining));
+          } else {
+            setShowEndWarning(false);
           }
         }
       }, 1000);
@@ -372,7 +416,7 @@ export default function ProfessionalSessionCallScreen() {
         if (sessionEndTimer.current) clearInterval(sessionEndTimer.current);
       };
     }
-  }, [isLoading, callState.call, sessionEndTime, showEndWarning]);
+  }, [isLoading, callState.call, sessionEndTime]);
 
   // Use effect for pulse animation
   useEffect(() => {
@@ -494,9 +538,12 @@ export default function ProfessionalSessionCallScreen() {
     return (
       <View style={styles.callControls}>
         <View style={styles.callInfoContainer}>
-          <Text style={styles.callDuration}>{formatDuration(callDuration)}</Text>
+          {/* <Text style={styles.callDuration}>{formatDuration(callDuration)}</Text> */}
           <Text style={styles.timeRemaining}>Remaining: {timeRemaining}</Text>
           <Text style={styles.professionalName}>with {professionalName}</Text>
+        <View style={styles.recordingIndicatorContainer}>
+          <RecordingIndicator />
+        </View>
         </View>
 
         <View style={styles.controlsContainer}>
@@ -566,7 +613,7 @@ export default function ProfessionalSessionCallScreen() {
         {showEndWarning && (
           <View style={styles.warningContainer}>
             <Ionicons name="warning" size={20} color={Colors.light.warning} />
-            <Text style={styles.warningText}>Session ends in 5 minutes</Text>
+            <Text style={styles.warningText}>{warningText}</Text>
           </View>
         )}
       </View>
@@ -654,7 +701,7 @@ export default function ProfessionalSessionCallScreen() {
           currentUserName={user?.name || 'Student'}
         />
         {/* Add recording indicator */}
-        <RecordingIndicator />
+       
       </ThemedView>
     </GestureHandlerRootView>
   );
@@ -664,6 +711,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background
+  },
+  recordingIndicatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -733,9 +784,6 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   recordingIndicator: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
