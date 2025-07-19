@@ -96,7 +96,7 @@ export const DetailedAnalysis: React.FC<Props> = ({ metrics }) => {
               </View>
             </View>
 
-            <View style={{backgroundColor: '#F8F9FA', borderRadius: 12, padding: 16}}>
+            {/* <View style={{backgroundColor: '#F8F9FA', borderRadius: 12, padding: 16}}>
               <ThemedText style={styles.subSectionTitle}>Business goal: used vs. missing terms</ThemedText>
               
               <View style={styles.termsContainer}>
@@ -111,7 +111,7 @@ export const DetailedAnalysis: React.FC<Props> = ({ metrics }) => {
                   </View>
                 ))}
               </View>
-            </View>
+            </View> */}
           </View>
 
           {/* Pronunciation */}
@@ -129,11 +129,11 @@ export const DetailedAnalysis: React.FC<Props> = ({ metrics }) => {
               </View>
             </View>
 
-            <View >
+            {/* <View >
               <ThemedText style={styles.analysisText}>
                 {metrics.pronunciationIntelligibility.commonChallenges}
               </ThemedText>
-            </View>
+            </View> */}
 
             <View style={styles.subsectionContainer}>
               <ThemedText style={styles.subSectionTitle}>Problematic words</ThemedText>

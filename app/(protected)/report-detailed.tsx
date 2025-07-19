@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Alert, ActivityIndicator, TouchableOpacity, View, Linking } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -233,6 +233,8 @@ export default function ReportDetailedScreen() {
   }
 
   return (
+    <>
+    <Stack.Screen options={{ headerShown: true, title: 'Detailed Report', headerTitleAlign: 'center' }} />
     <SafeAreaView style={styles.container}>
       {/* Header */}
       {/* <View style={styles.header}>
@@ -296,6 +298,7 @@ export default function ReportDetailedScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </>
   );
 }
 
