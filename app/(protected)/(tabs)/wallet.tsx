@@ -32,9 +32,11 @@ import {
   type SessionLicenseBalance,
   ComboPackage
 } from '@/api/services/coinService';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CoinsScreen() {
   const router = useRouter();
+  const { refreshUserData } = useAuth();
   
   // State
   const [coinBalance, setCoinBalance] = useState<CoinBalance | null>(null);
@@ -72,7 +74,8 @@ export default function CoinsScreen() {
         getCoinBalance(),
         getSessionLicenseBalance(),
         getCoinPackages(),
-        getComboPackages()
+        getComboPackages(),
+        refreshUserData()
       ]);
       
       console.log('Loaded coin packages:', packages);
@@ -126,14 +129,33 @@ export default function CoinsScreen() {
         Alert.alert('Already Checked In', 'You have already checked in today. Come back tomorrow!');
         setCanCheckIn(false);
       } else {
+        // Enhanced success message with milestone info
+        let message = `You earned ${result.coinsEarned} coins!`;
+        
+        if (result.bonusCoins > 0 && result.milestoneReached) {
+          message += `\n\n🎉 ${result.milestoneReached}-day milestone achieved!`;
+          message += `\n🎁 Bonus: ${result.bonusCoins} coins`;
+          message += `\n📈 Level up: ${result.level.toUpperCase()}`;
+        }
+        
+        message += `\n🔥 Current streak: ${result.dailyStreak} days`;
+        message += `\n✅ Service used: ${result.serviceUsed}`;
+
         Alert.alert(
-          'Daily Check-In Successful!',
-          `You earned ${result.coinsEarned} coins! ${result.streakBonus ? '🔥 Streak bonus included!' : ''}\n\nStreak: ${result.dailyStreak} days`,
+          result.milestoneReached ? '🏆 Milestone Achieved!' : '✅ Daily Check-In Successful!',
+          message,
           [{ text: 'Awesome!', onPress: () => loadData() }]
         );
       }
     } catch (error: any) {
-      if (error.message?.includes('already checked in')) {
+      // Handle new service usage error
+      if (error.message?.includes('use any of the services')) {
+        Alert.alert(
+          'Service Usage Required', 
+          'Please use AI Call, Professional Call, or Peer Practice first to claim your daily check-in.',
+          [{ text: 'Got it!' }]
+        );
+      } else if (error.message?.includes('Already checked in today')) {
         Alert.alert('Already Checked In', 'You have already checked in today. Come back tomorrow!');
         setCanCheckIn(false);
       } else {

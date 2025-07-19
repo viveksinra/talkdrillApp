@@ -16,6 +16,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { NotificationBell } from "@/components/shared/NotificationBell";
+import { DailyStreakCard } from "@/components/shared/DailyStreakCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchAICharacters } from "@/api/services/public/aiCharacters";
 import { fetchProfessionals, Professional } from "@/api/services/public/professionalService";
@@ -340,7 +341,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          <ScrollView style={{ flex: 1, padding: 16 }}>
+          <ScrollView style={{ flex: 1, padding: 8 }}>
             <ThemedView style={styles.greetingContainer}>
               <ThemedText type="title">
                 Hello, {user?.name.split(" ")[0] || "User"}!
@@ -351,6 +352,9 @@ export default function HomeScreen() {
                 Ready to improve your English today?
               </ThemedText>
             </ThemedView>
+
+            {/* Daily Streak Card */}
+            <DailyStreakCard />
 
             <ThemedView style={styles.sectionTitle}>
               <ThemedText type="defaultSemiBold">
@@ -519,7 +523,7 @@ const styles = StyleSheet.create({
     width: 120,
   },
   greetingContainer: {
-    marginBottom: 24,
+    marginBottom: 12,
   },
   sectionTitle: {
     marginBottom: 16,

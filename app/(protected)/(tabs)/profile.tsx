@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View, ScrollView, SafeAreaView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -40,6 +41,14 @@ export default function ProfileScreen() {
             </View>
             <ThemedText type="title">{user?.name || 'Your Name'}</ThemedText>
             <ThemedText>{user?.email || user?.phoneNumber}</ThemedText>
+            
+            {/* Streak Badge */}
+            <View style={styles.streakBadge}>
+              <Ionicons name="flame" size={16} color="#FF6B35" />
+              <ThemedText style={styles.streakText}>
+                {user?.dailyStreak || 0} Day Streak
+              </ThemedText>
+            </View>
           </View>
           
           {/* <ThemedView style={styles.statsContainer}>
@@ -159,6 +168,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4A86E8',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    marginTop: 12,
+    gap: 4,
+  },
+  streakText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   statsContainer: {
     flexDirection: 'row',

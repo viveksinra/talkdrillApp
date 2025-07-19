@@ -15,6 +15,8 @@ interface CallControlsProps {
   isConnected: boolean;
   isProcessingVoice: boolean;
   isGeneratingText: boolean;
+  isAIResponding: boolean;
+  isAudioPlaying: boolean;
   handleEndCall: () => void;
 }
 
@@ -29,6 +31,8 @@ export const CallControls: React.FC<CallControlsProps> = ({
   isConnected,
   isProcessingVoice,
   isGeneratingText,
+  isAIResponding,
+  isAudioPlaying,
   handleEndCall
 }) => {
   // Animation for the pulsing effect - only for shadow
@@ -109,6 +113,7 @@ export const CallControls: React.FC<CallControlsProps> = ({
           style={[
             styles.recordButton,
             isRecording && styles.recordingButton,
+            (isAIResponding || isAudioPlaying) && !isRecording && styles.interruptModeButton,
             !isConnected && styles.disabledButton,
           ]}
           onPress={toggleRecording}
@@ -240,6 +245,9 @@ const styles = StyleSheet.create({
   },
   recordingButton: {
     backgroundColor: "#4CAF50",
+  },
+  interruptModeButton: {
+    backgroundColor: "#FF9800", // Orange color for interrupt mode
   },
   disabledButton: {
     backgroundColor: "#CCCCCC",

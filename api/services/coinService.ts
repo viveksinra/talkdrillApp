@@ -66,9 +66,14 @@ export interface PaymentOrder {
 
 export interface DailyCheckInResult {
   coinsEarned: number;
+  baseReward: number;
+  bonusCoins: number;
   newBalance: number;
   dailyStreak: number;
-  streakBonus: boolean;
+  level: 'basic' | 'pro' | 'advanced';
+  milestoneReached: number | null;
+  serviceUsed: 'ai-call' | 'professional-call' | 'peer-practice';
+  streakBonus?: boolean; // Keep for backward compatibility
   transactionId: string;
   alreadyCheckedIn?: boolean;
 }
@@ -227,7 +232,7 @@ export const dailyCheckIn = async (): Promise<DailyCheckInResult> => {
     }
     throw new Error(response.data.message || 'Failed to process daily check-in');
   } catch (error) {
-    console.error('Error processing daily check-in:', error);
+    // console.error('Error processing daily check-in:', error);
     throw error;
   }
 };

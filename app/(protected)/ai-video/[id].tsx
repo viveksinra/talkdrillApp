@@ -993,6 +993,7 @@ export default function AIVideoCallScreen() {
               videosReady={videosReady}
               videosFailed={videosFailed}
               isAIResponding={isAIResponding}
+              isAudioPlaying={isAudioPlaying}
             />
           ),
           headerLeft: () => (
@@ -1069,6 +1070,8 @@ export default function AIVideoCallScreen() {
             isConnected={isConnected}
             isProcessingVoice={isProcessingVoice}
             isGeneratingText={isGeneratingText}
+            isAIResponding={isAIResponding}
+            isAudioPlaying={isAudioPlaying}
             handleEndCall={handleEndCall}
           />
         </KeyboardAvoidingView>

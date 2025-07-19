@@ -2,6 +2,7 @@ import { createContext, useState, useContext, useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import React from 'react';
+import { getCurrentUser } from '@/api/services/private/userService';
 
 interface User {
   id: string;
@@ -16,6 +17,11 @@ interface User {
   learningMotivation?: string;
   interests?: string[];
   focusAreas?: string[];
+  level: 'basic' | 'pro' | 'advanced';
+  dailyStreak: number;
+  coins?: number;
+  referralCode?: string;
+  settings?: any;
 }
 
 interface AuthContextType {
@@ -25,6 +31,7 @@ interface AuthContextType {
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (userData: Partial<User>) => void;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -34,6 +41,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   logout: async () => {},
   updateUser: () => {},
+  refreshUserData: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -50,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedUser = await SecureStore.getItemAsync('user');
         
         if (storedToken && storedUser) {
+          console.log("storedUser", JSON.parse(storedUser));
           setUser(JSON.parse(storedUser));
         }
       } catch (error) {
@@ -92,6 +101,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshUserData = async () => {
+    try {
+      const response = await getCurrentUser();
+      if (response && response.id) {
+        const updatedUser = {
+          id: response.id,
+          name: response.name,
+          email: response.email,
+          phoneNumber: response.phoneNumber,
+          profileImage: response.profileImage,
+          coins: response.coins,
+          dailyStreak: response.dailyStreak,
+          level: response.level,
+          settings: response.settings,
+          referralCode: response.referralCode,
+          // Keep existing local properties that might not be in server response
+          ...user,
+          // Override with server data
+          ...response
+        };
+        
+        setUser(updatedUser);
+        await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
+        console.log('User data refreshed successfully');
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+      throw error;
+    }
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -109,6 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         updateUser,
+        refreshUserData,
       }}
     >
       {children}

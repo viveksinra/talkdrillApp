@@ -11,6 +11,7 @@ interface CallHeaderProps {
   videosReady: boolean;
   videosFailed: boolean;
   isAIResponding: boolean;
+  isAudioPlaying: boolean;
 }
 
 export const CallHeader: React.FC<CallHeaderProps> = ({
@@ -20,7 +21,8 @@ export const CallHeader: React.FC<CallHeaderProps> = ({
   isConnected,
   videosReady,
   videosFailed,
-  isAIResponding
+  isAIResponding,
+  isAudioPlaying
 }) => {
   // Determine system readiness status
   const videoSystemReady = videosReady || videosFailed;
@@ -32,6 +34,8 @@ export const CallHeader: React.FC<CallHeaderProps> = ({
   
   if (!isConnected) {
     displayStatus = connectionStatus;
+  } else if (isAudioPlaying) {
+    displayStatus = "AI Speaking...";
   } else if (videosReady) {
     displayStatus = "Ready To Talk";
   } else if (videosFailed) {

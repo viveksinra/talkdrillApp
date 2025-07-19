@@ -6,10 +6,12 @@ export interface User {
   phoneNumber?: string;
   avatar?: string | null;
   streak: number;
+  level: 'basic' | 'pro' | 'advanced';
   totalSessions: number;
   reportsGenerated: number;
   coinsSpent: number;
   coinBalance: number;
+  profileImage?: string;
 }
 
 // Session types
@@ -30,491 +32,586 @@ export interface Session {
     content: string;
     timestamp: Date;
   }>;
-  audioUrl?: string;
-  transcript?: string;
-  hasReport: boolean;
-  startTime: Date;
-  endTime?: Date;
-  status: 'active' | 'completed' | 'terminated';
-  coinsSpent: number;
-  professionalEarning?: number; // For professional sessions
-  sessionRating?: number; // 1-5
-  sessionFeedback?: string;
-  // Legacy fields for backward compatibility
-  type?: SessionType;
-  partnerId?: string;
-  partnerName?: string;
-  partnerAvatar?: string;
-  reportId?: string;
+  status: 'active' | 'completed' | 'cancelled';
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-// Enhanced Report types matching backend model and UI screenshots
-export interface ConversationOverview {
-  participants: Array<{
-    name: string;
-    role: 'user' | 'ai' | 'peer';
-  }>;
-  date: Date;
-  duration: number; // in minutes
-  scenario: string;
-  excerpt: string;
-  goal: 'Business' | 'Casual' | 'Academic';
-}
-
-export interface DetailedMetrics {
-  fluencyCoherence: {
-    score: number; // 0-10
-    wordsPerMinute: number;
-    pausesPerMinute: number;
-    discourseMarkersUsed: number;
-    analysis: string;
-  };
-  grammarAccuracy: {
-    score: number; // 0-10
-    errorTypes: string[];
-    errorsPerHundredWords: number;
-    transcriptExamples: Array<{
-      original: string;
-      corrected: string;
-    }>;
-  };
-  vocabularyRange: {
-    score: number; // 0-10
-    lexicalDiversity: number;
-    businessTerms: {
-      used: string[];
-      missing: string[];
-    };
-  };
-  pronunciationIntelligibility: {
-    score: number; // 0-10
-    phonemeLevelErrors: number;
-    intelligibilityRating: number; // 0-100
-    commonChallenges: string;
-    problematicWords: Array<{
-      word: string;
-      issue: string;
-    }>;
-  };
-  pragmaticsRegister: {
-    politenessStrategies: 'Appropriate' | 'Needs Improvement' | 'Excellent';
-    formalityMatch: number; // 0-100
-    turnTaking: 'Good' | 'Needs Improvement' | 'Excellent';
-    analysis: string;
-  };
-}
-
-export interface Strength {
-  title: string;
-  description: string;
-}
-
-export interface Improvement {
-  title: string;
-  description: string;
-  action: string;
-}
-
-export interface ActionPlan {
-  shortTerm: Array<{
-    task: string;
-    timeframe: string;
-  }>;
-  midTerm: Array<{
-    task: string;
-    timeframe: string;
-  }>;
-  resources: {
-    apps: string[];
-    podcasts: string[];
-    worksheets: string[];
-  };
-}
-
-export interface VisualsData {
-  errorRateOverTime: Array<{
-    time: string;
-    errorRate: number;
-  }>;
-  skillProfile: Array<{
-    skill: string;
-    current: number;
-    target: number;
-  }>;
-  vocabularyComparison: Array<{
-    level: string;
-    current: number;
-    target: number;
-  }>;
-}
-
-export interface ExportRecord {
-  format: 'PDF' | 'CSV';
-  generatedAt: Date;
-  downloadUrl: string;
-}
-
-// Main Report interface
-export interface DetailedReport {
+// AI Character types
+export interface AICharacter {
   id: string;
-  sessionId: string;
-  sessionType: SessionType;
-  conversationOverview: ConversationOverview;
-  overallScore: number; // 0-10
-  metrics: DetailedMetrics;
-  strengths: Strength[];
-  improvements: Improvement[];
-  actionPlan: ActionPlan;
-  visualsData: VisualsData;
-  transcript?: string;
-  annotations?: Array<{
-    startIndex: number;
-    endIndex: number;
-    errorType: 'grammar' | 'vocabulary' | 'pronunciation' | 'fluency';
-    suggestion: string;
-    explanation: string;
-  }>;
-  suggestions: string[];
-  isSaved: boolean;
-  exports: ExportRecord[];
+  name: string;
+  description: string;
+  avatar: string;
+  personality: string[];
+  topics: string[];
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  isActive: boolean;
+}
+
+// Professional types
+export interface Professional {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  avatar: string;
+  specializations: string[];
+  rating: number;
+  reviewCount: number;
+  hourlyRate: number;
+  isAvailable: boolean;
+  languages: string[];
+  experience: number; // years
+}
+
+// Booking types
+export interface Booking {
+  id: string;
+  userId: string;
+  professionalId: string;
+  sessionType: 'video-call' | 'voice-call' | 'chat';
+  scheduledTime: Date;
+  duration: number; // minutes
+  topic?: string;
+  status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
+  totalCost: number;
   createdAt: Date;
 }
 
-// Legacy Report interface for backward compatibility
+// Report types
 export interface Report {
   id: string;
   sessionId: string;
-  sessionType: SessionType;
-  generatedDate: Date;
-  proficiencyScore: number;
-  metrics: {
-    fluency: number;
-    grammar: number;
-    vocabulary: number;
-    pronunciation: number;
-  };
-  transcript: TranscriptItem[];
-  suggestions: string[];
-}
-
-export interface ReportItem {
-  id: string;
-  conversationOverview: {
-    participants: Array<{
-      name: string;
-      role: string;
-    }>;
-    date: string;
-    duration: number;
-    scenario: string;
-    goal: string;
-  };
-  overallScore: number;
-  metrics: {
-    fluencyCoherence: { score: number };
-    grammarAccuracy: { score: number };
-    vocabularyRange: { score: number };
-    pronunciationIntelligibility: { score: number };
-  };
-  isSaved: boolean;
-  createdAt: string;
-}
-
-export interface TranscriptItem {
-  id: string;
-  speaker: 'user' | 'ai' | 'peer';
-  text: string;
-  timestamp: Date;
-  errors?: {
-    start: number;
-    end: number;
-    type: 'grammar' | 'vocabulary' | 'pronunciation';
-    suggestion: string;
-  }[];
-}
-
-// Coin transaction types
-export type TransactionType = 
-  | 'purchase' 
-  | 'check-in' 
-  | 'ai-session' 
-  | 'premium-filter' 
-  | 'teacher-session'
-  | 'refund';
-
-export interface CoinTransaction {
-  id: string;
   userId: string;
-  type: TransactionType;
-  amount: number; // positive for earned, negative for spent
-  timestamp: Date;
-  description: string;
+  type: 'ai-session' | 'professional-session' | 'peer-session';
+  overallScore: number;
+  sections: {
+    grammar: {
+      score: number;
+      feedback: string;
+      mistakes: Array<{
+        original: string;
+        corrected: string;
+        explanation: string;
+      }>;
+    };
+    vocabulary: {
+      score: number;
+      feedback: string;
+      wordsUsed: string[];
+      suggestedWords: string[];
+    };
+    pronunciation: {
+      score: number;
+      feedback: string;
+      difficultWords: string[];
+    };
+    fluency: {
+      score: number;
+      feedback: string;
+      pauseAnalysis: string;
+    };
+  };
+  actionPlan: string[];
+  createdAt: Date;
 }
 
 // Notification types
-export type NotificationType = 
-  | 'report_ready' 
-  | 'coin_bonus'
-  | 'coin_purchase'
-  | 'coin_low_balance'
-  | 'system'
-  | 'peer_request'
-  | 'peer_matched'
-  | 'session_started'
-  | 'session_ended'
-  | 'session_reminder'
-  | 'call_incoming'
-  | 'call_ended'
-  | 'call_extended'
-  | 'chat_message'
-  | 'ai_response_ready'
-  | 'maintenance'
-  | 'feature_announcement'
-  | 'daily_streak'
-  | 'achievement_unlocked';
-
-export type NotificationCategory = 'transaction' | 'session' | 'system' | 'social' | 'achievement';
-
-export type NotificationPriority = 'low' | 'medium' | 'high' | 'urgent';
-
 export interface Notification {
   id: string;
-  type: string;
-  category: string;
-  priority: string;
+  userId: string;
   title: string;
   message: string;
-  data: Record<string, any>;
-  actionUrl?: string;
-  imageUrl?: string;
+  type: 'session' | 'booking' | 'report' | 'achievement' | 'reminder' | 'system';
   isRead: boolean;
-  createdAt: string;
+  createdAt: Date;
+  data?: any; // Additional data for the notification
 }
 
-export interface NotificationPreferences {
-  pushNotifications: boolean;
-  categories: {
-    transaction: boolean;
-    session: boolean;
-    system: boolean;
-    social: boolean;
-    achievement: boolean;
+// Coin and Transaction types
+export interface CoinTransaction {
+  id: string;
+  userId: string;
+  type: 'earned' | 'spent' | 'purchased';
+  amount: number;
+  description: string;
+  relatedTo?: {
+    type: 'session' | 'booking' | 'daily-bonus' | 'referral' | 'purchase';
+    id: string;
   };
+  createdAt: Date;
 }
 
-export interface DeviceToken {
-  token: string;
-  platform: 'ios' | 'android' | 'web';
-  deviceId: string;
+// Common utility types
+export type LoadingState = 'idle' | 'loading' | 'success' | 'error';
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
 }
 
-// AI model types
-export interface AIModel {
+// Filter and search types
+export interface FilterOptions {
+  sessionType?: SessionType[];
+  difficulty?: ('beginner' | 'intermediate' | 'advanced')[];
+  topics?: string[];
+  languages?: string[];
+  priceRange?: {
+    min: number;
+    max: number;
+  };
+  availability?: 'now' | 'today' | 'this-week';
+}
+
+export interface SearchOptions {
+  query: string;
+  filters?: FilterOptions;
+  sortBy?: 'rating' | 'price' | 'experience' | 'alphabetical';
+  sortOrder?: 'asc' | 'desc';
+}
+
+// Audio and Video types
+export interface MediaSettings {
+  audioEnabled: boolean;
+  videoEnabled: boolean;
+  quality: 'low' | 'medium' | 'high';
+}
+
+// Achievement types
+export interface Achievement {
   id: string;
   name: string;
-  role: string; // Engineer, Counselor, Teacher, etc.
-  avatar: string;
   description: string;
+  icon: string;
+  type: 'session' | 'streak' | 'skill' | 'social';
+  requirement: {
+    count: number;
+    timeframe?: 'daily' | 'weekly' | 'monthly' | 'all-time';
+  };
+  reward: {
+    coins?: number;
+    badge?: string;
+  };
+  isUnlocked: boolean;
+  unlockedAt?: Date;
 }
 
-// Topics for conversation
-export interface Topic {
-  id: string;
-  title: string;
-  description: string;
-  suitableFor: ('beginner' | 'intermediate' | 'advanced')[];
+// Settings types
+export interface UserSettings {
+  notifications: {
+    push: boolean;
+    email: boolean;
+    sessionReminders: boolean;
+    dailyMotivation: boolean;
+    weeklyProgress: boolean;
+  };
+  privacy: {
+    profileVisibility: 'public' | 'friends' | 'private';
+    showOnlineStatus: boolean;
+    allowMessages: boolean;
+  };
+  preferences: {
+    language: string;
+    timezone: string;
+    autoJoinSessions: boolean;
+    recordSessions: boolean;
+  };
 }
 
-// Peer matching filters
-export interface PeerFilters {
-  proficiencyLevel: 'beginner' | 'intermediate' | 'advanced';
-  gender?: 'male' | 'female' | 'any';
-  isCertifiedTeacher?: boolean;
-  randomMatch: boolean;
-} 
-
-export interface Booking {
-  _id: string;
-  student: string; // User ID
-  professional: {
-    _id: string;
+// Referral types
+export interface ReferralData {
+  code: string;
+  totalReferred: number;
+  totalEarned: number;
+  pendingRewards: number;
+  referredUsers: Array<{
     name: string;
-    profileImage?: string;
-    averageRating: number;
-    specializations: string[];
-  };
-  scheduledDate: string; // ISO date string or Date
-  scheduledTime: string; // Format: "09:00"
-  endTime: string; // Format: "10:00"
-  duration: number; // Duration in minutes, default 30
-  sessionType: string; // Default "professional_session"
-  topic?: string;
-  studentNotes?: string;
-  status: 'booked' | 'confirmed' | 'in_progress' | 'completed' | 
-          'cancelled_by_student' | 'cancelled_by_professional' | 
-          'no_show_student' | 'no_show_professional';
-  amount: number; // Session cost in INR
-  coinsDeducted: number;
-  usedSessionLicense: boolean;
-  professionalEarning: number;
-  sessionId?: string;
-  bookingSessionStatus: 'scheduled' | 'in_progress' | 'completed';
-  streamCallId?: string;
-  // Cancellation details
-  cancellationReason?: string;
-  cancelledBy?: 'student' | 'professional' | 'system';
-  cancelledAt?: Date;
-  // Reminder notifications
-  remindersSent: {
-    fifteenMinutes: boolean;
-    oneHour: boolean;
-    oneDay: boolean;
-  };
-  bookingSource: 'app' | 'web' | 'admin';
-  createdAt: Date;
-  updatedAt: Date;
+    joinedAt: Date;
+    status: 'pending' | 'completed';
+    reward: number;
+  }>;
 }
 
-export interface TransformedBooking {
-  _id: string; // Converted from ObjectId to string
-  student: string; // ObjectId as string
-  professional: {
-    _id: string; // Converted from ObjectId to string
-    name: string;
-    profileImage?: string;
-    averageRating: number; // Guaranteed to be present (defaults to 4.5)
-    specializations: string[]; // Guaranteed to be an array (defaults to [])
-  };
-  scheduledDate: string; // Converted to YYYY-MM-DD format using toISOString().split('T')[0]
-  scheduledTime: string; // Format: "09:00"
-  endTime: string; // Format: "10:00"
-  duration: number; // Duration in minutes, default 30
-  sessionType: string; // Default "professional_session"
-  topic?: string;
-  studentNotes?: string;
-  status: 'booked' | 'confirmed' | 'in_progress' | 'completed' | 
-          'cancelled_by_student' | 'cancelled_by_professional' | 
-          'no_show_student' | 'no_show_professional';
-  amount: number; // Session cost in INR
-  coinsDeducted: number;
-  usedSessionLicense: boolean;
-  professionalEarning: number;
-  sessionId?: string; // ObjectId as string if present
-  bookingSessionStatus: 'scheduled' | 'in_progress' | 'completed';
-  streamCallId?: string;
-  attachments?: {
-    name: string;
-    url: string;
-    size?: string;
-    uploadDate?: Date | undefined;
-  }[];
-  recordingUrl?: string;
-  recordingFilename?: string;
-  recordingStatus?: 'pending' | 'ready' | 'failed';
-  transcriptionUrl?: string;
-  transcriptionFilename?: string;
-  transcriptionStatus?: 'pending' | 'ready' | 'failed';
-  // Cancellation details
-  cancellationReason?: string;
-  cancelledBy?: 'student' | 'professional' | 'system';
-  cancelledAt?: Date;
-  // Reminder notifications
-  remindersSent: {
-    fifteenMinutes: boolean;
-    oneHour: boolean;
-    oneDay: boolean;
-  };
-  bookingSource: 'app' | 'web' | 'admin';
-  createdAt: Date;
-  updatedAt: Date;
-  // Note: __v fields are explicitly removed
+// Socket event types
+export type SocketEvent = 
+  | 'user-connected'
+  | 'user-disconnected'
+  | 'call-request'
+  | 'call-accepted'
+  | 'call-rejected'
+  | 'call-ended'
+  | 'message-sent'
+  | 'message-received'
+  | 'typing-start'
+  | 'typing-stop'
+  | 'session-started'
+  | 'session-ended';
+
+export interface SocketEventData {
+  event: SocketEvent;
+  data: any;
+  timestamp: Date;
+}
+
+// Error types
+export interface AppError {
+  code: string;
+  message: string;
+  details?: any;
+}
+
+// Navigation types (for type-safe navigation)
+export type RootStackParamList = {
+  '(auth)': undefined;
+  '(protected)': undefined;
+  'ai-character': { id: string };
+  'professional-profile': { id: string };
+  'session-call': { bookingId: string };
+  'session-review': { bookingId: string };
+  'report-details': { reportId: string };
+  'edit-profile': undefined;
+  'settings': undefined;
+  'notifications': undefined;
 };
 
-export interface Professional {
-  _id: string;
+// Component prop types
+export interface BaseComponentProps {
+  style?: any;
+  testID?: string;
+}
+
+// Form types
+export interface LoginForm {
+  email: string;
+  password: string;
+}
+
+export interface SignupForm {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  phoneNumber?: string;
+}
+
+export interface ProfileForm {
   name: string;
   email?: string;
-  phoneNumber: string;
-  isPhoneVerified: boolean;
-  profileImage?: string;
+  phoneNumber?: string;
   bio?: string;
-  experience: number; // years of experience
-  education?: string;
-  certifications: Array<{
-    name: string;
-    issuer: string;
-    year: number;
-  }>;
-  specializations: Array<
-    'business_english' | 'conversation' | 'grammar' | 'pronunciation' |
-    'interview_preparation' | 'academic_english' | 'ielts_preparation' |
-    'toefl_preparation' | 'writing_skills' | 'presentation_skills'
-  >;
-  languages: Array<{
-    language: 'english' | 'hindi' | 'spanish' | 'french' | 'german' | 'chinese' |
-             'japanese' | 'korean' | 'arabic' | 'portuguese' | 'russian' | 'italian';
-    proficiency: 'native' | 'fluent' | 'intermediate' | 'basic';
-  }>;
-  hourlyRate: number; // minimum 50 INR per session
+  interests: string[];
+  goals: string[];
+  nativeLanguage: string;
+  targetLanguages: string[];
+}
+
+// Validation types
+export interface ValidationResult {
+  isValid: boolean;
+  errors: Record<string, string>;
+}
+
+// Theme types
+export interface ThemeColors {
+  primary: string;
+  secondary: string;
+  accent: string;
+  background: string;
+  surface: string;
+  text: string;
+  textSecondary: string;
+  border: string;
+  error: string;
+  success: string;
+  warning: string;
+}
+
+// Analytics types
+export interface AnalyticsEvent {
+  name: string;
+  properties?: Record<string, any>;
+  timestamp: Date;
+}
+
+// Performance types
+export interface PerformanceMetrics {
+  sessionDuration: number;
+  responseTime: number;
+  errorRate: number;
+  userEngagement: number;
+}
+
+// Auth types
+export interface AuthState {
+  isAuthenticated: boolean;
+  user: User | null;
+  loading: boolean;
+  error: string | null;
+}
+
+export interface AuthActions {
+  login: (credentials: LoginForm) => Promise<void>;
+  signup: (userData: SignupForm) => Promise<void>;
+  logout: () => Promise<void>;
+  updateProfile: (updates: Partial<User>) => Promise<void>;
+  refreshToken: () => Promise<void>;
+}
+
+// Context types
+export interface AppContextType {
+  auth: AuthState & AuthActions;
+  settings: UserSettings;
+  updateSettings: (settings: Partial<UserSettings>) => Promise<void>;
+}
+
+// Storage types
+export type StorageKeys = 
+  | 'auth_token'
+  | 'refresh_token'
+  | 'user_data'
+  | 'app_settings'
+  | 'cached_reports'
+  | 'offline_messages';
+
+// Network types
+export interface NetworkState {
+  isConnected: boolean;
+  isInternetReachable: boolean;
+  type: string;
+}
+
+// App state types
+export type AppStateStatus = 'active' | 'background' | 'inactive';
+
+// Gesture types
+export interface GestureState {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  scale: number;
+}
+
+// Animation types
+export interface AnimationConfig {
+  duration: number;
+  easing: string;
+  delay?: number;
+  repeat?: number;
+}
+
+// Platform types
+export type PlatformType = 'ios' | 'android' | 'web';
+
+// Device types
+export interface DeviceInfo {
+  platform: PlatformType;
+  version: string;
+  model: string;
+  isTablet: boolean;
+  hasNotch: boolean;
+}
+
+// Location types
+export interface LocationCoords {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  altitude?: number;
+  heading?: number;
+  speed?: number;
+}
+
+// File types
+export interface FileInfo {
+  uri: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
+// Camera types
+export interface CameraOptions {
+  mediaType: 'photo' | 'video';
+  quality: number;
+  allowsEditing: boolean;
+  aspect: [number, number];
+}
+
+// Push notification types
+export interface PushNotificationPayload {
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  badge?: number;
+  sound?: string;
+}
+
+// Deep link types
+export interface DeepLinkData {
+  screen: string;
+  params?: Record<string, any>;
+}
+
+// Feature flag types
+export interface FeatureFlags {
+  aiVideoChat: boolean;
+  premiumFeatures: boolean;
+  analyticsTracking: boolean;
+  crashReporting: boolean;
+}
+
+// A/B testing types
+export interface ABTestVariant {
+  name: string;
+  weight: number;
+  config: Record<string, any>;
+}
+
+// Metrics types
+export interface UserMetrics {
   totalSessions: number;
-  completedSessions: number;
-  averageRating: number; // 0-5
-  totalRatings: number;
-  totalReviews: number;
-  isVerified: boolean;
-  kycVerified: boolean;
-  kycDocuments: {
-    governmentId?: string; // URL
-    selfie?: string; // URL
-    resume?: string; // URL
-  };
-  offerFirstSessionFree: boolean;
-  kycSubmissionDate?: Date;
-  kycStatus: 'pending' | 'under_review' | 'approved' | 'rejected';
-  isActive: boolean;
-  isAvailableForBooking: boolean;
-  totalEarnings: number;
-  pendingPayouts: number;
-  lastPayoutDate?: Date;
-  // Device tokens for push notifications
-  deviceTokens: Array<{
-    token: string;
-    platform: 'ios' | 'android' | 'web';
-    deviceId: string;
-    isActive: boolean;
-    lastUsed: Date;
-  }>;
-  // Notification settings
-  settings: {
-    pushNotifications: boolean;
-    emailNotifications: boolean;
-    notificationCategories: {
-      professional_booking: boolean;
-      professional_session: boolean;
-      professional_payout: boolean;
-      professional_review: boolean;
-      system: boolean;
-    };
-  };
-  // Authentication fields
-  otp?: string;
-  otpExpires?: Date;
-  otpAttempts: number;
-  dateJoined: Date;
-  lastLoginDate?: Date;
-  // Payout settings
-  payoutSettings: {
-    method: 'bank_transfer' | 'upi';
-    frequency: 'weekly' | 'monthly';
-    bankAccount?: {
-      accountNumber: string;
-      ifscCode: string;
-      accountHolderName: string;
-      bankName: string;
-    };
-    upi?: {
-      upiId: string;
-    };
-    lastUpdated?: Date;
-  };
+  totalMinutes: number;
+  averageSessionLength: number;
+  streakDays: number;
+  coinsEarned: number;
+  coinsSpent: number;
+  improvementScore: number;
+}
+
+// Feedback types
+export interface UserFeedback {
+  rating: number;
+  comment: string;
+  category: 'bug' | 'feature' | 'general';
+  timestamp: Date;
+}
+
+// Subscription types
+export interface Subscription {
+  id: string;
+  userId: string;
+  plan: 'basic' | 'premium' | 'pro';
+  status: 'active' | 'cancelled' | 'expired';
+  startDate: Date;
+  endDate: Date;
+  autoRenew: boolean;
+}
+
+// Payment types
+export interface PaymentMethod {
+  id: string;
+  type: 'card' | 'paypal' | 'apple_pay' | 'google_pay';
+  lastFour?: string;
+  expiryDate?: string;
+  isDefault: boolean;
+}
+
+// Calendar types
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  startTime: Date;
+  endTime: Date;
+  type: 'session' | 'reminder' | 'review';
+  participants?: string[];
+}
+
+// Chat types
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  content: string;
+  type: 'text' | 'image' | 'audio' | 'file';
+  timestamp: Date;
+  isRead: boolean;
+  replyTo?: string;
+}
+
+export interface ChatRoom {
+  id: string;
+  participants: string[];
+  lastMessage?: ChatMessage;
+  unreadCount: number;
+  createdAt: Date;
+}
+
+// Review types
+export interface Review {
+  id: string;
+  userId: string;
+  targetId: string; // Professional or AI character ID
+  targetType: 'professional' | 'ai_character';
+  rating: number;
+  comment: string;
+  helpful: number;
+  createdAt: Date;
+}
+
+// Search history types
+export interface SearchQuery {
+  query: string;
+  timestamp: Date;
+  results: number;
+}
+
+// Cache types
+export interface CacheEntry<T> {
+  data: T;
+  timestamp: Date;
+  expiresAt: Date;
+}
+
+// Offline types
+export interface OfflineAction {
+  id: string;
+  type: string;
+  payload: any;
+  timestamp: Date;
+  retryCount: number;
+}
+
+// Logger types
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface LogEntry {
+  level: LogLevel;
+  message: string;
+  timestamp: Date;
+  data?: any;
+}
+
+// Accessibility types
+export interface AccessibilityInfo {
+  isScreenReaderEnabled: boolean;
+  isReduceMotionEnabled: boolean;
+  isReduceTransparencyEnabled: boolean;
+}
+
+// Internationalization types
+export type SupportedLanguage = 'en' | 'es' | 'fr' | 'de' | 'it' | 'pt' | 'hi' | 'zh' | 'ja' | 'ko';
+
+export interface TranslationKey {
+  key: string;
+  defaultValue: string;
+  interpolation?: Record<string, string | number>;
+}
+
+// Testing types
+export interface TestConfig {
+  environment: 'development' | 'staging' | 'production';
+  mockApi: boolean;
+  debugMode: boolean;
+}
+
+// Build types
+export interface BuildInfo {
+  version: string;
+  buildNumber: string;
+  commitHash: string;
+  buildDate: Date;
+  environment: 'development' | 'staging' | 'production';
 }
