@@ -63,11 +63,11 @@ export const StrengthsImprovements: React.FC<Props> = ({ strengths, improvements
                       <IconSymbol size={16} name="exclamationmark.triangle.fill" color="#FF9500" />
                     </View>
                     <View style={styles.textContainer}>
-                      <ThemedText style={styles.improvementTitle}>{'improvement.title'}</ThemedText>
-                      <ThemedText style={styles.improvementDescription}>{'improvement.description'}</ThemedText>
+                      <ThemedText style={styles.improvementTitle}>{improvement.title}</ThemedText>
+                      <ThemedText style={styles.improvementDescription}>{improvement.description}</ThemedText>
                       <View style={styles.actionRow}>
                         <ThemedText style={styles.actionLabel}>Action: </ThemedText>
-                        <ThemedText style={styles.actionText}>{'improvement.action'}</ThemedText>
+                        <ThemedText style={styles.actionText}>{improvement.action}</ThemedText>
                       </View>
                     </View>
                   </View>

@@ -117,6 +117,191 @@ export interface Report {
   createdAt: Date;
 }
 
+// Participant interface for conversation overview
+interface Participant {
+  name: string;
+  role: "user" | "ai" | "student" | "professional";
+}
+
+// Session data interface (optional)
+interface SessionData {
+  id: string;
+  type: string;
+  partner: string;
+  peerUser?: {
+    id: string;
+    name: string;
+    profileImage?: string;
+  } | null;
+  topic: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+}
+
+// Conversation overview interface
+interface ConversationOverview {
+  conversationId?: string;
+  bookingId?: string;
+  participants: Participant[];
+  date: string;
+  duration: number;
+  scenario: string;
+  excerpt: string;
+  goal: string;
+  sessionType?: string;
+  specialization?: string;
+}
+
+// Fluency analysis interface
+interface FluencyAnalysis {
+  score: number;
+  wordsPerMinute: number;
+  pausesPerMinute: number;
+  discourseMarkersUsed: number;
+  turnTakingQuality?: number;
+  analysis: string;
+}
+
+// Grammar accuracy interface
+interface GrammarAccuracy {
+  score: number;
+  errorTypes: string[];
+  errorsPerHundredWords: number;
+  transcriptExamples: Array<{
+    original: string;
+    corrected: string;
+    errorType?: string;
+  }>;
+  errorsByType?: Record<string, number>;
+  consistencyScore?: number;
+  improvement?: string;
+}
+
+// Business terms interface
+interface BusinessTerms {
+  used: string[];
+  missing: string[];
+}
+
+// Vocabulary range interface
+interface VocabularyRange {
+  score: number;
+  lexicalDiversity: number;
+  businessTerms: BusinessTerms;
+  vocabularyComplexity?: number;
+  keyPhrases?: string[];
+  totalWords?: number;
+  uniqueWords?: number;
+  contextAwareVocab?: string[];
+}
+
+// Pronunciation intelligibility interface
+interface PronunciationIntelligibility {
+  score: number;
+  phonemeLevelErrors: number;
+  intelligibilityRating: number;
+  commonChallenges: string;
+  problematicWords: Array<{
+    word: string;
+    issue: string;
+  }>;
+  recommendations?: string[];
+  estimatedLevel?: "Developing" | "Intermediate" | "Advanced";
+}
+
+// Pragmatics register interface
+interface PragmaticsRegister {
+  politenessStrategies: "Needs Improvement" | "Appropriate" | "Excellent";
+  formalityMatch: number;
+  turnTaking: string;
+  topicManagement?: string;
+  conversationalCompetence?: string;
+  sentimentAppropriateness?: string;
+  analysis: string;
+}
+
+// Metrics interface
+interface ReportMetrics {
+  fluencyCoherence: FluencyAnalysis;
+  grammarAccuracy: GrammarAccuracy;
+  vocabularyRange: VocabularyRange;
+  pronunciationIntelligibility: PronunciationIntelligibility;
+  pragmaticsRegister: PragmaticsRegister;
+}
+
+// Strengths and improvements interface
+interface StrengthImprovement {
+  title: string;
+  description: string;
+  action?: string;
+}
+
+// Action plan task interface
+interface ActionTask {
+  task: string;
+  timeframe: string;
+}
+
+// Action plan resources interface
+interface ActionResources {
+  apps: string[];
+  podcasts: string[];
+  worksheets: string[];
+}
+
+// Action plan interface
+interface ActionPlan {
+  shortTerm: ActionTask[];
+  midTerm: ActionTask[];
+  resources: ActionResources;
+}
+
+// Error rate data point interface
+interface ErrorRateDataPoint {
+  time: string;
+  errorRate: number;
+}
+
+// Skill profile data point interface
+interface SkillProfileDataPoint {
+  skill: string;
+  current: number;
+  target: number;
+}
+
+// Vocabulary comparison data point interface
+interface VocabularyComparisonDataPoint {
+  level: string;
+  current: number;
+  target: number;
+}
+
+// Visuals data interface
+interface VisualsData {
+  errorRateOverTime: ErrorRateDataPoint[];
+  skillProfile: SkillProfileDataPoint[];
+  vocabularyComparison: VocabularyComparisonDataPoint[];
+}
+
+// Main DetailedReport interface
+export interface DetailedReport {
+  id: string;
+  session: SessionData | null;
+  conversationOverview: ConversationOverview;
+  overallScore: number;
+  metrics: ReportMetrics;
+  strengths: StrengthImprovement[];
+  improvements: StrengthImprovement[];
+  actionPlan: ActionPlan;
+  visualsData: VisualsData;
+  transcript: string;
+  annotations: any[]; // Can be more specific based on your annotation structure
+  suggestions: string[];
+  isSaved: boolean;
+  createdAt: string;
+}
+
 // Notification types
 export interface Notification {
   id: string;
